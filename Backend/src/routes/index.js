@@ -7,6 +7,7 @@ import productRoutes from '../modules/products/product.routes.js';
 import warehouseRoutes from '../modules/warehouses/warehouse.routes.js';
 import inventoryRoutes from '../modules/inventory/inventory.routes.js';
 import salesRoutes from '../modules/sales/sales.routes.js';
+import purchasesRoutes from '../modules/purchases/purchases.routes.js';
 
 const router = Router();
 
@@ -68,5 +69,11 @@ router.use('/inventory', inventoryRoutes);
  * /api/sales
  */
 router.use('/sales', salesRoutes);
+
+/**
+ * Purchases & Procurement routes
+ * /api/purchases
+ */
+router.use('/purchases', purchasesRoutes);
 
 export default router;
