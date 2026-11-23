@@ -1,0 +1,16 @@
+import express from 'express';
+import * as eInvoiceController from './eInvoice.controller.js';
+import { authenticate } from '../../middleware/auth.middleware.js';
+
+const router = express.Router();
+
+router.use(authenticate);
+
+router.post('/generate', eInvoiceController.generateEInvoice);
+router.get('/', eInvoiceController.getEInvoices);
+router.get('/:id', eInvoiceController.getEInvoiceById);
+router.post('/:id/cancel', eInvoiceController.cancelEInvoice);
+router.get('/invoice/:invoiceId', eInvoiceController.getEInvoiceByInvoiceId);
+router.get('/invoice/:invoiceId/eligibility', eInvoiceController.checkEligibility);
+
+export default router;

@@ -311,6 +311,32 @@ const salesInvoiceSchema = new mongoose.Schema(
       ref: 'DeliveryChallan',
       default: null,
     },
+    eInvoiceStatus: {
+      type: String,
+      enum: ['not_applicable', 'pending', 'generated', 'failed', 'cancelled'],
+      default: 'not_applicable',
+      index: true,
+    },
+    irn: {
+      type: String,
+      default: null,
+      index: true,
+    },
+    signedQRCode: {
+      type: String,
+      default: null,
+    },
+    eWayBillNumber: {
+      type: String,
+      default: null,
+      index: true,
+    },
+    eWayBillStatus: {
+      type: String,
+      enum: ['not_applicable', 'generated', 'cancelled'],
+      default: 'not_applicable',
+      index: true,
+    },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',

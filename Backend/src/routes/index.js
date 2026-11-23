@@ -12,6 +12,8 @@ import bankingRoutes from '../modules/banking/banking.routes.js';
 import paymentRoutes from '../modules/payments/payment.routes.js';
 import expenseRoutes from '../modules/expenses/expense.routes.js';
 import gstRoutes from '../modules/gst/gst.routes.js';
+import eInvoiceRoutes from '../modules/eInvoice/eInvoice.routes.js';
+import eWayBillRoutes from '../modules/eWayBill/eWayBill.routes.js';
 
 const router = Router();
 
@@ -103,5 +105,17 @@ router.use('/expenses', expenseRoutes);
  * /api/gst
  */
 router.use('/gst', gstRoutes);
+
+/**
+ * E-Invoice (IRN) routes
+ * /api/e-invoices
+ */
+router.use('/e-invoices', eInvoiceRoutes);
+
+/**
+ * E-Way Bill routes
+ * /api/e-way-bills
+ */
+router.use('/e-way-bills', eWayBillRoutes);
 
 export default router;

@@ -36,26 +36,37 @@ export const generateInvoicePDF = (invoice, tenant, res) => {
     .text(`Status: ${invoice.invoiceStatus.toUpperCase()}`, 400, 91, { align: 'right' })
     .text(`Place of Supply: ${invoice.placeOfSupply}`, 400, 104, { align: 'right' });
 
+  let headerBottom = 130;
+  if (invoice.irn || invoice.eWayBillNumber) {
+    headerBottom = 145;
+    if (invoice.irn) {
+      doc.fontSize(8).font('Helvetica-Bold').text(`IRN: ${invoice.irn}`, 40, 118, { width: 340 });
+    }
+    if (invoice.eWayBillNumber) {
+      doc.fontSize(8).font('Helvetica-Bold').text(`E-Way Bill #: ${invoice.eWayBillNumber}`, 400, 118, { align: 'right' });
+    }
+  }
+
   doc.moveDown(2);
-  doc.moveTo(40, 130).lineTo(555, 130).stroke('#cccccc');
+  doc.moveTo(40, headerBottom).lineTo(555, headerBottom).stroke('#cccccc');
 
   // 2. Bill To (Buyer)
   doc
     .fontSize(11)
     .font('Helvetica-Bold')
-    .text('Billed To (Customer):', 40, 140);
+    .text('Billed To (Customer):', 40, headerBottom + 10);
 
   doc
     .fontSize(10)
     .font('Helvetica')
-    .text(invoice.partyName, 40, 155)
+    .text(invoice.partyName, 40, headerBottom + 25)
     .text(invoice.billingAddress || invoice.shippingAddress || 'N/A')
     .text(`GSTIN: ${invoice.partyGSTIN || 'Unregistered'} | PAN: ${invoice.partyPAN || 'N/A'}`);
 
-  doc.moveTo(40, 210).lineTo(555, 210).stroke('#cccccc');
+  doc.moveTo(40, headerBottom + 80).lineTo(555, headerBottom + 80).stroke('#cccccc');
 
   // 3. Table Header
-  let y = 220;
+  let y = headerBottom + 90;
   doc
     .fontSize(9)
     .font('Helvetica-Bold')

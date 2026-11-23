@@ -554,6 +554,18 @@ export const cancelInvoice = async (tenantId, userId, invoiceId, cancellationRea
       throw error;
     }
 
+    if (invoice.eInvoiceStatus === 'generated') {
+      const error = new Error('Cannot cancel invoice with an active E-Invoice (IRN). Please cancel the IRN first.');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    if (invoice.eWayBillStatus === 'generated') {
+      const error = new Error('Cannot cancel invoice with an active E-Way Bill. Please cancel the E-Way Bill first.');
+      error.statusCode = 400;
+      throw error;
+    }
+
     // If stock was previously deducted, restore it atomically
     if (invoice.stockDeducted && invoice.invoiceStatus === 'posted') {
       for (const item of invoice.items) {
