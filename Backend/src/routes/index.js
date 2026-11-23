@@ -3,6 +3,7 @@ import authRoutes from '../modules/auth/auth.routes.js';
 import partyRoutes from '../modules/parties/party.routes.js';
 import categoryRoutes from '../modules/categories/category.routes.js';
 import unitRoutes from '../modules/units/unit.routes.js';
+import productRoutes from '../modules/products/product.routes.js';
 
 const router = Router();
 
@@ -40,5 +41,11 @@ router.use('/categories', categoryRoutes);
  * /api/units
  */
 router.use('/units', unitRoutes);
+
+/**
+ * Products routes
+ * /api/products
+ */
+router.use('/products', productRoutes);
 
 export default router;
