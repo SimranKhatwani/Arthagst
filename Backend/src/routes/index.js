@@ -8,6 +8,9 @@ import warehouseRoutes from '../modules/warehouses/warehouse.routes.js';
 import inventoryRoutes from '../modules/inventory/inventory.routes.js';
 import salesRoutes from '../modules/sales/sales.routes.js';
 import purchasesRoutes from '../modules/purchases/purchases.routes.js';
+import bankingRoutes from '../modules/banking/banking.routes.js';
+import paymentRoutes from '../modules/payments/payment.routes.js';
+import expenseRoutes from '../modules/expenses/expense.routes.js';
 
 const router = Router();
 
@@ -75,5 +78,23 @@ router.use('/sales', salesRoutes);
  * /api/purchases
  */
 router.use('/purchases', purchasesRoutes);
+
+/**
+ * Banking & Bank Accounts routes
+ * /api/banking
+ */
+router.use('/banking', bankingRoutes);
+
+/**
+ * Payments & Allocations routes
+ * /api/payments
+ */
+router.use('/payments', paymentRoutes);
+
+/**
+ * Expenses & Categories routes
+ * /api/expenses
+ */
+router.use('/expenses', expenseRoutes);
 
 export default router;
