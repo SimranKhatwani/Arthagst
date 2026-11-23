@@ -1,7 +1,7 @@
 import { ZodError } from 'zod';
 import { registerSchema, loginSchema } from './auth.validation.js';
 import * as authService from './auth.service.js';
-import { sendResponse } from '../../utils/apiResponse.js';
+import { sendResponse, formatZodErrors } from '../../utils/apiResponse.js';
 
 /**
  * Handle business and owner registration
@@ -24,10 +24,7 @@ export const register = async (req, res, next) => {
       return res.status(400).json({
         success: false,
         message: 'Validation failed',
-        errors: error.errors.map((e) => ({
-          field: e.path.join('.'),
-          message: e.message,
-        })),
+        errors: formatZodErrors(error),
       });
     }
     next(error);
@@ -55,10 +52,7 @@ export const login = async (req, res, next) => {
       return res.status(400).json({
         success: false,
         message: 'Validation failed',
-        errors: error.errors.map((e) => ({
-          field: e.path.join('.'),
-          message: e.message,
-        })),
+        errors: formatZodErrors(error),
       });
     }
     next(error);
