@@ -1,4 +1,12 @@
+import dns from 'dns';
 import mongoose from 'mongoose';
+
+// Attempt to use Google / Cloudflare public DNS for SRV resolution
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1']);
+} catch {
+  // Ignore if custom DNS cannot be set
+}
 
 /**
  * Connect to MongoDB database using Mongoose
