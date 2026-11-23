@@ -180,6 +180,16 @@ const salesInvoiceSchema = new mongoose.Schema(
       required: true,
       default: false,
     },
+    isExport: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    exportType: {
+      type: String,
+      enum: ['WPAY', 'WOPAY', null],
+      default: null,
+    },
     billingAddress: {
       type: String,
       trim: true,

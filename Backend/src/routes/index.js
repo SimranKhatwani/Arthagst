@@ -11,6 +11,7 @@ import purchasesRoutes from '../modules/purchases/purchases.routes.js';
 import bankingRoutes from '../modules/banking/banking.routes.js';
 import paymentRoutes from '../modules/payments/payment.routes.js';
 import expenseRoutes from '../modules/expenses/expense.routes.js';
+import gstRoutes from '../modules/gst/gst.routes.js';
 
 const router = Router();
 
@@ -96,5 +97,11 @@ router.use('/payments', paymentRoutes);
  * /api/expenses
  */
 router.use('/expenses', expenseRoutes);
+
+/**
+ * GST Management & Return Preparation routes
+ * /api/gst
+ */
+router.use('/gst', gstRoutes);
 
 export default router;

@@ -98,6 +98,11 @@ const purchaseBillSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    isITCClaimable: {
+      type: Boolean,
+      default: true,
+      index: true,
+    },
     warehouseId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Warehouse',

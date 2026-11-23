@@ -72,6 +72,7 @@ export const createPurchaseBillSchema = z.object({
   dueDate: z.string().optional().nullable(),
   placeOfSupply: z.string().trim().optional(),
   isReverseCharge: z.boolean().optional().default(false),
+  isITCClaimable: z.boolean().optional().default(true),
   items: z.array(purchaseItemInputSchema).min(1, 'At least one line item is required'),
   paidAmount: z.coerce.number().min(0).optional().default(0),
   notes: z.string().trim().max(1000).optional().default(''),
