@@ -13,7 +13,12 @@ const userSchema = new mongoose.Schema(
       validate: {
         validator: async function (value) {
           if (!value) return false;
-          const tenant = await Tenant.exists({ _id: value });
+          const session = typeof this.$session === 'function' ? this.$session() : null;
+          const query = Tenant.exists({ _id: value });
+          if (session) {
+            query.session(session);
+          }
+          const tenant = await query;
           return !!tenant;
         },
         message: 'Invalid tenantId: Referenced Tenant does not exist',

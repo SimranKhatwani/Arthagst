@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import mongoose from 'mongoose';
 
 const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
@@ -6,6 +7,16 @@ const EMAIL_REGEX = /^\S+@\S+\.\S+$/;
 
 const tenantSchema = new mongoose.Schema(
   {
+    tenantCode: {
+      type: String,
+      required: [true, 'Tenant code is required'],
+      unique: true,
+      uppercase: true,
+      trim: true,
+      minlength: [3, 'Tenant code must be at least 3 characters'],
+      maxlength: [20, 'Tenant code cannot exceed 20 characters'],
+      index: true,
+    },
     businessName: {
       type: String,
       required: [true, 'Business name is required'],
@@ -137,8 +148,23 @@ tenantSchema.index({ GSTIN: 1 }, { sparse: true });
 tenantSchema.index({ PAN: 1 }, { sparse: true });
 tenantSchema.index({ businessName: 1 });
 
+// Static method to generate unique tenantCode
+tenantSchema.statics.generateUniqueTenantCode = async function (prefix = 'AGST') {
+  let code;
+  let exists = true;
+  while (exists) {
+    const randomPart = crypto.randomBytes(3).toString('hex').toUpperCase();
+    code = `${prefix}-${randomPart}`;
+    exists = await this.exists({ tenantCode: code });
+  }
+  return code;
+};
+
 // Pre-save normalization: derive PAN from GSTIN if PAN not provided, trim and format
 tenantSchema.pre('save', function () {
+  if (this.tenantCode) {
+    this.tenantCode = this.tenantCode.toUpperCase().trim();
+  }
   if (this.GSTIN) {
     this.GSTIN = this.GSTIN.toUpperCase().trim();
     if (!this.PAN && this.GSTIN.length === 15) {
