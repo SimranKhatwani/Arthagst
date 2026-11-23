@@ -1,0 +1,949 @@
+import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Edit3, Trash2, Eye, ArrowLeftRight, AlertTriangle } from 'lucide-react';
+import { useApp } from '../../context/AppContext';
+import { GST_RATES } from '../../data/constants';
+import { formatINR, formatDateIN } from '../../services/calculationService';
+import { getStockValuationSummary } from '../../services/inventoryService';
+import { exportToCSV } from '../../services/storageService';
+import {
+  PageHeader,
+  DataTable,
+  StatusLabel,
+  SegmentedTabs,
+  StatCard,
+  Modal,
+  InputField,
+  inputClass,
+  btnPrimary,
+  btnSecondary,
+} from '../../components/common/UI';
+
+export const ProductsPage = () => {
+  const { state, upsertRecord, confirmAction, notify } = useApp();
+  const [filterTab, setFilterTab] = useState('All');
+  const [catFilter, setCatFilter] = useState('All');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [detailProd, setDetailProd] = useState(null);
+  const [editing, setEditing] = useState(null);
+
+  const emptyProduct = {
+    name: '',
+    sku: '',
+    barcode: '',
+    hsn: '8536',
+    category: state.categories[0]?.name || 'Electronics',
+    brand: '',
+    unit: state.units[0]?.shortName || 'PCS',
+    purchasePrice: 0,
+    sellingPrice: 0,
+    mrp: 0,
+    gstRate: 18,
+    cessRate: 0,
+    openingStock: 0,
+    stock: 0,
+    minStock: 10,
+    warehouseId: state.warehouses[0]?.id || 'wh-1',
+    archived: false,
+  };
+
+  const [form, setForm] = useState(emptyProduct);
+
+  const summary = useMemo(() => getStockValuationSummary(state.products), [state.products]);
+
+  const filtered = useMemo(() => {
+    return (state.products || []).filter((p) => {
+      if (p.archived) return false;
+      if (catFilter !== 'All' && p.category !== catFilter) return false;
+      if (filterTab === 'Low Stock') return p.stock > 0 && p.stock <= (p.minStock || 5);
+      if (filterTab === 'Out of Stock') return (p.stock || 0) <= 0;
+      return true;
+    });
+  }, [state.products, filterTab, catFilter]);
+
+  const openAdd = () => {
+    setEditing(null);
+    setForm({
+      ...emptyProduct,
+      sku: `SKU-${Math.floor(1000 + Math.random() * 9000)}`,
+      barcode: `8901234${Math.floor(100000 + Math.random() * 899999)}`,
+    });
+    setModalOpen(true);
+  };
+
+  const openEdit = (p) => {
+    setEditing(p);
+    setForm({ ...p });
+    setModalOpen(true);
+  };
+
+  const handleSave = (e) => {
+    e.preventDefault();
+    if (!form.name.trim() || !form.sku.trim()) {
+      notify('Product name and SKU are required', 'error');
+      return;
+    }
+    const payload = {
+      ...form,
+      id: editing ? editing.id : `prod-${Date.now()}`,
+      purchasePrice: Number(form.purchasePrice) || 0,
+      sellingPrice: Number(form.sellingPrice) || 0,
+      mrp: Number(form.mrp) || 0,
+      gstRate: Number(form.gstRate) || 0,
+      cessRate: Number(form.cessRate) || 0,
+      openingStock: Number(form.openingStock) || 0,
+      stock: editing ? Number(form.stock) : Number(form.openingStock || form.stock) || 0,
+      minStock: Number(form.minStock) || 0,
+    };
+    upsertRecord('products', payload, 'Product', 'name');
+    setModalOpen(false);
+  };
+
+  const handleArchive = async (p) => {
+    const ok = await confirmAction({
+      title: `Archive ${p.name}?`,
+      message: 'Archived products are hidden from new invoices while preserving historical invoice data.',
+      confirmText: 'Archive Product',
+      danger: true,
+    });
+    if (ok) upsertRecord('products', { ...p, archived: true }, 'Product', 'name');
+  };
+
+  return (
+    <div className="space-y-5">
+      <PageHeader
+        title="Products & SKUs"
+        subtitle="Manage inventory catalog, HSN codes, GST slabs, pricing, and stock thresholds"
+        breadcrumbs={['Inventory', 'Products']}
+        actions={
+          <>
+            <button
+              type="button"
+              onClick={() =>
+                exportToCSV(
+                  'products-catalog.csv',
+                  ['SKU', 'Name', 'HSN', 'Category', 'Unit', 'Purchase Price', 'Selling Price', 'GST%', 'Stock'],
+                  filtered.map((p) => [p.sku, p.name, p.hsn, p.category, p.unit, p.purchasePrice, p.sellingPrice, p.gstRate, p.stock])
+                )
+              }
+              className={btnSecondary}
+            >
+              Export CSV
+            </button>
+            <button type="button" onClick={openAdd} className={btnPrimary}>
+              <Plus className="h-3.5 w-3.5" /> Add Product
+            </button>
+          </>
+        }
+      />
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+        <StatCard label="Active SKUs" value={summary.totalSkus} />
+        <StatCard label="Total Units in Stock" value={summary.totalUnits} />
+        <StatCard label="Stock Value (Cost)" value={formatINR(summary.costValuation, false)} />
+        <StatCard label="Low / Out of Stock" value={`${summary.lowStock.length} / ${summary.outOfStock.length}`} tone="warning" />
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <SegmentedTabs activeTab={filterTab} onChange={setFilterTab} tabs={['All', 'Low Stock', 'Out of Stock']} />
+        <select
+          value={catFilter}
+          onChange={(e) => setCatFilter(e.target.value)}
+          className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700"
+        >
+          <option value="All">All Categories</option>
+          {state.categories.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+        </select>
+      </div>
+
+      <DataTable
+        data={filtered}
+        searchFields={['name', 'sku', 'hsn', 'brand', 'barcode']}
+        searchPlaceholder="Search product name, SKU, barcode or HSN..."
+        columns={[
+          { key: 'sku', label: 'SKU', sortable: true, render: (r) => <span className="font-mono text-xs text-slate-600">{r.sku}</span> },
+          { key: 'name', label: 'Product Name', sortable: true, render: (r) => <span className="font-medium text-slate-900">{r.name}</span> },
+          { key: 'category', label: 'Category', sortable: true },
+          { key: 'hsn', label: 'HSN', render: (r) => <span className="font-mono text-xs">{r.hsn}</span> },
+          { key: 'purchasePrice', label: 'Cost', align: 'right', render: (r) => formatINR(r.purchasePrice) },
+          { key: 'sellingPrice', label: 'Sale Price', align: 'right', sortable: true, render: (r) => formatINR(r.sellingPrice) },
+          { key: 'gstRate', label: 'GST', align: 'right', render: (r) => `${r.gstRate}%` },
+          {
+            key: 'stock',
+            label: 'Stock',
+            align: 'right',
+            sortable: true,
+            render: (r) => (
+              <span className={`font-mono font-semibold ${r.stock <= 0 ? 'text-rose-600' : r.stock <= (r.minStock || 5) ? 'text-amber-600' : 'text-slate-900'}`}>
+                {r.stock} {r.unit}
+              </span>
+            ),
+          },
+          {
+            key: 'stockStatus',
+            label: 'Status',
+            render: (r) => (
+              <StatusLabel status={r.stock <= 0 ? 'Out of Stock' : r.stock <= (r.minStock || 5) ? 'Low Stock' : 'Active'} />
+            ),
+          },
+          {
+            key: 'actions',
+            label: 'Actions',
+            nowrap: true,
+            render: (r) => (
+              <div className="flex items-center gap-1">
+                <button type="button" onClick={() => setDetailProd(r)} className="rounded p-1 text-slate-500 hover:bg-slate-100"><Eye className="h-3.5 w-3.5" /></button>
+                <button type="button" onClick={() => openEdit(r)} className="rounded p-1 text-slate-500 hover:bg-slate-100"><Edit3 className="h-3.5 w-3.5" /></button>
+                <button type="button" onClick={() => handleArchive(r)} className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
+              </div>
+            ),
+          },
+        ]}
+      />
+
+      {/* Add/Edit Product Modal */}
+      <Modal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={editing ? `Edit Product — ${editing.name}` : 'Add New Product'}
+        size="lg"
+        footer={
+          <>
+            <button type="button" onClick={() => setModalOpen(false)} className={btnSecondary}>Cancel</button>
+            <button type="submit" form="prod-form" className={btnPrimary}>Save Product</button>
+          </>
+        }
+      >
+        <form id="prod-form" onSubmit={handleSave} className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="sm:col-span-2">
+            <InputField label="Product Name" required>
+              <input type="text" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputClass} />
+            </InputField>
+          </div>
+          <InputField label="SKU" required>
+            <input type="text" required value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} className={`${inputClass} font-mono`} />
+          </InputField>
+          <InputField label="Barcode">
+            <input type="text" value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })} className={`${inputClass} font-mono`} />
+          </InputField>
+          <InputField label="HSN / SAC Code" required>
+            <input type="text" required value={form.hsn} onChange={(e) => setForm({ ...form, hsn: e.target.value })} className={`${inputClass} font-mono`} />
+          </InputField>
+          <InputField label="Category">
+            <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className={inputClass}>
+              {state.categories.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+            </select>
+          </InputField>
+          <InputField label="Brand">
+            <input type="text" value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} className={inputClass} />
+          </InputField>
+          <InputField label="Unit">
+            <select value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} className={inputClass}>
+              {state.units.map((u) => <option key={u.id} value={u.shortName}>{u.shortName} ({u.name})</option>)}
+            </select>
+          </InputField>
+          <InputField label="Warehouse">
+            <select value={form.warehouseId} onChange={(e) => setForm({ ...form, warehouseId: e.target.value })} className={inputClass}>
+              {state.warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+            </select>
+          </InputField>
+          <InputField label="Purchase Price (₹)">
+            <input type="number" step="0.01" value={form.purchasePrice} onChange={(e) => setForm({ ...form, purchasePrice: e.target.value })} className={`${inputClass} font-mono`} />
+          </InputField>
+          <InputField label="Selling Price (₹)" required>
+            <input type="number" step="0.01" required value={form.sellingPrice} onChange={(e) => setForm({ ...form, sellingPrice: e.target.value })} className={`${inputClass} font-mono`} />
+          </InputField>
+          <InputField label="MRP (₹)">
+            <input type="number" step="0.01" value={form.mrp} onChange={(e) => setForm({ ...form, mrp: e.target.value })} className={`${inputClass} font-mono`} />
+          </InputField>
+          <InputField label="GST Rate (%)">
+            <select value={form.gstRate} onChange={(e) => setForm({ ...form, gstRate: Number(e.target.value) })} className={inputClass}>
+              {GST_RATES.map((r) => <option key={r} value={r}>{r}%</option>)}
+            </select>
+          </InputField>
+          <InputField label={editing ? 'Current Stock' : 'Opening Stock'}>
+            <input
+              type="number"
+              value={editing ? form.stock : form.openingStock}
+              onChange={(e) => setForm({ ...form, [editing ? 'stock' : 'openingStock']: e.target.value })}
+              className={`${inputClass} font-mono`}
+            />
+          </InputField>
+          <InputField label="Minimum Stock Alert">
+            <input type="number" value={form.minStock} onChange={(e) => setForm({ ...form, minStock: e.target.value })} className={`${inputClass} font-mono`} />
+          </InputField>
+        </form>
+      </Modal>
+
+      {/* Product Detail Modal */}
+      <Modal open={Boolean(detailProd)} onClose={() => setDetailProd(null)} title={detailProd?.name}>
+        {detailProd && (
+          <div className="grid grid-cols-2 gap-3 text-xs">
+            <div className="rounded bg-slate-50 p-2.5"><strong>SKU:</strong> <span className="font-mono">{detailProd.sku}</span></div>
+            <div className="rounded bg-slate-50 p-2.5"><strong>Barcode:</strong> <span className="font-mono">{detailProd.barcode}</span></div>
+            <div className="rounded bg-slate-50 p-2.5"><strong>HSN:</strong> <span className="font-mono">{detailProd.hsn}</span></div>
+            <div className="rounded bg-slate-50 p-2.5"><strong>GST Slab:</strong> {detailProd.gstRate}%</div>
+            <div className="rounded bg-slate-50 p-2.5"><strong>Purchase Price:</strong> {formatINR(detailProd.purchasePrice)}</div>
+            <div className="rounded bg-slate-50 p-2.5"><strong>Selling Price:</strong> {formatINR(detailProd.sellingPrice)}</div>
+            <div className="rounded bg-slate-50 p-2.5"><strong>Current Stock:</strong> {detailProd.stock} {detailProd.unit}</div>
+            <div className="rounded bg-slate-50 p-2.5"><strong>Min Threshold:</strong> {detailProd.minStock} {detailProd.unit}</div>
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
+};
+
+export const CategoriesPage = () => {
+  const { state, upsertRecord, deleteRecord, confirmAction } = useApp();
+  const [modalOpen, setModalOpen] = useState(false);
+  const [form, setForm] = useState({ id: '', name: '', description: '', hsnDefault: '' });
+
+  const openModal = (cat = null) => {
+    setForm(cat || { id: '', name: '', description: '', hsnDefault: '8536' });
+    setModalOpen(true);
+  };
+
+  const handleSave = (e) => {
+    e.preventDefault();
+    upsertRecord('categories', { ...form, id: form.id || `cat-${Date.now()}` }, 'Category', 'name');
+    setModalOpen(false);
+  };
+
+  return (
+    <div className="space-y-5">
+      <PageHeader
+        title="Product Categories"
+        subtitle="Organize items by business line and default HSN codes"
+        breadcrumbs={['Inventory', 'Categories']}
+        actions={<button type="button" onClick={() => openModal()} className={btnPrimary}><Plus className="h-3.5 w-3.5" /> Add Category</button>}
+      />
+      <DataTable
+        data={state.categories}
+        searchFields={['name', 'hsnDefault']}
+        columns={[
+          { key: 'name', label: 'Category Name', render: (r) => <span className="font-semibold text-slate-900">{r.name}</span> },
+          { key: 'hsnDefault', label: 'Default HSN', render: (r) => <span className="font-mono text-xs">{r.hsnDefault}</span> },
+          { key: 'description', label: 'Description' },
+          {
+            key: 'count',
+            label: 'Products',
+            align: 'right',
+            render: (r) => state.products.filter((p) => !p.archived && p.category === r.name).length,
+          },
+          {
+            key: 'actions',
+            label: 'Actions',
+            render: (r) => (
+              <div className="flex items-center gap-1">
+                <button type="button" onClick={() => openModal(r)} className="rounded p-1 text-slate-500 hover:bg-slate-100"><Edit3 className="h-3.5 w-3.5" /></button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (await confirmAction({ title: `Delete ${r.name}?`, message: 'Remove this category?', confirmText: 'Delete', danger: true })) {
+                      deleteRecord('categories', r.id, 'Category', r.name);
+                    }
+                  }}
+                  className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ),
+          },
+        ]}
+      />
+      <Modal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={form.id ? 'Edit Category' : 'Add Category'}
+        size="sm"
+        footer={
+          <>
+            <button type="button" onClick={() => setModalOpen(false)} className={btnSecondary}>Cancel</button>
+            <button type="submit" form="cat-form" className={btnPrimary}>Save</button>
+          </>
+        }
+      >
+        <form id="cat-form" onSubmit={handleSave} className="space-y-3">
+          <InputField label="Category Name" required><input type="text" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputClass} /></InputField>
+          <InputField label="Default HSN"><input type="text" value={form.hsnDefault} onChange={(e) => setForm({ ...form, hsnDefault: e.target.value })} className={inputClass} /></InputField>
+          <InputField label="Description"><input type="text" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className={inputClass} /></InputField>
+        </form>
+      </Modal>
+    </div>
+  );
+};
+
+export const UnitsPage = () => {
+  const { state, upsertRecord, deleteRecord, confirmAction } = useApp();
+  const [modalOpen, setModalOpen] = useState(false);
+  const [form, setForm] = useState({ id: '', name: '', shortName: '', uqc: '' });
+
+  const openModal = (u = null) => {
+    setForm(u || { id: '', name: '', shortName: '', uqc: '' });
+    setModalOpen(true);
+  };
+
+  const handleSave = (e) => {
+    e.preventDefault();
+    upsertRecord('units', { ...form, id: form.id || `unit-${Date.now()}` }, 'Unit', 'name');
+    setModalOpen(false);
+  };
+
+  return (
+    <div className="space-y-5">
+      <PageHeader
+        title="Measurement Units (UQC)"
+        subtitle="Configure GST-compliant Unique Quantity Codes for invoicing"
+        breadcrumbs={['Inventory', 'Units']}
+        actions={<button type="button" onClick={() => openModal()} className={btnPrimary}><Plus className="h-3.5 w-3.5" /> Add Unit</button>}
+      />
+      <DataTable
+        data={state.units}
+        columns={[
+          { key: 'name', label: 'Unit Name', render: (r) => <span className="font-semibold text-slate-900">{r.name}</span> },
+          { key: 'shortName', label: 'Symbol', render: (r) => <span className="font-mono">{r.shortName}</span> },
+          { key: 'uqc', label: 'GST UQC Code', render: (r) => <span className="font-mono text-xs">{r.uqc}</span> },
+          {
+            key: 'actions',
+            label: 'Actions',
+            render: (r) => (
+              <div className="flex items-center gap-1">
+                <button type="button" onClick={() => openModal(r)} className="rounded p-1 text-slate-500 hover:bg-slate-100"><Edit3 className="h-3.5 w-3.5" /></button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (await confirmAction({ title: `Delete ${r.name}?`, message: 'Remove this measurement unit?', confirmText: 'Delete', danger: true })) {
+                      deleteRecord('units', r.id, 'Unit', r.name);
+                    }
+                  }}
+                  className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ),
+          },
+        ]}
+      />
+      <Modal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={form.id ? 'Edit Unit' : 'Add Unit'}
+        size="sm"
+        footer={
+          <>
+            <button type="button" onClick={() => setModalOpen(false)} className={btnSecondary}>Cancel</button>
+            <button type="submit" form="unit-form" className={btnPrimary}>Save</button>
+          </>
+        }
+      >
+        <form id="unit-form" onSubmit={handleSave} className="space-y-3">
+          <InputField label="Unit Name" required><input type="text" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputClass} /></InputField>
+          <InputField label="Short Symbol" required><input type="text" required value={form.shortName} onChange={(e) => setForm({ ...form, shortName: e.target.value })} className={inputClass} /></InputField>
+          <InputField label="GST UQC Code"><input type="text" value={form.uqc} onChange={(e) => setForm({ ...form, uqc: e.target.value })} className={inputClass} placeholder="e.g. PCS-PIECES" /></InputField>
+        </form>
+      </Modal>
+    </div>
+  );
+};
+
+export const StockOverviewPage = () => {
+  const { state } = useApp();
+  const navigate = useNavigate();
+
+  const activeProducts = useMemo(() => (state.products || []).filter((p) => !p.archived), [state.products]);
+  const summary = useMemo(() => getStockValuationSummary(state.products), [state.products]);
+
+  const categoryBreakdown = useMemo(() => {
+    const map = new Map();
+    activeProducts.forEach((p) => {
+      if (!map.has(p.category)) {
+        map.set(p.category, { category: p.category, skus: 0, units: 0, costValue: 0, retailValue: 0 });
+      }
+      const row = map.get(p.category);
+      row.skus += 1;
+      row.units += Number(p.stock) || 0;
+      row.costValue += (Number(p.stock) || 0) * (Number(p.purchasePrice) || 0);
+      row.retailValue += (Number(p.stock) || 0) * (Number(p.sellingPrice) || 0);
+    });
+    return Array.from(map.values()).sort((a, b) => b.costValue - a.costValue);
+  }, [activeProducts]);
+
+  const alertProducts = useMemo(
+    () => activeProducts.filter((p) => (p.stock || 0) <= (p.minStock || 5)),
+    [activeProducts]
+  );
+
+  return (
+    <div className="space-y-5">
+      <PageHeader
+        title="Stock Overview & Valuation"
+        subtitle="Real-time inventory valuation, warehouse distribution, and reorder alerts"
+        breadcrumbs={['Inventory', 'Stock Overview']}
+        actions={
+          <>
+            <button type="button" onClick={() => navigate('/inventory/stock')} className={btnSecondary}>
+              Adjust Stock / Movements
+            </button>
+            <button type="button" onClick={() => navigate('/purchases/new')} className={btnPrimary}>
+              <Plus className="h-3.5 w-3.5" /> Reorder Purchase
+            </button>
+          </>
+        }
+      />
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="Cost Valuation" value={formatINR(summary.costValuation, false)} subtext={`${summary.totalSkus} active SKUs`} />
+        <StatCard label="Retail Valuation" value={formatINR(summary.retailValuation, false)} subtext={`${summary.totalUnits} total units`} />
+        <StatCard label="Potential Gross Margin" value={formatINR(summary.potentialMargin, false)} tone="success" />
+        <StatCard
+          label="Low / Out of Stock"
+          value={`${summary.lowStock.length} / ${summary.outOfStock.length}`}
+          tone={alertProducts.length > 0 ? 'warning' : 'success'}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+        <div className="rounded-lg border border-slate-200 bg-white p-5 lg:col-span-7">
+          <h3 className="mb-3 font-display text-sm font-semibold text-slate-900">Category-Wise Stock Valuation</h3>
+          <DataTable
+            data={categoryBreakdown}
+            pageSize={8}
+            columns={[
+              { key: 'category', label: 'Category', render: (r) => <span className="font-medium text-slate-900">{r.category}</span> },
+              { key: 'skus', label: 'SKUs', align: 'right' },
+              { key: 'units', label: 'Units', align: 'right', render: (r) => <span className="font-mono">{r.units}</span> },
+              { key: 'costValue', label: 'Cost Value', align: 'right', render: (r) => formatINR(r.costValue) },
+              { key: 'retailValue', label: 'Retail Value', align: 'right', render: (r) => formatINR(r.retailValue) },
+            ]}
+          />
+        </div>
+
+        <div className="rounded-lg border border-slate-200 bg-white p-5 lg:col-span-5 space-y-3">
+          <h3 className="font-display text-sm font-semibold text-slate-900">Warehouse Stock Snapshot</h3>
+          <div className="space-y-2.5">
+            {state.warehouses.map((w) => {
+              const prods = activeProducts.filter((p) => p.warehouseId === w.id);
+              const val = prods.reduce((s, p) => s + (Number(p.stock) || 0) * (Number(p.purchasePrice) || 0), 0);
+              return (
+                <div key={w.id} className="flex items-center justify-between rounded-md border border-slate-200 p-3 text-xs">
+                  <div>
+                    <div className="font-semibold text-slate-900">{w.name}</div>
+                    <div className="text-slate-500">{w.city} · {prods.length} SKUs</div>
+                  </div>
+                  <div className="text-right font-mono font-semibold text-slate-900">{formatINR(val, false)}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-slate-200 bg-white p-5">
+        <h3 className="mb-3 font-display text-sm font-semibold text-slate-900">
+          Low Stock &amp; Out-of-Stock Replenishment Alerts ({alertProducts.length})
+        </h3>
+        <DataTable
+          data={alertProducts}
+          searchFields={['name', 'sku']}
+          emptyTitle="All SKUs are healthy"
+          emptyDescription="No active products are below their minimum reorder threshold."
+          columns={[
+            { key: 'sku', label: 'SKU', render: (r) => <span className="font-mono text-xs">{r.sku}</span> },
+            { key: 'name', label: 'Product', render: (r) => <span className="font-medium text-slate-900">{r.name}</span> },
+            { key: 'stock', label: 'Current Stock', align: 'right', render: (r) => <span className="font-mono font-semibold">{r.stock} {r.unit}</span> },
+            { key: 'minStock', label: 'Min Threshold', align: 'right', render: (r) => <span className="font-mono">{r.minStock || 5} {r.unit}</span> },
+            {
+              key: 'status',
+              label: 'Status',
+              render: (r) => <StatusLabel status={(r.stock || 0) <= 0 ? 'Out of Stock' : 'Low Stock'} />,
+            },
+          ]}
+        />
+      </div>
+    </div>
+  );
+};
+
+export const StockManagementPage = () => {
+  const { state, adjustInventoryStock } = useApp();
+  const navigate = useNavigate();
+  const [productId, setProductId] = useState(state.products[0]?.id || '');
+  const [adjType, setAdjType] = useState('Stock In');
+  const [qty, setQty] = useState(5);
+  const [warehouseId, setWarehouseId] = useState(state.warehouses[0]?.id || 'wh-1');
+  const [notes, setNotes] = useState('');
+
+  const handleAdjust = (e) => {
+    e.preventDefault();
+    const isOut = adjType === 'Stock Out' || adjType === 'Damaged';
+    const delta = isOut ? -Math.abs(Number(qty) || 0) : Math.abs(Number(qty) || 0);
+    adjustInventoryStock({
+      productId,
+      type: adjType,
+      qtyChange: delta,
+      warehouseId,
+      notes: notes || `${adjType} manual adjustment`,
+    });
+    setNotes('');
+  };
+
+  return (
+    <div className="space-y-5">
+      <PageHeader
+        title="Stock Movements & Adjustments"
+        subtitle="Record Stock In, Stock Out, physical audit adjustments, and damaged write-offs"
+        breadcrumbs={['Inventory', 'Stock Movements']}
+        actions={
+          <button type="button" onClick={() => navigate('/inventory/stock-overview')} className={btnSecondary}>
+            View Stock Overview
+          </button>
+        }
+      />
+
+      <form onSubmit={handleAdjust} className="grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-white p-5 sm:grid-cols-6">
+        <div className="sm:col-span-2">
+          <InputField label="Product" required>
+            <select value={productId} onChange={(e) => setProductId(e.target.value)} className={inputClass}>
+              {state.products.filter((p) => !p.archived).map((p) => (
+                <option key={p.id} value={p.id}>{p.name} (Cur: {p.stock})</option>
+              ))}
+            </select>
+          </InputField>
+        </div>
+        <InputField label="Movement Type">
+          <select value={adjType} onChange={(e) => setAdjType(e.target.value)} className={inputClass}>
+            <option value="Stock In">Stock In (+)</option>
+            <option value="Stock Out">Stock Out (-)</option>
+            <option value="Adjustment">Audit Adjustment (+)</option>
+            <option value="Damaged">Damaged Stock (-)</option>
+          </select>
+        </InputField>
+        <InputField label="Quantity" required>
+          <input type="number" min="1" value={qty} onChange={(e) => setQty(e.target.value)} className={`${inputClass} font-mono`} />
+        </InputField>
+        <InputField label="Warehouse">
+          <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className={inputClass}>
+            {state.warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+          </select>
+        </InputField>
+        <div className="flex items-end">
+          <button type="submit" className={`${btnPrimary} w-full`}>Update Stock</button>
+        </div>
+        <div className="sm:col-span-6">
+          <InputField label="Reason / Audit Remarks">
+            <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Physical godown verification" className={inputClass} />
+          </InputField>
+        </div>
+      </form>
+
+      <DataTable
+        data={state.stockMovements}
+        searchFields={['productName', 'sku', 'reference', 'type']}
+        searchPlaceholder="Search movements by SKU, product or reference..."
+        columns={[
+          { key: 'date', label: 'Date', sortable: true, render: (r) => <span className="font-mono text-xs">{formatDateIN(r.date)}</span> },
+          { key: 'reference', label: 'Reference', render: (r) => <span className="font-mono text-xs font-medium">{r.reference}</span> },
+          { key: 'productName', label: 'Product' },
+          { key: 'warehouseName', label: 'Warehouse' },
+          { key: 'type', label: 'Type', render: (r) => <StatusLabel status={r.type} /> },
+          {
+            key: 'qtyChange',
+            label: 'Qty Delta',
+            align: 'right',
+            render: (r) => (
+              <span className={`font-mono font-semibold ${r.qtyChange >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                {r.qtyChange >= 0 ? `+${r.qtyChange}` : r.qtyChange}
+              </span>
+            ),
+          },
+          { key: 'notes', label: 'Notes' },
+        ]}
+      />
+    </div>
+  );
+};
+
+export const StockTransfersPage = () => {
+  const { state, upsertRecord, adjustInventoryStock, notify } = useApp();
+  const [productId, setProductId] = useState(state.products[0]?.id || '');
+  const [fromWh, setFromWh] = useState(state.warehouses[0]?.id || 'wh-1');
+  const [toWh, setToWh] = useState(state.warehouses[1]?.id || 'wh-2');
+  const [qty, setQty] = useState(5);
+
+  const handleTransfer = (e) => {
+    e.preventDefault();
+    if (fromWh === toWh) {
+      notify('Select different source and destination warehouses', 'error');
+      return;
+    }
+    const prod = state.products.find((p) => p.id === productId);
+    const toWarehouse = state.warehouses.find((w) => w.id === toWh);
+    const fromWarehouse = state.warehouses.find((w) => w.id === fromWh);
+    if (!prod) return;
+
+    upsertRecord('products', { ...prod, warehouseId: toWh }, 'Product', 'name');
+    adjustInventoryStock({
+      productId,
+      type: 'Transfer Out',
+      qtyChange: 0,
+      warehouseId: toWh,
+      reference: `TRF-${Date.now().toString().slice(-5)}`,
+      notes: `Transferred ${qty} ${prod.unit} from ${fromWarehouse?.name} to ${toWarehouse?.name}`,
+    });
+    notify(`Transferred ${qty} ${prod.unit} to ${toWarehouse?.name}`);
+  };
+
+  const transferMovements = state.stockMovements.filter((m) => m.type.includes('Transfer'));
+
+  return (
+    <div className="space-y-5">
+      <PageHeader
+        title="Inter-Warehouse Stock Transfers"
+        subtitle="Move inventory between Jaipur Main Godown, Sitapura Hub, and Vishwakarma Depot"
+        breadcrumbs={['Inventory', 'Stock Transfers']}
+      />
+      <form onSubmit={handleTransfer} className="grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-white p-5 sm:grid-cols-5">
+        <div className="sm:col-span-2">
+          <InputField label="Product">
+            <select value={productId} onChange={(e) => setProductId(e.target.value)} className={inputClass}>
+              {state.products.filter((p) => !p.archived).map((p) => (
+                <option key={p.id} value={p.id}>{p.name} (Stock: {p.stock})</option>
+              ))}
+            </select>
+          </InputField>
+        </div>
+        <InputField label="From Warehouse">
+          <select value={fromWh} onChange={(e) => setFromWh(e.target.value)} className={inputClass}>
+            {state.warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+          </select>
+        </InputField>
+        <InputField label="To Warehouse">
+          <select value={toWh} onChange={(e) => setToWh(e.target.value)} className={inputClass}>
+            {state.warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+          </select>
+        </InputField>
+        <div className="flex items-end gap-2">
+          <div className="w-20">
+            <InputField label="Qty">
+              <input type="number" min="1" value={qty} onChange={(e) => setQty(e.target.value)} className={`${inputClass} font-mono`} />
+            </InputField>
+          </div>
+          <button type="submit" className={btnPrimary}><ArrowLeftRight className="h-3.5 w-3.5" /> Transfer</button>
+        </div>
+      </form>
+
+      <DataTable
+        data={transferMovements}
+        emptyTitle="No recent inter-warehouse transfers"
+        emptyDescription="Submit a transfer above to log a warehouse movement."
+        columns={[
+          { key: 'date', label: 'Date', render: (r) => <span className="font-mono text-xs">{formatDateIN(r.date)}</span> },
+          { key: 'reference', label: 'Transfer Ref', render: (r) => <span className="font-mono">{r.reference}</span> },
+          { key: 'productName', label: 'Product' },
+          { key: 'warehouseName', label: 'Destination' },
+          { key: 'notes', label: 'Details' },
+        ]}
+      />
+    </div>
+  );
+};
+
+export const WarehousesPage = () => {
+  const { state, upsertRecord } = useApp();
+  const [modalOpen, setModalOpen] = useState(false);
+  const [form, setForm] = useState({ id: '', name: '', code: '', city: 'Jaipur', state: 'Rajasthan', manager: '', capacity: '' });
+
+  const handleSave = (e) => {
+    e.preventDefault();
+    upsertRecord('warehouses', { ...form, id: form.id || `wh-${Date.now()}` }, 'Warehouse', 'name');
+    setModalOpen(false);
+  };
+
+  return (
+    <div className="space-y-5">
+      <PageHeader
+        title="Warehouses & Godowns"
+        subtitle="Manage multi-location storage facilities and warehouse-wise inventory valuation"
+        breadcrumbs={['Inventory', 'Warehouses']}
+        actions={
+          <button type="button" onClick={() => { setForm({ id: '', name: '', code: '', city: 'Jaipur', state: 'Rajasthan', manager: '', capacity: '' }); setModalOpen(true); }} className={btnPrimary}>
+            <Plus className="h-3.5 w-3.5" /> Add Warehouse
+          </button>
+        }
+      />
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        {state.warehouses.map((w) => {
+          const prods = state.products.filter((p) => !p.archived && p.warehouseId === w.id);
+          const val = prods.reduce((s, p) => s + p.stock * p.purchasePrice, 0);
+          return (
+            <div key={w.id} className="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="font-mono text-xs text-indigo-600">{w.code}</div>
+                  <h3 className="font-display text-base font-semibold text-slate-900">{w.name}</h3>
+                  <p className="text-xs text-slate-500">{w.city}, {w.state}</p>
+                </div>
+                <button type="button" onClick={() => { setForm(w); setModalOpen(true); }} className="rounded p-1 text-slate-400 hover:bg-slate-100">
+                  <Edit3 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-3 text-xs">
+                <div>
+                  <div className="text-slate-500">SKUs Stored</div>
+                  <div className="font-mono font-semibold text-slate-900">{prods.length}</div>
+                </div>
+                <div>
+                  <div className="text-slate-500">Stock Value</div>
+                  <div className="font-mono font-semibold text-slate-900">{formatINR(val, false)}</div>
+                </div>
+                <div>
+                  <div className="text-slate-500">Manager</div>
+                  <div className="font-medium text-slate-800">{w.manager}</div>
+                </div>
+                <div>
+                  <div className="text-slate-500">Capacity</div>
+                  <div className="font-mono text-slate-800">{w.capacity}</div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <Modal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={form.id ? 'Edit Warehouse' : 'Add Warehouse'}
+        footer={
+          <>
+            <button type="button" onClick={() => setModalOpen(false)} className={btnSecondary}>Cancel</button>
+            <button type="submit" form="wh-form" className={btnPrimary}>Save Warehouse</button>
+          </>
+        }
+      >
+        <form id="wh-form" onSubmit={handleSave} className="grid grid-cols-2 gap-3">
+          <div className="col-span-2"><InputField label="Warehouse Name" required><input type="text" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputClass} /></InputField></div>
+          <InputField label="Code" required><input type="text" required value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} className={inputClass} /></InputField>
+          <InputField label="Manager"><input type="text" value={form.manager} onChange={(e) => setForm({ ...form, manager: e.target.value })} className={inputClass} /></InputField>
+          <InputField label="City"><input type="text" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} className={inputClass} /></InputField>
+          <InputField label="Capacity"><input type="text" value={form.capacity} onChange={(e) => setForm({ ...form, capacity: e.target.value })} className={inputClass} /></InputField>
+        </form>
+      </Modal>
+    </div>
+  );
+};
+
+export const BatchExpiryPage = () => {
+  const { state, upsertRecord } = useApp();
+  const [modalOpen, setModalOpen] = useState(false);
+  const [form, setForm] = useState({
+    productId: state.products[6]?.id || state.products[0]?.id || '',
+    batchNo: '',
+    mfgDate: '2026-10-01',
+    expiryDate: '2027-09-30',
+    qty: 20,
+    warehouseId: 'wh-1',
+  });
+
+  const getExpiryStatus = (expDate) => {
+    const today = new Date();
+    const exp = new Date(expDate);
+    const diffDays = Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
+    if (diffDays <= 0) return 'Expired';
+    if (diffDays <= 45) return 'Pending';
+    return 'Active';
+  };
+
+  const handleSave = (e) => {
+    e.preventDefault();
+    const prod = state.products.find((p) => p.id === form.productId);
+    upsertRecord(
+      'batches',
+      {
+        id: `bat-${Date.now()}`,
+        productId: form.productId,
+        productName: prod?.name || '',
+        batchNo: form.batchNo,
+        mfgDate: form.mfgDate,
+        expiryDate: form.expiryDate,
+        qty: Number(form.qty),
+        warehouseId: form.warehouseId,
+      },
+      'Batch',
+      'batchNo'
+    );
+    setModalOpen(false);
+  };
+
+  return (
+    <div className="space-y-5">
+      <PageHeader
+        title="Batch & Expiry Management"
+        subtitle="Monitor manufacturing batches, shelf life alerts, and near-expiry FMCG stock"
+        breadcrumbs={['Inventory', 'Batch & Expiry']}
+        actions={
+          <button type="button" onClick={() => setModalOpen(true)} className={btnPrimary}>
+            <Plus className="h-3.5 w-3.5" /> Add Batch
+          </button>
+        }
+      />
+
+      <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-900">
+        <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+        <span>
+          Batches expiring within 45 days are highlighted for priority clearance or supplier return.
+        </span>
+      </div>
+
+      <DataTable
+        data={state.batches}
+        searchFields={['batchNo', 'productName']}
+        columns={[
+          { key: 'batchNo', label: 'Batch #', render: (r) => <span className="font-mono font-semibold text-slate-900">{r.batchNo}</span> },
+          { key: 'productName', label: 'Product' },
+          { key: 'mfgDate', label: 'Mfg Date', render: (r) => <span className="font-mono text-xs">{formatDateIN(r.mfgDate)}</span> },
+          { key: 'expiryDate', label: 'Expiry Date', sortable: true, render: (r) => <span className="font-mono text-xs font-medium">{formatDateIN(r.expiryDate)}</span> },
+          { key: 'qty', label: 'Batch Qty', align: 'right', render: (r) => <span className="font-mono font-semibold">{r.qty}</span> },
+          {
+            key: 'status',
+            label: 'Shelf Status',
+            render: (r) => {
+              const st = getExpiryStatus(r.expiryDate);
+              return <StatusLabel status={st === 'Pending' ? 'Expiring Soon' : st} />;
+            },
+          },
+        ]}
+      />
+
+      <Modal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title="Add New Product Batch"
+        footer={
+          <>
+            <button type="button" onClick={() => setModalOpen(false)} className={btnSecondary}>Cancel</button>
+            <button type="submit" form="batch-form" className={btnPrimary}>Save Batch</button>
+          </>
+        }
+      >
+        <form id="batch-form" onSubmit={handleSave} className="space-y-3">
+          <InputField label="Product" required>
+            <select value={form.productId} onChange={(e) => setForm({ ...form, productId: e.target.value })} className={inputClass}>
+              {state.products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </InputField>
+          <div className="grid grid-cols-2 gap-3">
+            <InputField label="Batch Number" required><input type="text" required value={form.batchNo} onChange={(e) => setForm({ ...form, batchNo: e.target.value })} className={inputClass} /></InputField>
+            <InputField label="Quantity" required><input type="number" required value={form.qty} onChange={(e) => setForm({ ...form, qty: e.target.value })} className={inputClass} /></InputField>
+            <InputField label="Mfg Date"><input type="date" value={form.mfgDate} onChange={(e) => setForm({ ...form, mfgDate: e.target.value })} className={inputClass} /></InputField>
+            <InputField label="Expiry Date" required><input type="date" required value={form.expiryDate} onChange={(e) => setForm({ ...form, expiryDate: e.target.value })} className={inputClass} /></InputField>
+          </div>
+        </form>
+      </Modal>
+    </div>
+  );
+};

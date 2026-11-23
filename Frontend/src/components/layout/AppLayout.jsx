@@ -1,0 +1,835 @@
+import React, { useState, useMemo, useRef, useLayoutEffect } from 'react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import {
+  LayoutDashboard,
+  FileText,
+  ShoppingBag,
+  Package,
+  Users,
+  IndianRupee,
+  Receipt,
+  Percent,
+  QrCode,
+  BookOpen,
+  BarChart3,
+  MonitorSmartphone,
+  Bell,
+  History,
+  ShieldCheck,
+  Settings,
+  CreditCard,
+  ChevronDown,
+  ChevronRight,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Search,
+  HelpCircle,
+  RotateCcw,
+  LogOut,
+  Building2,
+  ShieldAlert,
+  Menu,
+  X,
+} from 'lucide-react';
+import { useApp } from '../../context/AppContext';
+import { FINANCIAL_YEARS } from '../../data/constants';
+import { formatINR } from '../../services/calculationService';
+import { Modal, btnPrimary, btnSecondary } from '../common/UI';
+
+export const NAV_GROUPS = [
+  {
+    section: 'Dashboard',
+    items: [
+      { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+    ],
+  },
+  {
+    section: 'Business Operations',
+    items: [
+      {
+        id: 'sales',
+        label: 'Sales',
+        icon: FileText,
+        children: [
+          { label: 'All Invoices', path: '/sales/invoices' },
+          { label: 'Create Invoice', path: '/sales/invoices/new' },
+          { label: 'Quotations', path: '/sales/quotations' },
+          { label: 'Sales Orders', path: '/sales/orders' },
+          { label: 'Delivery Challans', path: '/sales/challans' },
+          { label: 'Sales Returns', path: '/sales/returns' },
+          {
+            label: 'Credit/Debit Notes',
+            path: '/sales/notes',
+            matchPaths: ['/sales/notes', '/sales/credit-notes', '/sales/debit-notes'],
+          },
+        ],
+      },
+      {
+        id: 'purchases',
+        label: 'Purchases',
+        icon: ShoppingBag,
+        children: [
+          { label: 'Purchase Invoices', path: '/purchases', matchPaths: ['/purchases', '/purchases/payments'] },
+          { label: 'Add Purchase', path: '/purchases/new' },
+          { label: 'Purchase Returns', path: '/purchases/returns' },
+          { label: 'Goods Received Notes', path: '/purchases/grn' },
+        ],
+      },
+      {
+        id: 'inventory',
+        label: 'Inventory',
+        icon: Package,
+        children: [
+          { label: 'Products', path: '/inventory/products' },
+          { label: 'Categories', path: '/inventory/categories' },
+          { label: 'Units', path: '/inventory/units' },
+          { label: 'Stock Overview', path: '/inventory/stock-overview' },
+          { label: 'Stock Movements', path: '/inventory/stock' },
+          { label: 'Stock Transfers', path: '/inventory/transfers' },
+          { label: 'Warehouses', path: '/inventory/warehouses' },
+          { label: 'Batch & Expiry', path: '/inventory/batches' },
+        ],
+      },
+      {
+        id: 'parties',
+        label: 'Parties',
+        icon: Users,
+        children: [
+          { label: 'Customers', path: '/parties/customers', matchPaths: ['/parties/customers', '/accounting/customer-ledger'] },
+          { label: 'Suppliers', path: '/parties/suppliers', matchPaths: ['/parties/suppliers', '/accounting/supplier-ledger'] },
+        ],
+      },
+      {
+        id: 'payments',
+        label: 'Payments',
+        icon: IndianRupee,
+        children: [
+          { label: 'All Transactions', path: '/payments', matchPaths: ['/payments', '/payments/history'] },
+          { label: 'Money In', path: '/payments/in' },
+          { label: 'Money Out', path: '/payments/out' },
+          {
+            label: 'Cash & Bank',
+            path: '/payments/cash-bank',
+            matchPaths: ['/payments/cash-bank', '/payments/cash-book', '/payments/bank-book', '/accounting/cash-book', '/accounting/bank-book'],
+          },
+          { label: 'Bank Reconciliation', path: '/payments/reconciliation' },
+        ],
+      },
+      {
+        id: 'expenses',
+        label: 'Expenses',
+        icon: Receipt,
+        children: [
+          { label: 'All Expenses', path: '/expenses', matchPaths: ['/expenses', '/expenses/new'] },
+          { label: 'Expense Categories', path: '/expenses/categories' },
+        ],
+      },
+    ],
+  },
+  {
+    section: 'Tax & Accounting',
+    items: [
+      {
+        id: 'gst',
+        label: 'GST Management',
+        icon: Percent,
+        children: [
+          { label: 'GST Dashboard', path: '/gst', matchPaths: ['/gst', '/gst/summary'] },
+          {
+            id: 'gst-returns',
+            label: 'Returns',
+            children: [
+              { label: 'GSTR-1', path: '/gst/gstr-1' },
+              { label: 'GSTR-3B', path: '/gst/gstr-3b' },
+            ],
+          },
+          { label: 'GSTR-2B Reconciliation', path: '/gst/gstr-2b' },
+          { label: 'GST Reports', path: '/gst/reports', matchPaths: ['/gst/reports', '/gst/hsn'] },
+          { label: 'Filing Calendar', path: '/gst/calendar' },
+        ],
+      },
+      {
+        id: 'einvoice',
+        label: 'E-Invoice & E-Way Bill',
+        icon: QrCode,
+        children: [
+          { label: 'E-Invoices', path: '/einvoice/list' },
+          { label: 'Generate E-Invoice', path: '/einvoice/generate' },
+          { label: 'E-Way Bills', path: '/einvoice/eway-bills' },
+          { label: 'Generate E-Way Bill', path: '/einvoice/eway-generate' },
+        ],
+      },
+      {
+        id: 'accounting',
+        label: 'Accounting',
+        icon: BookOpen,
+        children: [
+          { label: 'Chart of Accounts', path: '/accounting/coa' },
+          { label: 'General Ledger', path: '/accounting/general-ledger' },
+          { label: 'Journal Entries', path: '/accounting/journals' },
+          { label: 'Trial Balance', path: '/accounting/trial-balance' },
+          { label: 'Profit & Loss', path: '/accounting/pnl' },
+          { label: 'Balance Sheet', path: '/accounting/balance-sheet' },
+        ],
+      },
+      {
+        id: 'reports',
+        label: 'Reports & Analytics',
+        icon: BarChart3,
+        children: [
+          { label: 'Sales Reports', path: '/reports/sales' },
+          { label: 'Purchase Reports', path: '/reports/purchases' },
+          { label: 'Inventory Reports', path: '/reports/inventory' },
+          { label: 'GST Reports', path: '/reports/gst' },
+          { label: 'Financial Reports', path: '/reports/financial' },
+          { label: 'Expense Reports', path: '/reports/expenses' },
+          { label: 'Receivables & Payables', path: '/reports/receivables-payables' },
+          { label: 'Business Analytics', path: '/reports/analytics' },
+        ],
+      },
+    ],
+  },
+  {
+    section: 'Retail & System',
+    items: [
+      { id: 'pos', label: 'POS Billing', icon: MonitorSmartphone, path: '/pos' },
+      { id: 'notifications', label: 'Notifications', icon: Bell, path: '/notifications' },
+      { id: 'audit', label: 'Audit Logs', icon: History, path: '/audit-logs' },
+      { id: 'users', label: 'User Management', icon: ShieldCheck, path: '/users' },
+      { id: 'settings', label: 'Settings', icon: Settings, path: '/settings' },
+      { id: 'subscription', label: 'Subscription & Billing', icon: CreditCard, path: '/subscription' },
+    ],
+  },
+];
+
+const SidebarContent = ({
+  isMobile = false,
+  collapsed,
+  setCollapsed,
+  setMobileOpen,
+  expandedGroups,
+  toggleGroup,
+  isGroupActive,
+  isSubItemActive,
+  unreadCount,
+  navScrollRef,
+  savedScrollTopRef,
+  navigate,
+}) => (
+  <div className="flex h-full flex-col bg-slate-900 text-slate-300">
+    {/* Brand */}
+    <div className="flex h-14 shrink-0 items-center justify-between border-b border-slate-800 px-3.5">
+      <button
+        type="button"
+        onClick={() => navigate('/dashboard')}
+        className="flex items-center gap-2.5 overflow-hidden text-left"
+      >
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-600 font-display text-sm font-bold text-white">
+          A
+        </div>
+        {(!collapsed || isMobile) && (
+          <span className="truncate font-display text-base font-semibold tracking-tight text-white">
+            ArthaGST
+          </span>
+        )}
+      </button>
+      {!isMobile && (
+        <button
+          type="button"
+          onClick={() => setCollapsed((c) => !c)}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+        >
+          {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+        </button>
+      )}
+      {isMobile && (
+        <button
+          type="button"
+          onClick={() => setMobileOpen(false)}
+          className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      )}
+    </div>
+
+    {/* Navigation */}
+    <div
+      ref={!isMobile ? navScrollRef : undefined}
+      onScroll={
+        !isMobile
+          ? (e) => {
+              savedScrollTopRef.current = e.currentTarget.scrollTop;
+            }
+          : undefined
+      }
+      className="no-scrollbar flex-1 overflow-y-auto px-2.5 py-3 space-y-5"
+    >
+      {NAV_GROUPS.map((group) => (
+        <div key={group.section}>
+          {(!collapsed || isMobile) && (
+            <div className="mb-1.5 px-2.5 text-[11px] font-medium text-slate-500">
+              {group.section}
+            </div>
+          )}
+          <div className="space-y-0.5">
+            {group.items.map((item) => {
+              const Icon = item.icon;
+              const active = isGroupActive(item);
+              const expanded = Boolean(expandedGroups[item.id] || active);
+
+              if (item.path) {
+                return (
+                  <NavLink
+                    key={item.id}
+                    to={item.path}
+                    onClick={() => isMobile && setMobileOpen(false)}
+                    title={collapsed && !isMobile ? item.label : undefined}
+                    className={({ isActive }) =>
+                      `flex items-center justify-between rounded-md px-2.5 py-2 text-[13px] font-medium transition-colors ${
+                        isActive
+                          ? 'bg-indigo-600 text-white'
+                          : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                      }`
+                    }
+                  >
+                    <span className="flex items-center gap-2.5 truncate">
+                      <Icon className="h-4 w-4 shrink-0" />
+                      {(!collapsed || isMobile) && <span className="truncate">{item.label}</span>}
+                    </span>
+                    {(!collapsed || isMobile) && item.id === 'notifications' && unreadCount > 0 && (
+                      <span className="rounded bg-rose-500 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-white">
+                        {unreadCount}
+                      </span>
+                    )}
+                  </NavLink>
+                );
+              }
+
+              return (
+                <div key={item.id}>
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(item.id)}
+                    title={collapsed && !isMobile ? item.label : undefined}
+                    className={`flex w-full items-center justify-between rounded-md px-2.5 py-2 text-[13px] font-medium transition-colors ${
+                      active
+                        ? 'bg-slate-800 text-white'
+                        : 'text-slate-300 hover:bg-slate-800/70 hover:text-white'
+                    }`}
+                  >
+                    <span className="flex items-center gap-2.5 truncate">
+                      <Icon className="h-4 w-4 shrink-0" />
+                      {(!collapsed || isMobile) && <span className="truncate">{item.label}</span>}
+                    </span>
+                    {(!collapsed || isMobile) &&
+                      (expanded ? (
+                        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                      ) : (
+                        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                      ))}
+                  </button>
+                  {expanded && (!collapsed || isMobile) && (
+                    <div className="mt-0.5 ml-4 space-y-0.5 border-l border-slate-800 pl-3">
+                      {item.children.map((sub) => {
+                        if (sub.children) {
+                          const subActive = isSubItemActive(sub);
+                          const subExpanded = Boolean(expandedGroups[sub.id] || subActive);
+                          return (
+                            <div key={sub.id}>
+                              <button
+                                type="button"
+                                onClick={() => toggleGroup(sub.id)}
+                                className={`flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-xs transition-colors ${
+                                  subActive
+                                    ? 'bg-indigo-600/15 font-medium text-indigo-300'
+                                    : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+                                }`}
+                              >
+                                <span>{sub.label}</span>
+                                {subExpanded ? (
+                                  <ChevronDown className="h-3 w-3 text-slate-400" />
+                                ) : (
+                                  <ChevronRight className="h-3 w-3 text-slate-400" />
+                                )}
+                              </button>
+                              {subExpanded && (
+                                <div className="mt-0.5 ml-3 space-y-0.5 border-l border-slate-800 pl-2.5">
+                                  {sub.children.map((leaf) => (
+                                    <NavLink
+                                      key={leaf.path}
+                                      to={leaf.path}
+                                      end
+                                      onClick={() => isMobile && setMobileOpen(false)}
+                                      className={({ isActive }) =>
+                                        `block rounded-md px-2.5 py-1 text-[11px] transition-colors ${
+                                          isActive
+                                            ? 'bg-indigo-600/20 font-medium text-indigo-300'
+                                            : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+                                        }`
+                                      }
+                                    >
+                                      {leaf.label}
+                                    </NavLink>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }
+
+                        const matched = isSubItemActive(sub);
+                        return (
+                          <NavLink
+                            key={sub.path}
+                            to={sub.path}
+                            end
+                            onClick={() => isMobile && setMobileOpen(false)}
+                            className={({ isActive }) =>
+                              `block rounded-md px-2.5 py-1.5 text-xs transition-colors ${
+                                isActive || matched
+                                  ? 'bg-indigo-600/20 font-medium text-indigo-300'
+                                  : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+                              }`
+                            }
+                          >
+                            {sub.label}
+                          </NavLink>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+
+    {/* Bottom Workspace Switcher to Super Admin */}
+    <div className="shrink-0 border-t border-slate-800 p-2.5">
+      <button
+        type="button"
+        onClick={() => {
+          navigate('/super-admin');
+          if (isMobile) setMobileOpen(false);
+        }}
+        title="Open Super Admin Console"
+        className="flex w-full items-center gap-2.5 rounded-md border border-slate-700/80 bg-slate-800/60 px-2.5 py-2 text-xs font-medium text-slate-200 hover:bg-slate-800"
+      >
+        <ShieldAlert className="h-4 w-4 shrink-0 text-amber-400" />
+        {(!collapsed || isMobile) && <span className="truncate">Super Admin Console</span>}
+      </button>
+    </div>
+  </div>
+);
+
+export const AppLayout = ({ children }) => {
+  const {
+    state,
+    selectedFY,
+    setSelectedFY,
+    confirmAction,
+    handleResetDemo,
+    logout,
+  } = useApp();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState({ sales: true, gst: false, 'gst-returns': false });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const navScrollRef = useRef(null);
+  const savedScrollTopRef = useRef(0);
+
+  useLayoutEffect(() => {
+    if (navScrollRef.current && navScrollRef.current.scrollTop !== savedScrollTopRef.current) {
+      navScrollRef.current.scrollTop = savedScrollTopRef.current;
+    }
+  }, [location.pathname, expandedGroups, collapsed]);
+
+  const unreadCount = (state.notifications || []).filter((n) => !n.read).length;
+
+  const isPathMatch = (targetPath, exact = false) => {
+    if (!targetPath) return false;
+    if (exact) return location.pathname === targetPath;
+    return location.pathname === targetPath || location.pathname.startsWith(targetPath + '/');
+  };
+
+  const isSubItemActive = (sub) => {
+    if (sub.children) {
+      return sub.children.some((leaf) => isSubItemActive(leaf)) || location.pathname === '/gst/returns';
+    }
+    if (sub.matchPaths) {
+      return sub.matchPaths.some((mp) => isPathMatch(mp, mp === '/purchases' || mp === '/payments' || mp === '/gst' || mp === '/expenses'));
+    }
+    return isPathMatch(sub.path, sub.path === '/purchases' || sub.path === '/payments' || sub.path === '/gst' || sub.path === '/expenses');
+  };
+
+  const isGroupActive = (item) => {
+    if (item.path) return location.pathname === item.path;
+    return item.children?.some((c) => isSubItemActive(c));
+  };
+
+  const toggleGroup = (id) => {
+    if (collapsed) {
+      setCollapsed(false);
+      setExpandedGroups((prev) => ({ ...prev, [id]: true }));
+      return;
+    }
+    setExpandedGroups((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const searchResults = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [];
+    const results = [];
+    (state.invoices || []).slice(0, 30).forEach((inv) => {
+      if (
+        inv.invoiceNumber.toLowerCase().includes(q) ||
+        inv.customerName.toLowerCase().includes(q)
+      ) {
+        results.push({
+          type: 'Invoice',
+          title: `${inv.invoiceNumber} — ${inv.customerName}`,
+          meta: `${formatINR(inv.grandTotal)} · ${inv.paymentStatus}`,
+          path: '/sales/invoices',
+        });
+      }
+    });
+    (state.customers || []).forEach((c) => {
+      if (c.name.toLowerCase().includes(q) || (c.gstin || '').toLowerCase().includes(q)) {
+        results.push({
+          type: 'Customer',
+          title: c.name,
+          meta: `${c.city || c.state} · ${c.registrationType}`,
+          path: `/parties/customers/${c.id}`,
+        });
+      }
+    });
+    (state.products || []).forEach((p) => {
+      if (p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q) || p.hsn.includes(q)) {
+        results.push({
+          type: 'Product',
+          title: p.name,
+          meta: `${p.sku} · HSN ${p.hsn} · Stock ${p.stock} ${p.unit}`,
+          path: '/inventory/products',
+        });
+      }
+    });
+    return results.slice(0, 8);
+  }, [searchQuery, state.invoices, state.customers, state.products]);
+
+  const onResetClick = async () => {
+    const ok = await confirmAction({
+      title: 'Reset Demo Dataset',
+      message:
+        'This will clear all local changes and restore the original Sharma Traders FY 2026-27 demo dataset. Continue?',
+      confirmText: 'Reset Demo Data',
+      danger: true,
+    });
+    if (ok) handleResetDemo();
+  };
+
+  const sidebarProps = {
+    collapsed,
+    setCollapsed,
+    setMobileOpen,
+    expandedGroups,
+    toggleGroup,
+    isGroupActive,
+    isSubItemActive,
+    unreadCount,
+    navScrollRef,
+    savedScrollTopRef,
+    navigate,
+  };
+
+  return (
+    <div className="flex min-h-screen bg-slate-50 text-slate-900">
+      {/* Desktop Sidebar */}
+      <aside
+        className={`no-print hidden shrink-0 lg:block transition-all duration-150 ${
+          collapsed ? 'w-[68px]' : 'w-[260px]'
+        }`}
+      >
+        <div className="sticky top-0 h-screen">
+          <SidebarContent {...sidebarProps} />
+        </div>
+      </aside>
+
+      {/* Mobile Drawer */}
+      {mobileOpen && (
+        <div className="no-print fixed inset-0 z-50 flex lg:hidden">
+          <div className="fixed inset-0 bg-slate-900/50" onClick={() => setMobileOpen(false)} />
+          <div className="relative z-10 w-[268px]">
+            <SidebarContent {...sidebarProps} isMobile />
+          </div>
+        </div>
+      )}
+
+      {/* Main Column */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Top Header */}
+        <header className="no-print sticky top-0 z-30 flex h-14 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 sm:px-6">
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              type="button"
+              onClick={() => setMobileOpen(true)}
+              className="rounded-md p-1.5 text-slate-600 hover:bg-slate-100 lg:hidden"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+
+            <div className="hidden sm:flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs">
+              <Building2 className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+              <span className="font-medium text-slate-900 whitespace-nowrap">
+                {state.business?.businessName}
+              </span>
+              <span className="text-slate-400">·</span>
+              <span className="text-slate-500 whitespace-nowrap">{state.business?.city}</span>
+            </div>
+
+            {/* Global Search */}
+            <div className="relative w-48 sm:w-72">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onFocus={() => setSearchOpen(true)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setSearchOpen(true);
+                }}
+                placeholder="Search invoices, customers, SKUs..."
+                className="w-full rounded-md border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none"
+              />
+              {searchOpen && searchQuery.trim() && (
+                <div className="absolute left-0 right-0 top-full z-40 mt-1 rounded-lg border border-slate-200 bg-white shadow-lg">
+                  {searchResults.length === 0 ? (
+                    <div className="p-3 text-xs text-slate-500">No matching records found.</div>
+                  ) : (
+                    <div className="divide-y divide-slate-100">
+                      {searchResults.map((res, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => {
+                            navigate(res.path);
+                            setSearchOpen(false);
+                            setSearchQuery('');
+                          }}
+                          className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-slate-50"
+                        >
+                          <div className="min-w-0">
+                            <div className="truncate text-xs font-medium text-slate-900">{res.title}</div>
+                            <div className="truncate text-[11px] text-slate-500">{res.meta}</div>
+                          </div>
+                          <span className="ml-2 shrink-0 text-[11px] font-medium text-indigo-600">
+                            {res.type}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            {/* Demo Mode Indicator & Quick Reset */}
+            <div className="hidden md:flex items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs text-amber-800">
+              <span className="font-medium whitespace-nowrap">Demo Mode</span>
+              <span className="text-amber-400">·</span>
+              <button
+                type="button"
+                onClick={onResetClick}
+                className="inline-flex items-center gap-1 font-medium text-amber-900 hover:underline whitespace-nowrap"
+              >
+                <RotateCcw className="h-3 w-3" />
+                Reset
+              </button>
+            </div>
+
+            {/* Financial Year */}
+            <select
+              value={selectedFY}
+              onChange={(e) => setSelectedFY(e.target.value)}
+              aria-label="Financial Year"
+              className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 focus:border-indigo-500 focus:outline-none"
+            >
+              {FINANCIAL_YEARS.map((fy) => (
+                <option key={fy} value={fy}>
+                  FY {fy}
+                </option>
+              ))}
+            </select>
+
+            {/* Notifications */}
+            <button
+              type="button"
+              onClick={() => navigate('/notifications')}
+              title="Notifications"
+              className="relative rounded-md border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50"
+            >
+              <Bell className="h-4 w-4" />
+              {unreadCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-600 px-1 font-mono text-[10px] font-semibold text-white">
+                  {unreadCount}
+                </span>
+              )}
+            </button>
+
+            {/* Help */}
+            <button
+              type="button"
+              onClick={() => setHelpOpen(true)}
+              title="Prototype Help & GST Guide"
+              className="hidden sm:inline-flex rounded-md border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50"
+            >
+              <HelpCircle className="h-4 w-4" />
+            </button>
+
+            {/* User Profile */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setProfileOpen((p) => !p)}
+                className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-left hover:bg-slate-50"
+              >
+                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-700">
+                  {(state.currentUser?.name || 'A')[0]}
+                </div>
+                <div className="hidden md:block">
+                  <div className="text-xs font-medium text-slate-900 whitespace-nowrap">
+                    {state.currentUser?.name || 'Anil Sharma'}
+                  </div>
+                </div>
+                <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+              </button>
+
+              {profileOpen && (
+                <div className="absolute right-0 top-full z-40 mt-1.5 w-56 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                  <div className="border-b border-slate-100 px-3 py-2">
+                    <div className="text-xs font-semibold text-slate-900">
+                      {state.currentUser?.name}
+                    </div>
+                    <div className="text-[11px] text-slate-500">
+                      {state.currentUser?.role} · {state.currentUser?.email}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileOpen(false);
+                      navigate('/settings');
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50"
+                  >
+                    <Settings className="h-3.5 w-3.5" />
+                    Business Settings
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileOpen(false);
+                      navigate('/onboarding');
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50"
+                  >
+                    <Building2 className="h-3.5 w-3.5" />
+                    Business Setup Wizard
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileOpen(false);
+                      navigate('/super-admin');
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50"
+                  >
+                    <ShieldAlert className="h-3.5 w-3.5 text-amber-600" />
+                    Super Admin Panel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileOpen(false);
+                      onResetClick();
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Reset Demo Data
+                  </button>
+                  <div className="my-1 border-t border-slate-100" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileOpen(false);
+                      logout();
+                      navigate('/login');
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-rose-600 hover:bg-rose-50"
+                  >
+                    <LogOut className="h-3.5 w-3.5" />
+                    Sign Out
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </header>
+
+        {/* Main Viewport */}
+        <main className="flex-1 p-4 sm:p-6">{children}</main>
+      </div>
+
+      {/* Help Modal */}
+      <Modal
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        title="ArthaGST Prototype Guide"
+        subtitle="Indian GST Billing, Inventory & Business Management Demo"
+        footer={
+          <>
+            <button type="button" onClick={onResetClick} className={btnSecondary}>
+              <RotateCcw className="h-3.5 w-3.5" />
+              Reset Demo Data
+            </button>
+            <button type="button" onClick={() => setHelpOpen(false)} className={btnPrimary}>
+              Close
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-3 text-xs text-slate-600">
+          <p>
+            You are exploring an interactive frontend prototype pre-loaded with realistic data for{' '}
+            <strong className="text-slate-900">Sharma Traders (Jaipur, Rajasthan)</strong> for FY 2026-27.
+          </p>
+          <div className="rounded-md border border-slate-200 bg-slate-50 p-3 space-y-1.5">
+            <div className="font-semibold text-slate-800">Key Connected Workflows to Try:</div>
+            <ul className="list-disc pl-4 space-y-1">
+              <li>Create a Sales Invoice (Intra-state Rajasthan computes CGST+SGST; Inter-state computes IGST).</li>
+              <li>Finalizing an invoice automatically reduces inventory stock and updates customer receivables.</li>
+              <li>Record a Payment In against any Unpaid/Partial invoice to update ledger and cash/bank balances.</li>
+              <li>Issue a Sales Return / Credit Note or record a Purchase Bill and see GSTR-1 / GSTR-3B update live.</li>
+              <li>Use POS Billing for fast retail checkout with barcode search and split payments.</li>
+            </ul>
+          </div>
+          <p className="text-[11px] text-slate-500">
+            Note: All GSTINs, PANs, IRP E-Invoice IRNs, E-Way Bills, and GSTR-2B filings in this prototype are simulated demo workflows stored locally in your browser.
+          </p>
+        </div>
+      </Modal>
+    </div>
+  );
+};
