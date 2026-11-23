@@ -4,6 +4,8 @@ import partyRoutes from '../modules/parties/party.routes.js';
 import categoryRoutes from '../modules/categories/category.routes.js';
 import unitRoutes from '../modules/units/unit.routes.js';
 import productRoutes from '../modules/products/product.routes.js';
+import warehouseRoutes from '../modules/warehouses/warehouse.routes.js';
+import inventoryRoutes from '../modules/inventory/inventory.routes.js';
 
 const router = Router();
 
@@ -47,5 +49,17 @@ router.use('/units', unitRoutes);
  * /api/products
  */
 router.use('/products', productRoutes);
+
+/**
+ * Warehouses routes
+ * /api/warehouses
+ */
+router.use('/warehouses', warehouseRoutes);
+
+/**
+ * Inventory & Stock Movements routes
+ * /api/inventory
+ */
+router.use('/inventory', inventoryRoutes);
 
 export default router;
