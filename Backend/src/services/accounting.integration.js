@@ -35,10 +35,14 @@ export const validateDoubleEntryBalance = (lines) => {
     const cr = round2(line.credit || 0);
 
     if (dr > 0 && cr > 0) {
-      throw new Error(`Line for account ${line.accountCode} cannot have both debit and credit amounts.`);
+      const err = new Error(`Line for account ${line.accountCode} cannot have both debit and credit amounts.`);
+      err.statusCode = 400;
+      throw err;
     }
     if (dr === 0 && cr === 0) {
-      throw new Error(`Line for account ${line.accountCode} must have either a debit or credit amount.`);
+      const err = new Error(`Line for account ${line.accountCode} must have either a debit or credit amount.`);
+      err.statusCode = 400;
+      throw err;
     }
 
     totalDebit = round2(totalDebit + dr);
@@ -47,9 +51,11 @@ export const validateDoubleEntryBalance = (lines) => {
 
   const diff = Math.abs(round2(totalDebit - totalCredit));
   if (diff > 0.01) {
-    throw new Error(
+    const error = new Error(
       `Double-entry imbalance: Total Debit (₹${totalDebit}) must equal Total Credit (₹${totalCredit}). Difference: ₹${diff}`
     );
+    error.statusCode = 400;
+    throw error;
   }
 
   return {

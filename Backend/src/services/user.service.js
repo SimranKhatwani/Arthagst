@@ -120,7 +120,7 @@ export const createStaff = async (tenantId, actorUser, data) => {
     tenantId,
     title: 'New Staff Member Added',
     message: `${user.name} (${user.role}) has been added to the team by ${actorUser?.name || 'Administrator'}.`,
-    notificationType: 'SYSTEM_EVENT',
+    notificationType: 'system',
     referenceType: 'User',
     referenceId: user._id,
   }).catch(() => {});

@@ -23,6 +23,7 @@ import auditLogRoutes from './auditLog.routes.js';
 import userRoutes from './user.routes.js';
 import tenantRoutes from './tenant.routes.js';
 import settingsRoutes from './settings.routes.js';
+import reportsRoutes from './reports.routes.js';
 
 const router = Router();
 
@@ -180,5 +181,11 @@ router.use('/tenants', tenantRoutes);
  * /api/settings
  */
 router.use('/settings', settingsRoutes);
+
+/**
+ * Operational Reports Module
+ * /api/reports
+ */
+router.use('/reports', reportsRoutes);
 
 export default router;
