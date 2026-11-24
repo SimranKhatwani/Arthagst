@@ -10,6 +10,11 @@ import Tenant from '../tenants/tenant.model.js';
 import Inventory from '../inventory/inventory.model.js';
 import StockMovement from '../inventory/stockMovement.model.js';
 import purchasesCalculator from './purchases.calculator.js';
+import {
+  postPurchaseBillJournal,
+  reversePurchaseBillJournal,
+  postDebitNoteJournal,
+} from '../accounting/accounting.integration.js';
 
 /**
  * Transaction helper with retry on write conflicts
@@ -1028,6 +1033,9 @@ export const postPurchaseBill = async (tenantId, userId, billId) => {
     bill.postedAt = new Date();
     await bill.save({ session });
 
+    // Automatic Accounting Journal Posting
+    await postPurchaseBillJournal(tenantId, userId, bill, session);
+
     return bill;
   });
 };
@@ -1103,9 +1111,15 @@ export const cancelPurchaseBill = async (tenantId, userId, billId) => {
       }
     }
 
+    const wasPosted = bill.billStatus === 'posted';
     bill.billStatus = 'cancelled';
     bill.cancelledAt = new Date();
     await bill.save({ session });
+
+    // Reverse accounting journal entry if bill was posted
+    if (wasPosted) {
+      await reversePurchaseBillJournal(tenantId, userId, bill, session);
+    }
 
     return bill;
   });
@@ -1324,6 +1338,9 @@ export const postDebitNote = async (tenantId, userId, debitNoteId) => {
     debitNote.stockReduced = true;
     debitNote.postedAt = new Date();
     await debitNote.save({ session });
+
+    // Automatic Accounting Journal Posting
+    await postDebitNoteJournal(tenantId, userId, debitNote, session);
 
     return debitNote;
   });

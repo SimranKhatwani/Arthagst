@@ -14,6 +14,7 @@ import expenseRoutes from '../modules/expenses/expense.routes.js';
 import gstRoutes from '../modules/gst/gst.routes.js';
 import eInvoiceRoutes from '../modules/eInvoice/eInvoice.routes.js';
 import eWayBillRoutes from '../modules/eWayBill/eWayBill.routes.js';
+import accountingRoutes from '../modules/accounting/accounting.routes.js';
 
 const router = Router();
 
@@ -117,5 +118,11 @@ router.use('/e-invoices', eInvoiceRoutes);
  * /api/e-way-bills
  */
 router.use('/e-way-bills', eWayBillRoutes);
+
+/**
+ * Accounting & Financial Reports routes
+ * /api/accounting
+ */
+router.use('/accounting', accountingRoutes);
 
 export default router;

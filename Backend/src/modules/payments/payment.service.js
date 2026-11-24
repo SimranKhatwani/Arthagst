@@ -6,6 +6,10 @@ import PurchaseBill from '../purchases/purchaseBill.model.js';
 import Party from '../parties/party.model.js';
 import BankAccount from '../banking/bankAccount.model.js';
 import { getFinancialYear, round2 } from '../sales/sales.calculator.js';
+import {
+  postPaymentJournal,
+  reversePaymentJournal,
+} from '../accounting/accounting.integration.js';
 
 /**
  * Transaction helper with retry on write conflicts
@@ -353,6 +357,10 @@ export const createPayment = async (tenantId, userId, data) => {
     });
 
     await payment.save({ session });
+
+    // Automatic Accounting Journal Posting
+    await postPaymentJournal(tenantId, userId, payment, session);
+
     return payment;
   });
 };
@@ -451,6 +459,10 @@ export const cancelPayment = async (tenantId, userId, paymentId, cancellationRea
     payment.cancellationReason = cancellationReason;
 
     await payment.save({ session });
+
+    // Automatic Accounting Journal Reversal
+    await reversePaymentJournal(tenantId, userId, payment, session);
+
     return payment;
   });
 };

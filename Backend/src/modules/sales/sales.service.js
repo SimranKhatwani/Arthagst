@@ -11,6 +11,11 @@ import Tenant from '../tenants/tenant.model.js';
 import Inventory from '../inventory/inventory.model.js';
 import StockMovement from '../inventory/stockMovement.model.js';
 import salesCalculator from './sales.calculator.js';
+import {
+  postSalesInvoiceJournal,
+  reverseSalesInvoiceJournal,
+  postCreditNoteJournal,
+} from '../accounting/accounting.integration.js';
 
 /**
  * Transaction helper with retry on write conflicts
@@ -509,6 +514,9 @@ export const postInvoice = async (tenantId, userId, invoiceId) => {
     invoice.postedAt = new Date();
     await invoice.save({ session });
 
+    // Automatic Accounting Journal Posting
+    await postSalesInvoiceJournal(tenantId, userId, invoice, session);
+
     return invoice;
   });
 };
@@ -618,10 +626,16 @@ export const cancelInvoice = async (tenantId, userId, invoiceId, cancellationRea
       }
     }
 
+    const wasPosted = invoice.invoiceStatus === 'posted';
     invoice.invoiceStatus = 'cancelled';
     invoice.cancelledAt = new Date();
     invoice.cancellationReason = cancellationReason;
     await invoice.save({ session });
+
+    // Reverse accounting journal entry if invoice was posted
+    if (wasPosted) {
+      await reverseSalesInvoiceJournal(tenantId, userId, invoice, session);
+    }
 
     return invoice;
   });
@@ -1276,6 +1290,9 @@ export const postCreditNote = async (tenantId, userId, creditNoteId) => {
     creditNote.stockRestored = true;
     creditNote.postedAt = new Date();
     await creditNote.save({ session });
+
+    // Automatic Accounting Journal Posting
+    await postCreditNoteJournal(tenantId, userId, creditNote, session);
 
     return creditNote;
   });
