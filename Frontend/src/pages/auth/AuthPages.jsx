@@ -1,6 +1,23 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Check, ArrowRight, ArrowLeft, Building2, ShieldCheck } from 'lucide-react';
+import {
+  Check,
+  ArrowRight,
+  ArrowLeft,
+  Building2,
+  ShieldCheck,
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  Sparkles,
+  Zap,
+  AlertCircle,
+  Layers,
+  User,
+  Phone,
+  MapPin,
+} from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import {
   INDIAN_STATES,
@@ -14,15 +31,28 @@ import { InputField, inputClass, btnPrimary, btnSecondary } from '../../componen
 export const LoginPage = () => {
   const { login, notify } = useApp();
   const navigate = useNavigate();
+  const [loginMode, setLoginMode] = useState('tenant'); // 'tenant' or 'admin'
   const [tenantCode, setTenantCode] = useState(
     () => localStorage.getItem('arthagst_last_tenant_code') || ''
   );
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
+  const [quickFillSuccess, setQuickFillSuccess] = useState(false);
+
+  const handleQuickFillAdmin = () => {
+    setTenantCode('ARTHA');
+    setEmail('admin@artha.com');
+    setPassword('Admin@12345');
+    setFieldErrors({});
+    setError(null);
+    setQuickFillSuccess(true);
+    setTimeout(() => setQuickFillSuccess(false), 3000);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -30,7 +60,9 @@ export const LoginPage = () => {
     setFieldErrors({});
 
     const errors = {};
-    if (!tenantCode.trim()) errors.tenantCode = 'Tenant code is required';
+    if (loginMode === 'tenant' && !tenantCode.trim()) {
+      errors.tenantCode = 'Organization code is required';
+    }
     if (!email.trim()) errors.email = 'Email address is required';
     if (!password) errors.password = 'Password is required';
 
@@ -42,12 +74,13 @@ export const LoginPage = () => {
     setLoading(true);
     try {
       await login({
-        tenantCode: tenantCode.trim().toUpperCase(),
+        tenantCode: loginMode === 'tenant' ? tenantCode.trim().toUpperCase() : (tenantCode.trim() || undefined),
         email: email.trim().toLowerCase(),
         password,
+        isSuperAdmin: loginMode === 'admin',
       });
 
-      if (remember) {
+      if (remember && tenantCode.trim()) {
         localStorage.setItem('arthagst_last_tenant_code', tenantCode.trim().toUpperCase());
       }
 
@@ -67,112 +100,301 @@ export const LoginPage = () => {
   };
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
-      <div className="hidden w-1/2 flex-col justify-between bg-slate-900 p-12 text-white lg:flex">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 font-display text-base font-bold">
-            A
-          </div>
-          <span className="font-display text-xl font-semibold">ArthaGST</span>
-        </div>
-        <div className="max-w-md space-y-4">
-          <h1 className="font-display text-3xl font-semibold leading-tight">
-            GST billing, inventory, and accounting built for Indian businesses.
-          </h1>
-          <p className="text-sm leading-relaxed text-slate-300">
-            Manage CGST/SGST/IGST invoicing, GSTR-1 &amp; GSTR-3B summaries, multi-warehouse stock,
-            and supplier payables in one structured workspace.
-          </p>
-          <div className="grid grid-cols-2 gap-3 pt-4 text-xs text-slate-300">
-            <div className="rounded-lg border border-slate-800 bg-slate-800/40 p-3">
-              <div className="font-semibold text-white">Multi-Tenant Cloud</div>
-              <div className="mt-1 text-slate-400">Strict organization data isolation</div>
+    <div className="flex min-h-screen bg-slate-900">
+      {/* LEFT HERO / VALUE PROPOSITION PANEL */}
+      <div className="hidden lg:flex w-1/2 flex-col justify-between p-12 lg:p-14 text-white relative overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950">
+        {/* Ambient Glow Elements */}
+        <div className="absolute -top-32 -left-32 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-violet-600/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute inset-0 bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:24px_24px] opacity-20 pointer-events-none" />
+
+        {/* Brand Header */}
+        <div className="relative z-10 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 font-display text-lg font-bold text-white shadow-lg shadow-indigo-500/30">
+              A
             </div>
-            <div className="rounded-lg border border-slate-800 bg-slate-800/40 p-3">
-              <div className="font-semibold text-white">Real-Time GST Engine</div>
-              <div className="mt-1 text-slate-400">Automated CGST/SGST/IGST compliance</div>
+            <div>
+              <div className="font-display text-2xl font-bold tracking-tight text-white">ArthaGST</div>
+              <div className="text-[11px] text-slate-400 font-medium">Enterprise GST &amp; ERP Suite</div>
             </div>
           </div>
+
         </div>
-        <div className="text-xs text-slate-400">
-          Enterprise Multi-Tenant GST SaaS · Connected to ArthaGST Backend
+
+        {/* Pitch & Value Props */}
+        <div className="relative z-10 max-w-lg space-y-6 my-auto py-8">
+          <div className="space-y-3">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
+
+              Built for Modern Indian Commerce
+            </div>
+            <h1 className="font-display text-3xl xl:text-4xl font-extrabold tracking-tight text-white leading-tight">
+              GST billing, inventory &amp; compliance in one structured workspace.
+            </h1>
+            <p className="text-sm leading-relaxed text-slate-300">
+              Automated CGST/SGST/IGST invoicing, GSTR-1 &amp; GSTR-3B return generation, multi-warehouse stock ledgers, and supplier payables with strict multi-tenant isolation.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-start gap-3.5 p-3.5 rounded-xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-sm">
+              <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shrink-0">
+                <ShieldCheck className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-xs font-semibold text-white">Multi-Tenant Cryptographic Isolation</div>
+                <div className="mt-0.5 text-xs text-slate-400 leading-normal">
+                  Each organization’s data is strictly partitioned by unique tenant codes with zero cross-tenant leakage.
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3.5 p-3.5 rounded-xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-sm">
+              <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
+                <Zap className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-xs font-semibold text-white">Real-Time GST Calculation Engine</div>
+                <div className="mt-0.5 text-xs text-slate-400 leading-normal">
+                  Automated place-of-supply tax logic, reverse charge mechanism, and exportable GSTR-1 &amp; 3B filing summaries.
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3.5 p-3.5 rounded-xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-sm">
+              <div className="p-2 rounded-lg bg-violet-500/10 text-violet-400 border border-violet-500/20 shrink-0">
+                <Layers className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-xs font-semibold text-white">Multi-Warehouse Inventory &amp; Banking</div>
+                <div className="mt-0.5 text-xs text-slate-400 leading-normal">
+                  Track stock across multiple godowns, record bank statements, and maintain double-entry audit logs.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer Badges */}
+        <div className="relative z-10 pt-6 border-t border-slate-800/80 flex flex-wrap items-center justify-between text-xs text-slate-400 gap-3">
+          <div className="flex items-center gap-3">
+            <span className="px-2 py-0.5 rounded bg-slate-800/80 text-[11px] font-mono text-slate-300">256-Bit SSL</span>
+            <span className="px-2 py-0.5 rounded bg-slate-800/80 text-[11px] font-mono text-slate-300">GSTN Ready</span>
+            <span className="px-2 py-0.5 rounded bg-slate-800/80 text-[11px] font-mono text-slate-300">SOC2 Standards</span>
+          </div>
+          <div>ArthaGST Production v2.5</div>
         </div>
       </div>
 
-      <div className="flex flex-1 items-center justify-center p-6">
-        <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
-          <h2 className="font-display text-xl font-semibold text-slate-900">Sign in to ArthaGST</h2>
-          <p className="mt-1 text-xs text-slate-500">
-            Enter your organization tenant code and credentials.
-          </p>
+      {/* RIGHT AUTH CARD PANEL */}
+      <div className="flex flex-1 items-center justify-center p-6 sm:p-10 bg-slate-50 relative">
+        <div className="absolute inset-0 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:20px_20px] opacity-40 pointer-events-none" />
 
+        <div className="w-full max-w-md rounded-2xl border border-slate-200/90 bg-white/95 backdrop-blur-md p-7 sm:p-9 shadow-xl shadow-slate-200/50 relative z-10">
+          {/* Mobile Logo */}
+          <div className="flex lg:hidden items-center gap-2.5 mb-6">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 font-display text-base font-bold text-white shadow-md shadow-indigo-500/30">
+              A
+            </div>
+            <div>
+              <div className="font-display text-lg font-bold text-slate-900">ArthaGST</div>
+              <div className="text-[10px] text-slate-500 font-medium">Enterprise GST Suite</div>
+            </div>
+          </div>
+
+          <div className="mb-6">
+            <h2 className="font-display text-2xl font-bold text-slate-900 tracking-tight">
+              Sign in to ArthaGST
+            </h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Select your portal mode and enter your verified credentials.
+            </p>
+          </div>
+
+          {/* Portal Switcher Tabs */}
+          <div className="grid grid-cols-2 p-1 bg-slate-100 rounded-xl mb-5 text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => {
+                setLoginMode('tenant');
+                setError(null);
+                setFieldErrors({});
+              }}
+              className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg transition-all cursor-pointer ${loginMode === 'tenant'
+                ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/80 font-bold'
+                : 'text-slate-600 hover:text-slate-900'
+                }`}
+            >
+              <Building2 className="w-3.5 h-3.5" />
+              Organization
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setLoginMode('admin');
+                setError(null);
+                setFieldErrors({});
+              }}
+              className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg transition-all cursor-pointer ${loginMode === 'admin'
+                ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-sm font-bold'
+                : 'text-slate-600 hover:text-slate-900'
+                }`}
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              Platform Admin
+            </button>
+          </div>
+
+
+
+          {/* Error Banner */}
           {error && (
-            <div className="mt-4 rounded-md border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
-              <div className="font-semibold">Authentication Failed</div>
-              <div className="mt-0.5">{error}</div>
+            <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50/80 p-3.5 text-xs text-rose-800 flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <div>
+                <div className="font-bold">Authentication Failed</div>
+                <div className="mt-0.5 text-rose-700 leading-relaxed">{error}</div>
+              </div>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-            <InputField label="Tenant / Organization Code" required error={fieldErrors.tenantCode}>
-              <input
-                type="text"
-                value={tenantCode}
-                onChange={(e) => setTenantCode(e.target.value.toUpperCase())}
-                className={inputClass}
-                placeholder="e.g. ST001 or ORGCODE"
-                autoComplete="organization"
-              />
-            </InputField>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Tenant Code Field */}
+            {loginMode === 'tenant' && (
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-slate-700 flex items-center gap-1">
+                    Organization / Tenant Code <span className="text-rose-500">*</span>
+                  </label>
+                  <span className="text-[11px] text-slate-400">e.g. ARTHA</span>
+                </div>
+                <div className="relative">
+                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                    <Building2 className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="text"
+                    value={tenantCode}
+                    onChange={(e) => setTenantCode(e.target.value.toUpperCase())}
+                    className={`w-full rounded-xl border ${fieldErrors.tenantCode ? 'border-rose-400 bg-rose-50/30' : 'border-slate-300'
+                      } bg-white py-2.5 pl-9 pr-3 text-sm font-mono uppercase tracking-wider text-slate-900 placeholder:text-slate-400 placeholder:font-sans placeholder:normal-case placeholder:tracking-normal focus:border-indigo-600 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all`}
+                    placeholder="Enter Tenant Code"
+                    autoComplete="organization"
+                  />
+                </div>
+                {fieldErrors.tenantCode && (
+                  <p className="mt-1 text-[11px] text-rose-600">{fieldErrors.tenantCode}</p>
+                )}
+              </div>
+            )}
 
-            <InputField label="Email Address" required error={fieldErrors.email}>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className={inputClass}
-                placeholder="name@company.com"
-                autoComplete="email"
-              />
-            </InputField>
+            {/* Email Field */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Email Address <span className="text-rose-500">*</span>
+              </label>
+              <div className="relative">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                  <Mail className="w-4 h-4" />
+                </div>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className={`w-full rounded-xl border ${fieldErrors.email ? 'border-rose-400 bg-rose-50/30' : 'border-slate-300'
+                    } bg-white py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all`}
+                  placeholder="name@company.com"
+                  autoComplete="email"
+                />
+              </div>
+              {fieldErrors.email && (
+                <p className="mt-1 text-[11px] text-rose-600">{fieldErrors.email}</p>
+              )}
+            </div>
 
-            <InputField label="Password" required error={fieldErrors.password}>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className={inputClass}
-                placeholder="••••••••"
-                autoComplete="current-password"
-              />
-            </InputField>
+            {/* Password Field */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-semibold text-slate-700">
+                  Password <span className="text-rose-500">*</span>
+                </label>
+              </div>
+              <div className="relative">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                  <Lock className="w-4 h-4" />
+                </div>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className={`w-full rounded-xl border ${fieldErrors.password ? 'border-rose-400 bg-rose-50/30' : 'border-slate-300'
+                    } bg-white py-2.5 pl-9 pr-10 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all`}
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  tabIndex={-1}
+                  aria-label="Toggle password visibility"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              {fieldErrors.password && (
+                <p className="mt-1 text-[11px] text-rose-600">{fieldErrors.password}</p>
+              )}
+            </div>
 
-            <div className="flex items-center justify-between text-xs">
-              <label className="flex items-center gap-2 text-slate-600">
+            {/* Remember Me */}
+            <div className="flex items-center justify-between text-xs pt-1">
+              <label className="flex items-center gap-2 text-slate-600 cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={remember}
                   onChange={(e) => setRemember(e.target.checked)}
-                  className="rounded border-slate-300 text-indigo-600"
+                  className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                 />
-                Remember tenant code
+                Remember organization code
               </label>
             </div>
 
+            {/* Submit Button */}
             <button
               type="submit"
               disabled={loading}
-              className={`${btnPrimary} w-full py-2.5 cursor-pointer disabled:opacity-50`}
+              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-white font-semibold text-sm bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 shadow-md shadow-indigo-600/25 hover:shadow-indigo-600/35 active:scale-[0.99] transition-all disabled:opacity-50 cursor-pointer"
             >
-              {loading ? 'Signing in...' : 'Sign In'}
+              {loading ? (
+                <>
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Authenticating...
+                </>
+              ) : (
+                <>
+                  <span>Sign In</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
             </button>
           </form>
 
-          <div className="mt-6 border-t border-slate-200 pt-4 text-center text-xs text-slate-600">
-            New business?{' '}
-            <Link to="/register" className="font-medium text-indigo-600 hover:underline">
-              Register New Organization
-            </Link>
+          {/* Footer Navigation */}
+          <div className="mt-6 border-t border-slate-200 pt-5 text-center text-xs text-slate-600">
+            {loginMode === 'tenant' ? (
+              <>
+                New to ArthaGST?{' '}
+                <Link to="/register" className="font-semibold text-indigo-600 hover:text-indigo-700 hover:underline">
+                  Register New Organization &rarr;
+                </Link>
+              </>
+            ) : (
+              <span className="text-slate-500">
+                Platform Administrator Login · Protected Area
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -193,6 +415,7 @@ export const RegisterPage = () => {
     password: '',
     confirmPassword: '',
   });
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
@@ -245,126 +468,194 @@ export const RegisterPage = () => {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
-      <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 font-display text-sm font-bold text-white">
-            A
+    <div className="flex min-h-screen items-center justify-center bg-slate-900/95 p-6 relative overflow-hidden">
+      {/* Background Ambience */}
+      <div className="absolute -top-32 -left-32 w-96 h-96 bg-indigo-600/15 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-violet-600/15 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute inset-0 bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:24px_24px] opacity-20 pointer-events-none" />
+
+      <div className="w-full max-w-lg rounded-2xl border border-slate-200/90 bg-white p-8 sm:p-9 shadow-2xl relative z-10">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 font-display text-base font-bold text-white shadow-md shadow-indigo-500/30">
+              A
+            </div>
+            <span className="font-display text-xl font-bold text-slate-900">ArthaGST</span>
           </div>
-          <span className="font-display text-lg font-semibold text-slate-900">ArthaGST</span>
+          <span className="text-[11px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 rounded-full">
+            New Organization
+          </span>
         </div>
-        <h2 className="mt-4 font-display text-xl font-semibold text-slate-900">
-          Create your business account
-        </h2>
-        <p className="mt-1 text-xs text-slate-500">
-          Set up your organization and initial owner account.
-        </p>
+
+        <div className="mt-5 mb-5">
+          <h2 className="font-display text-2xl font-bold text-slate-900 tracking-tight">
+            Create Business Workspace
+          </h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Set up your organization and initial owner administrator credentials.
+          </p>
+        </div>
 
         {error && (
-          <div className="mt-4 rounded-md border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
-            <div className="font-semibold">Registration Error</div>
-            <div className="mt-0.5">{error}</div>
+          <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50/80 p-3.5 text-xs text-rose-800 flex items-start gap-2.5">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+            <div>
+              <div className="font-bold">Registration Error</div>
+              <div className="mt-0.5 text-rose-700 leading-relaxed">{error}</div>
+            </div>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="mt-5 space-y-3.5">
-          <InputField label="Trade / Business Name" required error={fieldErrors.businessName}>
-            <input
-              type="text"
-              value={form.businessName}
-              onChange={(e) => setForm({ ...form, businessName: e.target.value })}
-              className={inputClass}
-              placeholder="e.g. Acme Enterprises"
-            />
-          </InputField>
+        <form onSubmit={handleSubmit} className="space-y-3.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <InputField label="Trade / Business Name" required error={fieldErrors.businessName}>
+              <div className="relative">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                  <Building2 className="w-4 h-4" />
+                </div>
+                <input
+                  type="text"
+                  value={form.businessName}
+                  onChange={(e) => setForm({ ...form, businessName: e.target.value })}
+                  className="w-full rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all"
+                  placeholder="e.g. Acme Enterprises"
+                />
+              </div>
+            </InputField>
 
-          <InputField label="Custom Tenant Code (Optional)" error={fieldErrors.tenantCode}>
-            <input
-              type="text"
-              value={form.tenantCode}
-              onChange={(e) => setForm({ ...form, tenantCode: e.target.value.toUpperCase() })}
-              className={inputClass}
-              placeholder="e.g. ACME (auto-generated if empty)"
-            />
-          </InputField>
+            <InputField label="Custom Tenant Code" error={fieldErrors.tenantCode}>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={form.tenantCode}
+                  onChange={(e) => setForm({ ...form, tenantCode: e.target.value.toUpperCase() })}
+                  className="w-full rounded-xl border border-slate-300 bg-white py-2 px-3 text-xs font-mono uppercase tracking-wider text-slate-900 placeholder:text-slate-400 placeholder:font-sans placeholder:normal-case placeholder:tracking-normal focus:border-indigo-600 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all"
+                  placeholder="Auto-generated if empty"
+                />
+              </div>
+            </InputField>
+          </div>
 
-          <InputField label="Owner Full Name" required error={fieldErrors.ownerName}>
-            <input
-              type="text"
-              value={form.ownerName}
-              onChange={(e) => setForm({ ...form, ownerName: e.target.value })}
-              className={inputClass}
-              placeholder="e.g. Rajesh Sharma"
-            />
-          </InputField>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <InputField label="Owner Full Name" required error={fieldErrors.ownerName}>
+              <div className="relative">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                  <User className="w-4 h-4" />
+                </div>
+                <input
+                  type="text"
+                  value={form.ownerName}
+                  onChange={(e) => setForm({ ...form, ownerName: e.target.value })}
+                  className="w-full rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all"
+                  placeholder="e.g. Rajesh Sharma"
+                />
+              </div>
+            </InputField>
 
-          <InputField label="Business Email" required error={fieldErrors.email}>
-            <input
-              type="email"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              className={inputClass}
-              placeholder="accounts@company.in"
-            />
-          </InputField>
+            <InputField label="Mobile Number" required error={fieldErrors.mobile}>
+              <div className="relative">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                  <Phone className="w-4 h-4" />
+                </div>
+                <input
+                  type="tel"
+                  value={form.mobile}
+                  onChange={(e) => setForm({ ...form, mobile: e.target.value })}
+                  className="w-full rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all"
+                  placeholder="9829011223"
+                />
+              </div>
+            </InputField>
+          </div>
 
-          <InputField label="Mobile Number (+91)" required error={fieldErrors.mobile}>
-            <input
-              type="tel"
-              value={form.mobile}
-              onChange={(e) => setForm({ ...form, mobile: e.target.value })}
-              className={inputClass}
-              placeholder="9829011223"
-            />
-          </InputField>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <InputField label="Business Email" required error={fieldErrors.email}>
+              <div className="relative">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                  <Mail className="w-4 h-4" />
+                </div>
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  className="w-full rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all"
+                  placeholder="accounts@company.in"
+                />
+              </div>
+            </InputField>
 
-          <InputField label="State / Union Territory" required error={fieldErrors.state}>
-            <select
-              value={form.state}
-              onChange={(e) => setForm({ ...form, state: e.target.value })}
-              className={inputClass}
-            >
-              {INDIAN_STATES.map((st) => (
-                <option key={st} value={st}>
-                  {st}
-                </option>
-              ))}
-            </select>
-          </InputField>
+            <InputField label="State / UT" required error={fieldErrors.state}>
+              <div className="relative">
+                <select
+                  value={form.state}
+                  onChange={(e) => setForm({ ...form, state: e.target.value })}
+                  className="w-full rounded-xl border border-slate-300 bg-white py-2 px-3 text-xs text-slate-900 focus:border-indigo-600 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all"
+                >
+                  {INDIAN_STATES.map((st) => (
+                    <option key={st} value={st}>
+                      {st}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </InputField>
+          </div>
 
-          <InputField label="Password" required error={fieldErrors.password}>
-            <input
-              type="password"
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-              className={inputClass}
-              placeholder="Minimum 6 characters"
-            />
-          </InputField>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <InputField label="Password" required error={fieldErrors.password}>
+              <div className="relative">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                  <Lock className="w-4 h-4" />
+                </div>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={form.password}
+                  onChange={(e) => setForm({ ...form, password: e.target.value })}
+                  className="w-full rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-8 text-xs text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all"
+                  placeholder="Min 6 chars"
+                />
+              </div>
+            </InputField>
 
-          <InputField label="Confirm Password" required error={fieldErrors.confirmPassword}>
-            <input
-              type="password"
-              value={form.confirmPassword}
-              onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
-              className={inputClass}
-              placeholder="Re-enter password"
-            />
-          </InputField>
+            <InputField label="Confirm Password" required error={fieldErrors.confirmPassword}>
+              <div className="relative">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                  <Lock className="w-4 h-4" />
+                </div>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={form.confirmPassword}
+                  onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
+                  className="w-full rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all"
+                  placeholder="Re-enter password"
+                />
+              </div>
+            </InputField>
+          </div>
 
           <button
             type="submit"
             disabled={loading}
-            className={`${btnPrimary} w-full py-2.5 cursor-pointer disabled:opacity-50`}
+            className="w-full mt-2 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-white font-semibold text-sm bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 shadow-md shadow-indigo-600/25 hover:shadow-indigo-600/35 active:scale-[0.99] transition-all disabled:opacity-50 cursor-pointer"
           >
-            {loading ? 'Creating Account...' : 'Continue to Business Setup'}
+            {loading ? (
+              <>
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Creating Organization Account...
+              </>
+            ) : (
+              <>
+                <span>Continue to Business Setup</span>
+                <ArrowRight className="w-4 h-4" />
+              </>
+            )}
           </button>
         </form>
 
-        <div className="mt-5 text-center text-xs text-slate-600">
-          Already registered?{' '}
-          <Link to="/login" className="font-medium text-indigo-600 hover:underline">
-            Sign In
+        <div className="mt-5 pt-4 border-t border-slate-200 text-center text-xs text-slate-600">
+          Already have an account?{' '}
+          <Link to="/login" className="font-semibold text-indigo-600 hover:text-indigo-700 hover:underline">
+            Sign In &rarr;
           </Link>
         </div>
       </div>
@@ -442,13 +733,12 @@ export const OnboardingWizardPage = () => {
               key={s.num}
               type="button"
               onClick={() => setStep(s.num)}
-              className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs transition-colors ${
-                step === s.num
-                  ? 'border-indigo-600 bg-indigo-50 font-semibold text-indigo-900'
-                  : step > s.num
+              className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs transition-colors ${step === s.num
+                ? 'border-indigo-600 bg-indigo-50 font-semibold text-indigo-900'
+                : step > s.num
                   ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
                   : 'border-slate-200 bg-white text-slate-500'
-              }`}
+                }`}
             >
               <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-[11px] font-bold border border-current">
                 {step > s.num ? <Check className="h-3 w-3" /> : s.num}
@@ -687,11 +977,10 @@ export const OnboardingWizardPage = () => {
                         key={tpl}
                         type="button"
                         onClick={() => setForm({ ...form, invoiceTemplate: tpl })}
-                        className={`rounded-md border p-2.5 text-center text-xs font-medium ${
-                          form.invoiceTemplate === tpl
-                            ? 'border-indigo-600 bg-indigo-50 text-indigo-800'
-                            : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                        }`}
+                        className={`rounded-md border p-2.5 text-center text-xs font-medium ${form.invoiceTemplate === tpl
+                          ? 'border-indigo-600 bg-indigo-50 text-indigo-800'
+                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                          }`}
                       >
                         {tpl}
                       </button>

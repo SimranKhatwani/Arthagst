@@ -169,8 +169,76 @@ export const registerBusiness = async (data) => {
  * Authenticate tenant user with tenantCode, email, and password
  */
 export const loginUser = async ({ tenantCode, email, password }) => {
-  const normalizedCode = tenantCode.toUpperCase().trim();
-  const normalizedEmail = email.toLowerCase().trim();
+  const normalizedCode = (tenantCode || '').toUpperCase().trim();
+  const normalizedEmail = (email || '').toLowerCase().trim();
+
+  // If tenant code is omitted or admin code passed, allow super_admin direct login
+  if (!normalizedCode || normalizedCode === 'ADMIN' || normalizedCode === 'SUPERADMIN') {
+    const adminUser = await User.findOne({
+      email: normalizedEmail,
+      $or: [{ isSuperAdmin: true }, { role: 'super_admin' }],
+    }).select('+password');
+
+    if (adminUser) {
+      if (!adminUser.isActive) {
+        const error = new Error('Admin account is inactive. Please contact system administrator.');
+        error.statusCode = 403;
+        throw error;
+      }
+
+      const isMatch = await adminUser.comparePassword(password);
+      if (!isMatch) {
+        const error = new Error('Invalid email or password');
+        error.statusCode = 401;
+        throw error;
+      }
+
+      await User.updateOne({ _id: adminUser._id }, { $set: { lastLogin: new Date() } });
+
+      let tenant = null;
+      if (adminUser.tenantId) {
+        tenant = await Tenant.findById(adminUser.tenantId);
+      }
+
+      const token = generateToken({
+        userId: adminUser._id,
+        tenantId: tenant ? tenant._id : null,
+        role: 'super_admin',
+        isSuperAdmin: true,
+      });
+
+      return {
+        token,
+        tenant: tenant
+          ? {
+              id: tenant._id,
+              tenantCode: tenant.tenantCode,
+              businessName: tenant.businessName,
+              ownerName: tenant.ownerName,
+              email: tenant.email,
+              subscriptionStatus: tenant.subscriptionStatus,
+              isActive: tenant.isActive,
+            }
+          : {
+              id: null,
+              tenantCode: 'PLATFORM',
+              businessName: 'Platform Administration',
+              ownerName: adminUser.name,
+              email: adminUser.email,
+              subscriptionStatus: 'active',
+              isActive: true,
+            },
+        user: {
+          id: adminUser._id,
+          name: adminUser.name,
+          email: adminUser.email,
+          role: 'super_admin',
+          isSuperAdmin: true,
+          isActive: adminUser.isActive,
+        },
+      };
+    }
+  }
 
   // 1. Verify Tenant exists
   const tenant = await Tenant.findOne({ tenantCode: normalizedCode });

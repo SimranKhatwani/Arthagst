@@ -56,10 +56,7 @@ export const registerSchema = z.object({
 });
 
 export const loginSchema = z.object({
-  tenantCode: z
-    .string({ required_error: 'Tenant code is required' })
-    .trim()
-    .min(1, 'Tenant code is required'),
+  tenantCode: z.string().trim().optional().default(''),
   email: z
     .string({ required_error: 'Email is required' })
     .trim()

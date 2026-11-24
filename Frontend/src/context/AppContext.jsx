@@ -45,22 +45,28 @@ export const AppProvider = ({ children }) => {
       .getMe()
       .then((data) => {
         if (!isMounted) return;
-        if (data?.user && data?.tenant) {
+        if (data?.user) {
+          const tenant = data.tenant || {
+            tenantCode: 'PLATFORM',
+            businessName: 'Platform Administration',
+            subscriptionStatus: 'active',
+            isActive: true,
+          };
           setState((prev) => ({
             ...prev,
             isAuthenticated: true,
             currentUser: data.user,
-            currentTenant: data.tenant,
+            currentTenant: tenant,
             business: {
               ...prev.business,
-              ...data.tenant,
-              businessName: data.tenant.businessName || prev.business?.businessName,
-              tenantCode: data.tenant.tenantCode,
-              email: data.tenant.email || prev.business?.email,
-              phone: data.tenant.phone || prev.business?.phone,
-              state: data.tenant.state || prev.business?.state,
-              city: data.tenant.city || prev.business?.city,
-              subscriptionStatus: data.tenant.subscriptionStatus,
+              ...tenant,
+              businessName: tenant.businessName || prev.business?.businessName,
+              tenantCode: tenant.tenantCode || 'PLATFORM',
+              email: tenant.email || data.user.email || prev.business?.email,
+              phone: tenant.phone || prev.business?.phone,
+              state: tenant.state || prev.business?.state,
+              city: tenant.city || prev.business?.city,
+              subscriptionStatus: tenant.subscriptionStatus || 'active',
             },
           }));
         }
@@ -167,10 +173,15 @@ export const AppProvider = ({ children }) => {
 
   // Backend Authentication & Session State
   const login = useCallback(
-    async ({ tenantCode, email, password }) => {
+    async ({ tenantCode, email, password, isSuperAdmin }) => {
       setAuthLoading(true);
       try {
-        const data = await authService.login({ tenantCode, email, password });
+        let data;
+        if (isSuperAdmin && (!tenantCode || !tenantCode.trim())) {
+          data = await authService.superAdminLogin({ email, password });
+        } else {
+          data = await authService.login({ tenantCode, email, password });
+        }
         setToken(data.token);
         if (data.tenant?.tenantCode) {
           localStorage.setItem('arthagst_last_tenant_code', data.tenant.tenantCode);
@@ -183,14 +194,14 @@ export const AppProvider = ({ children }) => {
           business: {
             ...prev.business,
             ...data.tenant,
-            businessName: data.tenant.businessName || prev.business?.businessName,
-            tenantCode: data.tenant.tenantCode,
-            email: data.tenant.email || prev.business?.email,
-            subscriptionStatus: data.tenant.subscriptionStatus,
+            businessName: data.tenant?.businessName || prev.business?.businessName,
+            tenantCode: data.tenant?.tenantCode || 'PLATFORM',
+            email: data.tenant?.email || data.user?.email || prev.business?.email,
+            subscriptionStatus: data.tenant?.subscriptionStatus || 'active',
           },
         }));
         setAuthLoading(false);
-        notify(`Welcome back, ${data.user.name}!`);
+        notify(`Welcome back, ${data.user?.name || 'Administrator'}!`);
         return data;
       } catch (err) {
         setAuthLoading(false);

@@ -6,8 +6,19 @@ import api from './api.js';
  */
 
 export const login = async ({ tenantCode, email, password }) => {
-  const res = await api.post('/auth/login', {
-    tenantCode: tenantCode.trim().toUpperCase(),
+  const payload = {
+    email: email.trim().toLowerCase(),
+    password,
+  };
+  if (tenantCode && tenantCode.trim()) {
+    payload.tenantCode = tenantCode.trim().toUpperCase();
+  }
+  const res = await api.post('/auth/login', payload);
+  return res.data;
+};
+
+export const superAdminLogin = async ({ email, password }) => {
+  const res = await api.post('/super-admin/auth/login', {
     email: email.trim().toLowerCase(),
     password,
   });
@@ -34,6 +45,7 @@ export const logout = async () => {
 
 export default {
   login,
+  superAdminLogin,
   register,
   getMe,
   logout,
