@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AppProvider, useApp } from './context/AppContext';
 import { ToastContainer, ConfirmDialog } from './components/common/UI';
 import { AppLayout } from './components/layout/AppLayout';
@@ -119,20 +119,61 @@ import {
   SuperAdminSubSectionPage,
 } from './pages/admin/SuperAdminPages';
 
+const AuthLoadingScreen = ({ message = 'Verifying ArthaGST session...' }) => (
+  <div className="flex min-h-screen items-center justify-center bg-slate-50">
+    <div className="text-center">
+      <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-indigo-600 border-r-transparent align-[-0.125em]" />
+      <p className="mt-3 text-xs font-medium text-slate-500">{message}</p>
+    </div>
+  </div>
+);
+
 const ProtectedTenant = ({ children }) => {
-  const { state } = useApp();
+  const { state, authLoading } = useApp();
+  const location = useLocation();
+
+  if (authLoading) {
+    return <AuthLoadingScreen />;
+  }
+
   if (!state.isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
   return <AppLayout>{children}</AppLayout>;
 };
 
 const ProtectedSuperAdmin = ({ children }) => {
-  const { state } = useApp();
-  if (!state.isAuthenticated) {
-    return <Navigate to="/login" replace />;
+  const { state, authLoading } = useApp();
+  const location = useLocation();
+
+  if (authLoading) {
+    return <AuthLoadingScreen />;
   }
+
+  if (!state.isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // Enforce Super Admin role
+  if (state.currentUser?.role !== 'super_admin' && !state.currentUser?.isSuperAdmin) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   return <SuperAdminLayout>{children}</SuperAdminLayout>;
+};
+
+const PublicAuthRoute = ({ children }) => {
+  const { state, authLoading } = useApp();
+
+  if (authLoading) {
+    return <AuthLoadingScreen message="Loading..." />;
+  }
+
+  if (state.isAuthenticated) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return children;
 };
 
 const AppRoutes = () => {
@@ -144,15 +185,27 @@ const AppRoutes = () => {
         {/* Public Auth & Setup */}
         <Route
           path="/login"
-          element={state.isAuthenticated ? <Navigate to="/dashboard" replace /> : <LoginPage />}
+          element={
+            <PublicAuthRoute>
+              <LoginPage />
+            </PublicAuthRoute>
+          }
         />
         <Route
           path="/register"
-          element={state.isAuthenticated ? <Navigate to="/onboarding" replace /> : <RegisterPage />}
+          element={
+            <PublicAuthRoute>
+              <RegisterPage />
+            </PublicAuthRoute>
+          }
         />
         <Route
           path="/onboarding"
-          element={state.isAuthenticated ? <OnboardingWizardPage /> : <Navigate to="/login" replace />}
+          element={
+            <ProtectedTenant>
+              <OnboardingWizardPage />
+            </ProtectedTenant>
+          }
         />
 
         {/* Tenant App Routes */}

@@ -695,9 +695,10 @@ const superAdminData = {
 export function createInitialDemoState() {
   return {
     version: '1.0.0',
-    isAuthenticated: true,
+    isAuthenticated: false,
     onboardingCompleted: true,
-    currentUser: users[0],
+    currentUser: null,
+    currentTenant: null,
     business: { ...DEMO_BUSINESS },
     categories: [...categories],
     units: [...units],

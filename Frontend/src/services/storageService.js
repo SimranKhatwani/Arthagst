@@ -5,20 +5,41 @@ const STORAGE_KEY = 'arthagst_prototype_state_v1';
 export const loadAppState = () => {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
+    const token = window.localStorage.getItem('arthagst_token');
     if (!raw) {
       const initial = createInitialDemoState();
+      initial.isAuthenticated = Boolean(token);
+      if (!token) {
+        initial.currentUser = null;
+        initial.currentTenant = null;
+      }
       saveAppState(initial);
       return initial;
     }
     const parsed = JSON.parse(raw);
     if (!parsed || !parsed.business || !Array.isArray(parsed.invoices)) {
       const initial = createInitialDemoState();
+      initial.isAuthenticated = Boolean(token);
+      if (!token) {
+        initial.currentUser = null;
+        initial.currentTenant = null;
+      }
       saveAppState(initial);
       return initial;
     }
+    // Strictly validate authentication status by token presence
+    parsed.isAuthenticated = Boolean(token);
+    if (!token) {
+      parsed.currentUser = null;
+      parsed.currentTenant = null;
+    }
     return parsed;
   } catch {
-    return createInitialDemoState();
+    const initial = createInitialDemoState();
+    initial.isAuthenticated = false;
+    initial.currentUser = null;
+    initial.currentTenant = null;
+    return initial;
   }
 };
 

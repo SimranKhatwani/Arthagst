@@ -12,21 +12,58 @@ import {
 import { InputField, inputClass, btnPrimary, btnSecondary } from '../../components/common/UI';
 
 export const LoginPage = () => {
-  const { loginDemo, notify } = useApp();
+  const { login, notify } = useApp();
   const navigate = useNavigate();
-  const [identifier, setIdentifier] = useState('anil@sharmatraders.demo');
-  const [password, setPassword] = useState('demo1234');
+  const [tenantCode, setTenantCode] = useState(
+    () => localStorage.getItem('arthagst_last_tenant_code') || ''
+  );
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(true);
-  const [forgotSent, setForgotSent] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [fieldErrors, setFieldErrors] = useState({});
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!identifier.trim() || !password.trim()) {
-      notify('Enter email/mobile and password', 'error');
+    setError(null);
+    setFieldErrors({});
+
+    const errors = {};
+    if (!tenantCode.trim()) errors.tenantCode = 'Tenant code is required';
+    if (!email.trim()) errors.email = 'Email address is required';
+    if (!password) errors.password = 'Password is required';
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
       return;
     }
-    loginDemo(identifier);
-    navigate('/dashboard');
+
+    setLoading(true);
+    try {
+      await login({
+        tenantCode: tenantCode.trim().toUpperCase(),
+        email: email.trim().toLowerCase(),
+        password,
+      });
+
+      if (remember) {
+        localStorage.setItem('arthagst_last_tenant_code', tenantCode.trim().toUpperCase());
+      }
+
+      navigate('/dashboard');
+    } catch (err) {
+      if (err.errors && Array.isArray(err.errors)) {
+        const mapped = {};
+        err.errors.forEach((fe) => {
+          mapped[fe.field] = fe.message;
+        });
+        setFieldErrors(mapped);
+      }
+      setError(err.message || 'Login failed. Please check your credentials.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -48,43 +85,65 @@ export const LoginPage = () => {
           </p>
           <div className="grid grid-cols-2 gap-3 pt-4 text-xs text-slate-300">
             <div className="rounded-lg border border-slate-800 bg-slate-800/40 p-3">
-              <div className="font-semibold text-white">Pre-populated Demo</div>
-              <div className="mt-1 text-slate-400">Sharma Traders · Jaipur FY 2026-27</div>
+              <div className="font-semibold text-white">Multi-Tenant Cloud</div>
+              <div className="mt-1 text-slate-400">Strict organization data isolation</div>
             </div>
             <div className="rounded-lg border border-slate-800 bg-slate-800/40 p-3">
-              <div className="font-semibold text-white">Local Persistence</div>
-              <div className="mt-1 text-slate-400">All edits save automatically in browser</div>
+              <div className="font-semibold text-white">Real-Time GST Engine</div>
+              <div className="mt-1 text-slate-400">Automated CGST/SGST/IGST compliance</div>
             </div>
           </div>
         </div>
         <div className="text-xs text-slate-400">
-          Interactive SaaS Prototype · Simulated GST &amp; IRP Workflows
+          Enterprise Multi-Tenant GST SaaS · Connected to ArthaGST Backend
         </div>
       </div>
 
       <div className="flex flex-1 items-center justify-center p-6">
-        <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-8">
+        <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
           <h2 className="font-display text-xl font-semibold text-slate-900">Sign in to ArthaGST</h2>
           <p className="mt-1 text-xs text-slate-500">
-            Use the pre-filled demo credentials or click Demo Login.
+            Enter your organization tenant code and credentials.
           </p>
 
+          {error && (
+            <div className="mt-4 rounded-md border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
+              <div className="font-semibold">Authentication Failed</div>
+              <div className="mt-0.5">{error}</div>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-            <InputField label="Email or Mobile Number" required>
+            <InputField label="Tenant / Organization Code" required error={fieldErrors.tenantCode}>
               <input
                 type="text"
-                value={identifier}
-                onChange={(e) => setIdentifier(e.target.value)}
+                value={tenantCode}
+                onChange={(e) => setTenantCode(e.target.value.toUpperCase())}
                 className={inputClass}
-                placeholder="anil@sharmatraders.demo"
+                placeholder="e.g. ST001 or ORGCODE"
+                autoComplete="organization"
               />
             </InputField>
-            <InputField label="Password" required>
+
+            <InputField label="Email Address" required error={fieldErrors.email}>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className={inputClass}
+                placeholder="name@company.com"
+                autoComplete="email"
+              />
+            </InputField>
+
+            <InputField label="Password" required error={fieldErrors.password}>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className={inputClass}
+                placeholder="••••••••"
+                autoComplete="current-password"
               />
             </InputField>
 
@@ -96,45 +155,23 @@ export const LoginPage = () => {
                   onChange={(e) => setRemember(e.target.checked)}
                   className="rounded border-slate-300 text-indigo-600"
                 />
-                Remember me
+                Remember tenant code
               </label>
-              <button
-                type="button"
-                onClick={() => {
-                  setForgotSent(true);
-                  notify('Demo password reset link simulated', 'info');
-                }}
-                className="font-medium text-indigo-600 hover:underline"
-              >
-                Forgot password?
-              </button>
             </div>
 
-            {forgotSent && (
-              <div className="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-800">
-                Demo mode: Password reset is simulated. Click Demo Login below to continue.
-              </div>
-            )}
-
-            <button type="submit" className={`${btnPrimary} w-full py-2.5`}>
-              Sign In
-            </button>
             <button
-              type="button"
-              onClick={() => {
-                loginDemo('anil@sharmatraders.demo');
-                navigate('/dashboard');
-              }}
-              className={`${btnSecondary} w-full py-2.5`}
+              type="submit"
+              disabled={loading}
+              className={`${btnPrimary} w-full py-2.5 cursor-pointer disabled:opacity-50`}
             >
-              Instant Demo Login (Sharma Traders)
+              {loading ? 'Signing in...' : 'Sign In'}
             </button>
           </form>
 
           <div className="mt-6 border-t border-slate-200 pt-4 text-center text-xs text-slate-600">
             New business?{' '}
             <Link to="/register" className="font-medium text-indigo-600 hover:underline">
-              Create Business Account
+              Register New Organization
             </Link>
           </div>
         </div>
@@ -144,33 +181,72 @@ export const LoginPage = () => {
 };
 
 export const RegisterPage = () => {
-  const { registerUser, notify } = useApp();
+  const { register, notify } = useApp();
   const navigate = useNavigate();
   const [form, setForm] = useState({
+    businessName: '',
+    tenantCode: '',
     ownerName: '',
     email: '',
     mobile: '',
+    state: 'Maharashtra',
     password: '',
     confirmPassword: '',
   });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [fieldErrors, setFieldErrors] = useState({});
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.ownerName || !form.email || !form.mobile || !form.password) {
-      notify('Please complete all required fields', 'error');
+    setError(null);
+    setFieldErrors({});
+
+    const errors = {};
+    if (!form.businessName.trim()) errors.businessName = 'Business name is required';
+    if (!form.ownerName.trim()) errors.ownerName = 'Owner name is required';
+    if (!form.email.trim()) errors.email = 'Email address is required';
+    if (!form.mobile.trim()) errors.mobile = 'Mobile number is required';
+    if (!form.password) errors.password = 'Password is required';
+    else if (form.password.length < 6) errors.password = 'Password must be at least 6 characters';
+    if (form.password !== form.confirmPassword) errors.confirmPassword = 'Passwords do not match';
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
       return;
     }
-    if (form.password !== form.confirmPassword) {
-      notify('Passwords do not match', 'error');
-      return;
+
+    setLoading(true);
+    try {
+      await register({
+        businessName: form.businessName.trim(),
+        ...(form.tenantCode.trim() && { tenantCode: form.tenantCode.trim().toUpperCase() }),
+        ownerName: form.ownerName.trim(),
+        email: form.email.trim().toLowerCase(),
+        phone: form.mobile.trim(),
+        state: form.state,
+        password: form.password,
+      });
+
+      navigate('/onboarding');
+    } catch (err) {
+      if (err.errors && Array.isArray(err.errors)) {
+        const mapped = {};
+        err.errors.forEach((fe) => {
+          const key = fe.field === 'phone' ? 'mobile' : fe.field;
+          mapped[key] = fe.message;
+        });
+        setFieldErrors(mapped);
+      }
+      setError(err.message || 'Registration failed. Please check form inputs.');
+    } finally {
+      setLoading(false);
     }
-    registerUser(form);
-    navigate('/onboarding');
   };
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
-      <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-8">
+      <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 font-display text-sm font-bold text-white">
             A
@@ -181,11 +257,38 @@ export const RegisterPage = () => {
           Create your business account
         </h2>
         <p className="mt-1 text-xs text-slate-500">
-          Set up your GST workspace in a few guided steps.
+          Set up your organization and initial owner account.
         </p>
 
+        {error && (
+          <div className="mt-4 rounded-md border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
+            <div className="font-semibold">Registration Error</div>
+            <div className="mt-0.5">{error}</div>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="mt-5 space-y-3.5">
-          <InputField label="Owner Full Name" required>
+          <InputField label="Trade / Business Name" required error={fieldErrors.businessName}>
+            <input
+              type="text"
+              value={form.businessName}
+              onChange={(e) => setForm({ ...form, businessName: e.target.value })}
+              className={inputClass}
+              placeholder="e.g. Acme Enterprises"
+            />
+          </InputField>
+
+          <InputField label="Custom Tenant Code (Optional)" error={fieldErrors.tenantCode}>
+            <input
+              type="text"
+              value={form.tenantCode}
+              onChange={(e) => setForm({ ...form, tenantCode: e.target.value.toUpperCase() })}
+              className={inputClass}
+              placeholder="e.g. ACME (auto-generated if empty)"
+            />
+          </InputField>
+
+          <InputField label="Owner Full Name" required error={fieldErrors.ownerName}>
             <input
               type="text"
               value={form.ownerName}
@@ -194,7 +297,8 @@ export const RegisterPage = () => {
               placeholder="e.g. Rajesh Sharma"
             />
           </InputField>
-          <InputField label="Business Email" required>
+
+          <InputField label="Business Email" required error={fieldErrors.email}>
             <input
               type="email"
               value={form.email}
@@ -203,7 +307,8 @@ export const RegisterPage = () => {
               placeholder="accounts@company.in"
             />
           </InputField>
-          <InputField label="Mobile Number (+91)" required>
+
+          <InputField label="Mobile Number (+91)" required error={fieldErrors.mobile}>
             <input
               type="tel"
               value={form.mobile}
@@ -212,24 +317,47 @@ export const RegisterPage = () => {
               placeholder="9829011223"
             />
           </InputField>
-          <InputField label="Password" required>
+
+          <InputField label="State / Union Territory" required error={fieldErrors.state}>
+            <select
+              value={form.state}
+              onChange={(e) => setForm({ ...form, state: e.target.value })}
+              className={inputClass}
+            >
+              {INDIAN_STATES.map((st) => (
+                <option key={st} value={st}>
+                  {st}
+                </option>
+              ))}
+            </select>
+          </InputField>
+
+          <InputField label="Password" required error={fieldErrors.password}>
             <input
               type="password"
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
               className={inputClass}
+              placeholder="Minimum 6 characters"
             />
           </InputField>
-          <InputField label="Confirm Password" required>
+
+          <InputField label="Confirm Password" required error={fieldErrors.confirmPassword}>
             <input
               type="password"
               value={form.confirmPassword}
               onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
               className={inputClass}
+              placeholder="Re-enter password"
             />
           </InputField>
-          <button type="submit" className={`${btnPrimary} w-full py-2.5`}>
-            Continue to Business Setup
+
+          <button
+            type="submit"
+            disabled={loading}
+            className={`${btnPrimary} w-full py-2.5 cursor-pointer disabled:opacity-50`}
+          >
+            {loading ? 'Creating Account...' : 'Continue to Business Setup'}
           </button>
         </form>
 
@@ -250,24 +378,24 @@ export const OnboardingWizardPage = () => {
   const [step, setStep] = useState(1);
 
   const [form, setForm] = useState({
-    businessName: state.business?.businessName || 'Sharma Traders',
-    legalName: state.business?.legalName || 'Sharma Traders Enterprises',
+    businessName: state.currentTenant?.businessName || state.business?.businessName || '',
+    legalName: state.business?.legalName || state.currentTenant?.businessName || '',
     businessType: state.business?.businessType || 'Wholesale & Retail',
     constitution: state.business?.constitution || 'Proprietorship',
-    gstRegistered: state.business?.gstRegistered ?? true,
-    gstin: state.business?.gstin || '08AABCS1234F1Z5 (DEMO)',
+    gstRegistered: Boolean(state.currentTenant?.GSTIN || state.business?.gstRegistered),
+    gstin: state.currentTenant?.GSTIN || state.business?.gstin || '',
     registrationType: state.business?.registrationType || 'Regular',
-    state: state.business?.state || 'Rajasthan',
-    pan: state.business?.pan || 'AABCS1234F (DEMO)',
-    address: state.business?.address || '42, Johari Bazaar Main Road',
-    city: state.business?.city || 'Jaipur',
-    pincode: state.business?.pincode || '302003',
+    state: state.currentTenant?.state || state.business?.state || 'Maharashtra',
+    pan: state.currentTenant?.PAN || state.business?.pan || '',
+    address: state.currentTenant?.businessAddress || state.business?.address || '',
+    city: state.currentTenant?.city || state.business?.city || '',
+    pincode: state.currentTenant?.pincode || state.business?.pincode || '',
     financialYear: state.business?.financialYear || '2026-27',
     currency: 'INR',
-    invoicePrefix: state.business?.invoicePrefix || 'ST/26-27/',
+    invoicePrefix: state.business?.invoicePrefix || 'INV/26-27/',
     priceInclusiveDefault: state.settings?.gst?.priceInclusiveDefault || false,
     invoiceTemplate: state.business?.invoiceTemplate || 'Classic GST Pro',
-    logoName: 'sharma-traders-mark.svg',
+    logoName: 'brand-mark.svg',
   });
 
   const steps = [

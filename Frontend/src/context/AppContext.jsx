@@ -10,6 +10,8 @@ import {
 } from '../services/inventoryService';
 import { computePaymentStatus, generateNextDocNumber } from '../services/invoiceService';
 import { round2 } from '../services/calculationService';
+import * as authService from '../services/authService';
+import { getToken, setToken, removeToken } from '../services/api';
 
 const AppContext = createContext(null);
 
@@ -21,6 +23,7 @@ export const useApp = () => {
 
 export const AppProvider = ({ children }) => {
   const [state, setState] = useState(() => loadAppState());
+  const [authLoading, setAuthLoading] = useState(Boolean(getToken()));
   const [toasts, setToasts] = useState([]);
   const [confirmState, setConfirmState] = useState(null);
   const [selectedFY, setSelectedFY] = useState(state.business?.financialYear || '2026-27');
@@ -28,6 +31,76 @@ export const AppProvider = ({ children }) => {
   useEffect(() => {
     saveAppState(state);
   }, [state]);
+
+  // Initial authentication verification from backend /api/auth/me
+  useEffect(() => {
+    const token = getToken();
+    if (!token) {
+      setAuthLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+    authService
+      .getMe()
+      .then((data) => {
+        if (!isMounted) return;
+        if (data?.user && data?.tenant) {
+          setState((prev) => ({
+            ...prev,
+            isAuthenticated: true,
+            currentUser: data.user,
+            currentTenant: data.tenant,
+            business: {
+              ...prev.business,
+              ...data.tenant,
+              businessName: data.tenant.businessName || prev.business?.businessName,
+              tenantCode: data.tenant.tenantCode,
+              email: data.tenant.email || prev.business?.email,
+              phone: data.tenant.phone || prev.business?.phone,
+              state: data.tenant.state || prev.business?.state,
+              city: data.tenant.city || prev.business?.city,
+              subscriptionStatus: data.tenant.subscriptionStatus,
+            },
+          }));
+        }
+      })
+      .catch((err) => {
+        if (!isMounted) return;
+        console.warn('Session verification failed:', err.message);
+        removeToken();
+        setState((prev) => ({
+          ...prev,
+          isAuthenticated: false,
+          currentUser: null,
+          currentTenant: null,
+        }));
+      })
+      .finally(() => {
+        if (isMounted) setAuthLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Listen for unauthorized 401 events from api client
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      removeToken();
+      setState((prev) => ({
+        ...prev,
+        isAuthenticated: false,
+        currentUser: null,
+        currentTenant: null,
+      }));
+      notify('Session expired. Please sign in again.', 'error');
+    };
+
+    window.addEventListener('arthagst:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('arthagst:unauthorized', handleUnauthorized);
+  }, []);
 
   const notify = useCallback((message, type = 'success') => {
     const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -92,36 +165,119 @@ export const AppProvider = ({ children }) => {
     });
   }, []);
 
-  // Auth & Onboarding
-  const loginDemo = useCallback((userEmail) => {
-    setState((prev) => {
-      const matched =
-        prev.users.find((u) => u.email.toLowerCase() === String(userEmail || '').toLowerCase()) ||
-        prev.users[0];
-      return { ...prev, isAuthenticated: true, currentUser: matched };
-    });
-    notify('Signed in to Sharma Traders (Demo Workspace)');
-  }, [notify]);
+  // Backend Authentication & Session State
+  const login = useCallback(
+    async ({ tenantCode, email, password }) => {
+      setAuthLoading(true);
+      try {
+        const data = await authService.login({ tenantCode, email, password });
+        setToken(data.token);
+        if (data.tenant?.tenantCode) {
+          localStorage.setItem('arthagst_last_tenant_code', data.tenant.tenantCode);
+        }
+        setState((prev) => ({
+          ...prev,
+          isAuthenticated: true,
+          currentUser: data.user,
+          currentTenant: data.tenant,
+          business: {
+            ...prev.business,
+            ...data.tenant,
+            businessName: data.tenant.businessName || prev.business?.businessName,
+            tenantCode: data.tenant.tenantCode,
+            email: data.tenant.email || prev.business?.email,
+            subscriptionStatus: data.tenant.subscriptionStatus,
+          },
+        }));
+        setAuthLoading(false);
+        notify(`Welcome back, ${data.user.name}!`);
+        return data;
+      } catch (err) {
+        setAuthLoading(false);
+        throw err;
+      }
+    },
+    [notify]
+  );
 
-  const registerUser = useCallback((payload) => {
-    const newUser = {
-      id: `usr-${Date.now()}`,
-      name: payload.ownerName,
-      email: payload.email,
-      mobile: payload.mobile,
-      role: 'Owner',
-      status: 'Active',
-      lastLogin: new Date().toISOString().slice(0, 16).replace('T', ' '),
-    };
+  const register = useCallback(
+    async (payload) => {
+      setAuthLoading(true);
+      try {
+        const data = await authService.register(payload);
+        setToken(data.token);
+        if (data.tenant?.tenantCode) {
+          localStorage.setItem('arthagst_last_tenant_code', data.tenant.tenantCode);
+        }
+        setState((prev) => ({
+          ...prev,
+          isAuthenticated: true,
+          currentUser: data.user,
+          currentTenant: data.tenant,
+          business: {
+            ...prev.business,
+            ...data.tenant,
+            businessName: data.tenant.businessName || prev.business?.businessName,
+            tenantCode: data.tenant.tenantCode,
+            subscriptionStatus: data.tenant.subscriptionStatus,
+          },
+        }));
+        setAuthLoading(false);
+        notify(`Business account created for ${data.tenant.businessName}!`);
+        return data;
+      } catch (err) {
+        setAuthLoading(false);
+        throw err;
+      }
+    },
+    [notify]
+  );
+
+  const logout = useCallback(async () => {
+    try {
+      await authService.logout();
+    } catch {
+      // Non-blocking logout call
+    }
+    removeToken();
     setState((prev) => ({
       ...prev,
-      isAuthenticated: true,
-      onboardingCompleted: false,
-      currentUser: newUser,
-      users: [newUser, ...prev.users],
+      isAuthenticated: false,
+      currentUser: null,
+      currentTenant: null,
     }));
-    notify('Account created. Complete business setup.');
+    notify('Signed out successfully');
   }, [notify]);
+
+  const refreshProfile = useCallback(async () => {
+    try {
+      const data = await authService.getMe();
+      if (data?.user && data?.tenant) {
+        setState((prev) => ({
+          ...prev,
+          isAuthenticated: true,
+          currentUser: data.user,
+          currentTenant: data.tenant,
+          business: {
+            ...prev.business,
+            ...data.tenant,
+            businessName: data.tenant.businessName || prev.business?.businessName,
+            tenantCode: data.tenant.tenantCode,
+          },
+        }));
+      }
+      return data;
+    } catch (err) {
+      removeToken();
+      setState((prev) => ({
+        ...prev,
+        isAuthenticated: false,
+        currentUser: null,
+        currentTenant: null,
+      }));
+      throw err;
+    }
+  }, []);
 
   const completeOnboarding = useCallback((bizPayload) => {
     setState((prev) => ({
@@ -143,10 +299,6 @@ export const AppProvider = ({ children }) => {
     }));
     notify('Business onboarding saved');
   }, [notify]);
-
-  const logout = useCallback(() => {
-    setState((prev) => ({ ...prev, isAuthenticated: false }));
-  }, []);
 
   // Reset Demo Data
   const handleResetDemo = useCallback(() => {
@@ -850,10 +1002,14 @@ export const AppProvider = ({ children }) => {
     dismissToast,
     confirmState,
     confirmAction,
-    loginDemo,
-    registerUser,
-    completeOnboarding,
+    authLoading,
+    login,
+    register,
+    loginUser: login,
+    registerUser: register,
     logout,
+    refreshProfile,
+    completeOnboarding,
     handleResetDemo,
     upsertRecord,
     deleteRecord,
@@ -873,4 +1029,19 @@ export const AppProvider = ({ children }) => {
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+};
+
+export const useAuth = () => {
+  const ctx = useApp();
+  return {
+    isAuthenticated: ctx.state.isAuthenticated,
+    user: ctx.state.currentUser,
+    tenant: ctx.state.currentTenant,
+    business: ctx.state.business,
+    authLoading: ctx.authLoading,
+    login: ctx.login,
+    register: ctx.register,
+    logout: ctx.logout,
+    refreshProfile: ctx.refreshProfile,
+  };
 };
