@@ -15,6 +15,8 @@ import {
   reversePurchaseBillJournal,
   postDebitNoteJournal,
 } from '../accounting/accounting.integration.js';
+import * as notificationService from '../notifications/notification.service.js';
+import * as auditLogService from '../auditLogs/auditLog.service.js';
 
 /**
  * Transaction helper with retry on write conflicts
@@ -1036,6 +1038,35 @@ export const postPurchaseBill = async (tenantId, userId, billId) => {
     // Automatic Accounting Journal Posting
     await postPurchaseBillJournal(tenantId, userId, bill, session);
 
+    // Purchase Bill Notification
+    await notificationService.createNotification({
+      tenantId,
+      title: 'Purchase Bill Posted',
+      message: `Purchase bill ${bill.billNumber} from ${bill.supplierName} (₹${bill.grandTotal}) has been posted.`,
+      notificationType: 'purchase_bill',
+      referenceType: 'PurchaseBill',
+      referenceId: bill._id,
+      session,
+    });
+
+    // Record Audit Log for bill posting
+    await auditLogService.logAuditAction({
+      tenantId,
+      userId,
+      action: 'PURCHASE_BILL_POSTED',
+      module: 'purchases',
+      entityType: 'PurchaseBill',
+      entityId: bill._id,
+      targetName: bill.billNumber,
+      description: `Posted purchase bill ${bill.billNumber} from ${bill.supplierName} for ₹${bill.grandTotal}`,
+      changes: {
+        billNumber: bill.billNumber,
+        supplierName: bill.supplierName,
+        grandTotal: bill.grandTotal,
+      },
+      session,
+    });
+
     return bill;
   });
 };
@@ -1120,6 +1151,19 @@ export const cancelPurchaseBill = async (tenantId, userId, billId) => {
     if (wasPosted) {
       await reversePurchaseBillJournal(tenantId, userId, bill, session);
     }
+
+    // Record Audit Log for bill cancellation
+    await auditLogService.logAuditAction({
+      tenantId,
+      userId,
+      action: 'PURCHASE_BILL_CANCELLED',
+      module: 'purchases',
+      entityType: 'PurchaseBill',
+      entityId: bill._id,
+      targetName: bill.billNumber,
+      description: `Cancelled purchase bill ${bill.billNumber}`,
+      session,
+    });
 
     return bill;
   });

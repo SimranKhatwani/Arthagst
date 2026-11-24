@@ -10,6 +10,8 @@ import {
   postExpenseJournal,
   reverseExpenseJournal,
 } from '../accounting/accounting.integration.js';
+import * as notificationService from '../notifications/notification.service.js';
+import * as auditLogService from '../auditLogs/auditLog.service.js';
 
 /**
  * Transaction helper with retry on write conflicts
@@ -421,6 +423,35 @@ export const createExpense = async (tenantId, userId, data) => {
     // Automatic Accounting Journal Posting
     await postExpenseJournal(tenantId, userId, expense, session);
 
+    // Notification for recorded expense
+    await notificationService.createNotification({
+      tenantId,
+      title: 'Expense Recorded',
+      message: `Expense ${expense.expenseNumber} of ₹${expense.amount} recorded under category '${category.name}'.`,
+      notificationType: 'expense',
+      referenceType: 'Expense',
+      referenceId: expense._id,
+      session,
+    });
+
+    // Record Audit Log for expense creation
+    await auditLogService.logAuditAction({
+      tenantId,
+      userId,
+      action: 'EXPENSE_CREATED',
+      module: 'expenses',
+      entityType: 'Expense',
+      entityId: expense._id,
+      targetName: expense.expenseNumber,
+      description: `Recorded expense ${expense.expenseNumber} of ₹${expense.amount} under ${category.name}`,
+      changes: {
+        expenseNumber: expense.expenseNumber,
+        categoryName: category.name,
+        amount: expense.amount,
+      },
+      session,
+    });
+
     return expense;
   });
 };
@@ -472,6 +503,20 @@ export const cancelExpense = async (tenantId, userId, expenseId, cancellationRea
 
     // Automatic Accounting Journal Reversal
     await reverseExpenseJournal(tenantId, userId, expense, session);
+
+    // Record Audit Log for expense cancellation
+    await auditLogService.logAuditAction({
+      tenantId,
+      userId,
+      action: 'EXPENSE_CANCELLED',
+      module: 'expenses',
+      entityType: 'Expense',
+      entityId: expense._id,
+      targetName: expense.expenseNumber,
+      description: `Cancelled expense ${expense.expenseNumber}. Reason: ${cancellationReason}`,
+      changes: { cancellationReason },
+      session,
+    });
 
     return expense;
   });

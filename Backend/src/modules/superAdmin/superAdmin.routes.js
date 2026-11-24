@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as superAdminController from './superAdmin.controller.js';
 import { requireSuperAdmin } from '../../middleware/superAdminMiddleware.js';
+import { authLimiter } from '../../middleware/rateLimiter.js';
 
 const router = Router();
 
@@ -8,7 +9,7 @@ const router = Router();
  * Super Admin Login (Platform Login)
  * POST /api/super-admin/auth/login
  */
-router.post('/auth/login', superAdminController.login);
+router.post('/auth/login', authLimiter, superAdminController.login);
 
 // Guard all subsequent routes strictly for Super Admins
 router.use(requireSuperAdmin);

@@ -1,6 +1,7 @@
 import { ZodError } from 'zod';
 import { registerSchema, loginSchema } from './auth.validation.js';
 import * as authService from './auth.service.js';
+import * as auditLogService from '../auditLogs/auditLog.service.js';
 import { sendResponse, formatZodErrors } from '../../utils/apiResponse.js';
 
 /**
@@ -39,6 +40,20 @@ export const login = async (req, res, next) => {
   try {
     const validatedData = loginSchema.parse(req.body);
     const result = await authService.loginUser(validatedData);
+
+    // Record audit log for successful login
+    await auditLogService.logAuditAction({
+      tenantId: result.tenant.id,
+      userId: result.user.id,
+      userEmail: result.user.email,
+      userRole: result.user.role,
+      action: 'USER_LOGIN',
+      module: 'auth',
+      entityType: 'User',
+      entityId: result.user.id,
+      description: `User ${result.user.email} logged in successfully`,
+      req,
+    });
 
     return sendResponse(
       res,

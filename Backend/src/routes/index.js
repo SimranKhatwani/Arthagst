@@ -18,6 +18,8 @@ import accountingRoutes from '../modules/accounting/accounting.routes.js';
 import planRoutes from '../modules/subscriptions/plan.routes.js';
 import subscriptionRoutes from '../modules/subscriptions/subscription.routes.js';
 import superAdminRoutes from '../modules/superAdmin/superAdmin.routes.js';
+import notificationRoutes from '../modules/notifications/notification.routes.js';
+import auditLogRoutes from '../modules/auditLogs/auditLog.routes.js';
 
 const router = Router();
 
@@ -145,5 +147,17 @@ router.use('/subscription', subscriptionRoutes);
  * /api/super-admin
  */
 router.use('/super-admin', superAdminRoutes);
+
+/**
+ * Notifications Management
+ * /api/notifications
+ */
+router.use('/notifications', notificationRoutes);
+
+/**
+ * Audit Logs (Read-Only)
+ * /api/audit-logs
+ */
+router.use('/audit-logs', auditLogRoutes);
 
 export default router;

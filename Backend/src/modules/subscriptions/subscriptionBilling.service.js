@@ -5,6 +5,8 @@ import SubscriptionSequence from './subscriptionSequence.model.js';
 import Subscription from './subscription.model.js';
 import Tenant from '../tenants/tenant.model.js';
 import { getFinancialYear, round2 } from '../sales/sales.calculator.js';
+import * as notificationService from '../notifications/notification.service.js';
+import * as auditLogService from '../auditLogs/auditLog.service.js';
 
 /**
  * Generate sequential subscription invoice number atomically (SUB-INV/YYYY-YY/XXXX)
@@ -235,6 +237,33 @@ export const processPaymentConfirmation = async ({
     await Tenant.findByIdAndUpdate(subscription.tenantId, {
       subscriptionStatus: 'active',
       isActive: true,
+    });
+
+    // Create notification
+    await notificationService.createNotification({
+      tenantId: invoice.tenantId,
+      title: 'Subscription Payment Confirmed',
+      message: `Payment of ₹${invoice.totalAmount} for plan ${invoice.planName} has been confirmed.`,
+      notificationType: 'subscription',
+      referenceType: 'SubscriptionInvoice',
+      referenceId: invoice._id,
+    });
+
+    // Record audit log
+    await auditLogService.logAuditAction({
+      tenantId: invoice.tenantId,
+      userId,
+      action: 'SUBSCRIPTION_PAYMENT_CONFIRMED',
+      module: 'subscriptions',
+      entityType: 'SubscriptionInvoice',
+      entityId: invoice._id,
+      targetName: invoice.invoiceNumber,
+      description: `Confirmed payment of ₹${invoice.totalAmount} for subscription invoice ${invoice.invoiceNumber}`,
+      changes: {
+        invoiceNumber: invoice.invoiceNumber,
+        totalAmount: invoice.totalAmount,
+        planCode: invoice.planCode,
+      },
     });
   }
 

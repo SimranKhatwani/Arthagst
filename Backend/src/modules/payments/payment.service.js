@@ -10,6 +10,8 @@ import {
   postPaymentJournal,
   reversePaymentJournal,
 } from '../accounting/accounting.integration.js';
+import * as notificationService from '../notifications/notification.service.js';
+import * as auditLogService from '../auditLogs/auditLog.service.js';
 
 /**
  * Transaction helper with retry on write conflicts
@@ -361,6 +363,39 @@ export const createPayment = async (tenantId, userId, data) => {
     // Automatic Accounting Journal Posting
     await postPaymentJournal(tenantId, userId, payment, session);
 
+    // Notification for recorded payment
+    await notificationService.createNotification({
+      tenantId,
+      title: direction === 'in' ? 'Customer Payment Received' : 'Supplier Payment Recorded',
+      message:
+        direction === 'in'
+          ? `Received customer payment ${payment.paymentNumber} of ₹${payment.amount} from ${payment.partyName || 'Customer'}.`
+          : `Recorded supplier payment ${payment.paymentNumber} of ₹${payment.amount} to ${payment.partyName || 'Supplier'}.`,
+      notificationType: direction === 'in' ? 'customer_payment' : 'supplier_payment',
+      referenceType: 'Payment',
+      referenceId: payment._id,
+      session,
+    });
+
+    // Record Audit Log for payment creation
+    await auditLogService.logAuditAction({
+      tenantId,
+      userId,
+      action: 'PAYMENT_CREATED',
+      module: 'payments',
+      entityType: 'Payment',
+      entityId: payment._id,
+      targetName: payment.paymentNumber,
+      description: `Recorded payment ${payment.paymentNumber} (${direction === 'in' ? 'Receipt' : 'Payment'}) of ₹${payment.amount}`,
+      changes: {
+        paymentNumber: payment.paymentNumber,
+        direction,
+        amount: payment.amount,
+        partyName: payment.partyName,
+      },
+      session,
+    });
+
     return payment;
   });
 };
@@ -462,6 +497,20 @@ export const cancelPayment = async (tenantId, userId, paymentId, cancellationRea
 
     // Automatic Accounting Journal Reversal
     await reversePaymentJournal(tenantId, userId, payment, session);
+
+    // Record Audit Log for payment cancellation
+    await auditLogService.logAuditAction({
+      tenantId,
+      userId,
+      action: 'PAYMENT_CANCELLED',
+      module: 'payments',
+      entityType: 'Payment',
+      entityId: payment._id,
+      targetName: payment.paymentNumber,
+      description: `Cancelled payment ${payment.paymentNumber}. Reason: ${cancellationReason}`,
+      changes: { cancellationReason },
+      session,
+    });
 
     return payment;
   });

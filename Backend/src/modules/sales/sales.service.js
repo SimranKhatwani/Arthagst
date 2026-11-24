@@ -16,6 +16,8 @@ import {
   reverseSalesInvoiceJournal,
   postCreditNoteJournal,
 } from '../accounting/accounting.integration.js';
+import * as notificationService from '../notifications/notification.service.js';
+import * as auditLogService from '../auditLogs/auditLog.service.js';
 
 /**
  * Transaction helper with retry on write conflicts
@@ -506,6 +508,23 @@ export const postInvoice = async (tenantId, userId, invoiceId) => {
           createdBy: userId,
         });
         await movement.save({ session });
+
+        // Trigger low stock alert notification if inventory falls to or below threshold
+        if (
+          product.lowStockAlert !== undefined &&
+          product.lowStockAlert !== null &&
+          newStock <= product.lowStockAlert
+        ) {
+          await notificationService.createNotification({
+            tenantId,
+            title: 'Low Stock Alert',
+            message: `Product '${product.name}' is low on stock (${newStock} remaining, alert threshold: ${product.lowStockAlert}).`,
+            notificationType: 'low_stock',
+            referenceType: 'Product',
+            referenceId: product._id,
+            session,
+          });
+        }
       }
     }
 
@@ -516,6 +535,35 @@ export const postInvoice = async (tenantId, userId, invoiceId) => {
 
     // Automatic Accounting Journal Posting
     await postSalesInvoiceJournal(tenantId, userId, invoice, session);
+
+    // Sales Invoice Notification
+    await notificationService.createNotification({
+      tenantId,
+      title: 'Sales Invoice Posted',
+      message: `Sales invoice ${invoice.invoiceNumber} for ${invoice.partyName} (₹${invoice.grandTotal}) has been posted.`,
+      notificationType: 'sales_invoice',
+      referenceType: 'SalesInvoice',
+      referenceId: invoice._id,
+      session,
+    });
+
+    // Record Audit Log for invoice posting
+    await auditLogService.logAuditAction({
+      tenantId,
+      userId,
+      action: 'SALES_INVOICE_POSTED',
+      module: 'sales',
+      entityType: 'SalesInvoice',
+      entityId: invoice._id,
+      targetName: invoice.invoiceNumber,
+      description: `Posted sales invoice ${invoice.invoiceNumber} for ₹${invoice.grandTotal}`,
+      changes: {
+        invoiceNumber: invoice.invoiceNumber,
+        partyName: invoice.partyName,
+        grandTotal: invoice.grandTotal,
+      },
+      session,
+    });
 
     return invoice;
   });
@@ -636,6 +684,20 @@ export const cancelInvoice = async (tenantId, userId, invoiceId, cancellationRea
     if (wasPosted) {
       await reverseSalesInvoiceJournal(tenantId, userId, invoice, session);
     }
+
+    // Record Audit Log for invoice cancellation
+    await auditLogService.logAuditAction({
+      tenantId,
+      userId,
+      action: 'SALES_INVOICE_CANCELLED',
+      module: 'sales',
+      entityType: 'SalesInvoice',
+      entityId: invoice._id,
+      targetName: invoice.invoiceNumber,
+      description: `Cancelled sales invoice ${invoice.invoiceNumber}. Reason: ${cancellationReason}`,
+      changes: { cancellationReason },
+      session,
+    });
 
     return invoice;
   });

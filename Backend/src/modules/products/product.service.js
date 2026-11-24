@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import Product from './product.model.js';
 import Category from '../categories/category.model.js';
 import Unit from '../units/unit.model.js';
+import * as auditLogService from '../auditLogs/auditLog.service.js';
 
 /**
  * Create a new product scoped to tenant
@@ -112,6 +113,17 @@ export const createProduct = async (tenantId, data) => {
     { path: 'categoryId', select: 'name' },
     { path: 'unitId', select: 'name shortName gstUqcCode allowDecimal' },
   ]);
+
+  await auditLogService.logAuditAction({
+    tenantId,
+    action: 'PRODUCT_CREATED',
+    module: 'products',
+    entityType: 'Product',
+    entityId: product._id,
+    targetName: product.name,
+    description: `Created product ${product.name} (SKU: ${product.SKU})`,
+    changes: { name: product.name, SKU: product.SKU, sellingPrice: product.sellingPrice },
+  });
 
   return product;
 };
@@ -369,6 +381,17 @@ export const updateProduct = async (tenantId, productId, data) => {
     { path: 'categoryId', select: 'name' },
     { path: 'unitId', select: 'name shortName gstUqcCode allowDecimal' },
   ]);
+
+  await auditLogService.logAuditAction({
+    tenantId,
+    action: 'PRODUCT_UPDATED',
+    module: 'products',
+    entityType: 'Product',
+    entityId: product._id,
+    targetName: product.name,
+    description: `Updated product ${product.name} (SKU: ${product.SKU})`,
+    changes: data,
+  });
 
   return product;
 };

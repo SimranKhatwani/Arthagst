@@ -1,6 +1,6 @@
 import express from 'express';
 import * as eWayBillController from './eWayBill.controller.js';
-import { authenticate } from '../../middleware/auth.middleware.js';
+import { authenticate } from '../../middleware/authMiddleware.js';
 import { requireFeature } from '../subscriptions/subscriptionLimit.middleware.js';
 
 const router = express.Router();

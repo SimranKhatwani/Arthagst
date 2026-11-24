@@ -40,7 +40,7 @@ router.put('/accounts/:id', bankingController.updateAccount);
  * @desc    Activate or deactivate bank account
  * @access  Private
  */
-router.patch('/accounts/:id/status', bankingController.updateStatus);
+router.patch('/accounts/:id/status', bankingController.updateAccountStatus);
 
 /**
  * @route   DELETE /api/banking/accounts/:id

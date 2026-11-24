@@ -5,6 +5,8 @@ import Tenant from '../tenants/tenant.model.js';
 import { seedDefaultPlans } from './plan.seed.js';
 import { createSubscriptionInvoice } from './subscriptionBilling.service.js';
 import { getUsageOverview } from './subscriptionLimit.service.js';
+import * as notificationService from '../notifications/notification.service.js';
+import * as auditLogService from '../auditLogs/auditLog.service.js';
 
 /**
  * Helper to compute period end date based on billing cycle
@@ -429,6 +431,29 @@ export const cancelSubscription = async ({ tenantId, cancellationReason = '', us
   // Tenant subscription status is updated to cancelled
   await Tenant.findByIdAndUpdate(tenantId, {
     subscriptionStatus: 'cancelled',
+  });
+
+  // Notification for subscription cancellation
+  await notificationService.createNotification({
+    tenantId,
+    title: 'Subscription Cancelled',
+    message: 'Your SaaS subscription has been cancelled. Access remains until the current period ends.',
+    notificationType: 'subscription',
+    referenceType: 'Subscription',
+    referenceId: subscription._id,
+  });
+
+  // Audit Log for cancellation
+  await auditLogService.logAuditAction({
+    tenantId,
+    userId,
+    action: 'SUBSCRIPTION_CANCELLED',
+    module: 'subscriptions',
+    entityType: 'Subscription',
+    entityId: subscription._id,
+    targetName: subscription.planSnapshot?.name || 'Subscription',
+    description: `Subscription cancelled. Reason: ${cancellationReason || 'User request'}`,
+    changes: { cancellationReason },
   });
 
   return {

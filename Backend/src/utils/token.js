@@ -12,8 +12,8 @@ export const generateToken = ({ userId, tenantId, role }) => {
 
   return jwt.sign(
     {
-      userId: userId.toString(),
-      tenantId: tenantId.toString(),
+      userId: userId ? userId.toString() : null,
+      tenantId: tenantId ? tenantId.toString() : null,
       role,
     },
     process.env.JWT_SECRET,

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as authController from './auth.controller.js';
 import { authenticate } from '../../middleware/authMiddleware.js';
+import { authLimiter } from '../../middleware/rateLimiter.js';
 
 const router = Router();
 
@@ -9,14 +10,14 @@ const router = Router();
  * @desc    Register a new business (tenant) and its initial owner account
  * @access  Public
  */
-router.post('/register', authController.register);
+router.post('/register', authLimiter, authController.register);
 
 /**
  * @route   POST /api/auth/login
  * @desc    Authenticate user under a specific tenant and return JWT
  * @access  Public
  */
-router.post('/login', authController.login);
+router.post('/login', authLimiter, authController.login);
 
 /**
  * @route   GET /api/auth/me

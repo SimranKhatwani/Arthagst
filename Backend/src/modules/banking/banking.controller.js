@@ -78,11 +78,14 @@ export const deleteAccount = async (req, res, next) => {
   }
 };
 
+export const updateStatus = updateAccountStatus;
+
 export default {
   createAccount,
   getAccounts,
   getAccountById,
   updateAccount,
   updateAccountStatus,
+  updateStatus,
   deleteAccount,
 };
