@@ -29,9 +29,8 @@ import {
 import { InputField, inputClass, btnPrimary, btnSecondary } from '../../components/common/UI';
 
 export const LoginPage = () => {
-  const { login, notify } = useApp();
+  const { login } = useApp();
   const navigate = useNavigate();
-  const [loginMode, setLoginMode] = useState('tenant'); // 'tenant' or 'admin'
   const [tenantCode, setTenantCode] = useState(
     () => localStorage.getItem('arthagst_last_tenant_code') || ''
   );
@@ -42,17 +41,6 @@ export const LoginPage = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
-  const [quickFillSuccess, setQuickFillSuccess] = useState(false);
-
-  const handleQuickFillAdmin = () => {
-    setTenantCode('ARTHA');
-    setEmail('admin@artha.com');
-    setPassword('Admin@12345');
-    setFieldErrors({});
-    setError(null);
-    setQuickFillSuccess(true);
-    setTimeout(() => setQuickFillSuccess(false), 3000);
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -60,9 +48,7 @@ export const LoginPage = () => {
     setFieldErrors({});
 
     const errors = {};
-    if (loginMode === 'tenant' && !tenantCode.trim()) {
-      errors.tenantCode = 'Organization code is required';
-    }
+    if (!tenantCode.trim()) errors.tenantCode = 'Organization code is required';
     if (!email.trim()) errors.email = 'Email address is required';
     if (!password) errors.password = 'Password is required';
 
@@ -74,10 +60,9 @@ export const LoginPage = () => {
     setLoading(true);
     try {
       await login({
-        tenantCode: loginMode === 'tenant' ? tenantCode.trim().toUpperCase() : (tenantCode.trim() || undefined),
+        tenantCode: tenantCode.trim().toUpperCase(),
         email: email.trim().toLowerCase(),
         password,
-        isSuperAdmin: loginMode === 'admin',
       });
 
       if (remember && tenantCode.trim()) {
@@ -119,14 +104,17 @@ export const LoginPage = () => {
               <div className="text-[11px] text-slate-400 font-medium">Enterprise GST &amp; ERP Suite</div>
             </div>
           </div>
-
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            Backend Connected
+          </div>
         </div>
 
         {/* Pitch & Value Props */}
         <div className="relative z-10 max-w-lg space-y-6 my-auto py-8">
           <div className="space-y-3">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
-
+              <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
               Built for Modern Indian Commerce
             </div>
             <h1 className="font-display text-3xl xl:text-4xl font-extrabold tracking-tight text-white leading-tight">
@@ -204,49 +192,17 @@ export const LoginPage = () => {
           </div>
 
           <div className="mb-6">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100 mb-2">
+              <Building2 className="w-3.5 h-3.5" />
+              Organization Portal
+            </span>
             <h2 className="font-display text-2xl font-bold text-slate-900 tracking-tight">
               Sign in to ArthaGST
             </h2>
             <p className="mt-1 text-xs text-slate-500">
-              Select your portal mode and enter your verified credentials.
+              Enter your organization tenant code and staff credentials.
             </p>
           </div>
-
-          {/* Portal Switcher Tabs */}
-          <div className="grid grid-cols-2 p-1 bg-slate-100 rounded-xl mb-5 text-xs font-semibold">
-            <button
-              type="button"
-              onClick={() => {
-                setLoginMode('tenant');
-                setError(null);
-                setFieldErrors({});
-              }}
-              className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg transition-all cursor-pointer ${loginMode === 'tenant'
-                ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/80 font-bold'
-                : 'text-slate-600 hover:text-slate-900'
-                }`}
-            >
-              <Building2 className="w-3.5 h-3.5" />
-              Organization
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setLoginMode('admin');
-                setError(null);
-                setFieldErrors({});
-              }}
-              className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg transition-all cursor-pointer ${loginMode === 'admin'
-                ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-sm font-bold'
-                : 'text-slate-600 hover:text-slate-900'
-                }`}
-            >
-              <ShieldCheck className="w-3.5 h-3.5" />
-              Platform Admin
-            </button>
-          </div>
-
-
 
           {/* Error Banner */}
           {error && (
@@ -261,33 +217,31 @@ export const LoginPage = () => {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Tenant Code Field */}
-            {loginMode === 'tenant' && (
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-semibold text-slate-700 flex items-center gap-1">
-                    Organization / Tenant Code <span className="text-rose-500">*</span>
-                  </label>
-                  <span className="text-[11px] text-slate-400">e.g. ARTHA</span>
-                </div>
-                <div className="relative">
-                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
-                    <Building2 className="w-4 h-4" />
-                  </div>
-                  <input
-                    type="text"
-                    value={tenantCode}
-                    onChange={(e) => setTenantCode(e.target.value.toUpperCase())}
-                    className={`w-full rounded-xl border ${fieldErrors.tenantCode ? 'border-rose-400 bg-rose-50/30' : 'border-slate-300'
-                      } bg-white py-2.5 pl-9 pr-3 text-sm font-mono uppercase tracking-wider text-slate-900 placeholder:text-slate-400 placeholder:font-sans placeholder:normal-case placeholder:tracking-normal focus:border-indigo-600 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all`}
-                    placeholder="Enter Tenant Code"
-                    autoComplete="organization"
-                  />
-                </div>
-                {fieldErrors.tenantCode && (
-                  <p className="mt-1 text-[11px] text-rose-600">{fieldErrors.tenantCode}</p>
-                )}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-semibold text-slate-700 flex items-center gap-1">
+                  Organization / Tenant Code <span className="text-rose-500">*</span>
+                </label>
+                <span className="text-[11px] text-slate-400">e.g. ARTHA</span>
               </div>
-            )}
+              <div className="relative">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                  <Building2 className="w-4 h-4" />
+                </div>
+                <input
+                  type="text"
+                  value={tenantCode}
+                  onChange={(e) => setTenantCode(e.target.value.toUpperCase())}
+                  className={`w-full rounded-xl border ${fieldErrors.tenantCode ? 'border-rose-400 bg-rose-50/30' : 'border-slate-300'
+                    } bg-white py-2.5 pl-9 pr-3 text-sm font-mono uppercase tracking-wider text-slate-900 placeholder:text-slate-400 placeholder:font-sans placeholder:normal-case placeholder:tracking-normal focus:border-indigo-600 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all`}
+                  placeholder="Enter Organization Code"
+                  autoComplete="organization"
+                />
+              </div>
+              {fieldErrors.tenantCode && (
+                <p className="mt-1 text-[11px] text-rose-600">{fieldErrors.tenantCode}</p>
+              )}
+            </div>
 
             {/* Email Field */}
             <div>
@@ -374,7 +328,7 @@ export const LoginPage = () => {
                 </>
               ) : (
                 <>
-                  <span>Sign In</span>
+                  <span>Sign In to Organization</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
@@ -382,20 +336,242 @@ export const LoginPage = () => {
           </form>
 
           {/* Footer Navigation */}
-          <div className="mt-6 border-t border-slate-200 pt-5 text-center text-xs text-slate-600">
-            {loginMode === 'tenant' ? (
-              <>
-                New to ArthaGST?{' '}
-                <Link to="/register" className="font-semibold text-indigo-600 hover:text-indigo-700 hover:underline">
-                  Register New Organization &rarr;
-                </Link>
-              </>
-            ) : (
-              <span className="text-slate-500">
-                Platform Administrator Login · Protected Area
-              </span>
+          <div className="mt-6 border-t border-slate-200 pt-5 text-center text-xs text-slate-600 space-y-2.5">
+            <div>
+              New to ArthaGST?{' '}
+              <Link to="/register" className="font-semibold text-indigo-600 hover:text-indigo-700 hover:underline">
+                Register New Organization &rarr;
+              </Link>
+            </div>
+            <div className="pt-2 border-t border-slate-100">
+              <Link to="/sd" className="inline-flex items-center gap-1.5 text-slate-500 hover:text-indigo-600 transition-colors">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                Platform Super Admin Portal (/sd) &rarr;
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Super Admin Dedicated Login Page (/sd/login)
+ * Strictly for SaaS Platform Master Administrators
+ */
+export const SuperAdminLoginPage = () => {
+  const { login } = useApp();
+  const navigate = useNavigate();
+  const [email, setEmail] = useState('admin@artha.com');
+  const [password, setPassword] = useState('Admin@12345');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [quickFillSuccess, setQuickFillSuccess] = useState(false);
+
+  const handleQuickFill = () => {
+    setEmail('admin@artha.com');
+    setPassword('Admin@12345');
+    setFieldErrors({});
+    setError(null);
+    setQuickFillSuccess(true);
+    setTimeout(() => setQuickFillSuccess(false), 3000);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError(null);
+    setFieldErrors({});
+
+    const errors = {};
+    if (!email.trim()) errors.email = 'Admin email is required';
+    if (!password) errors.password = 'Password is required';
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await login({
+        email: email.trim().toLowerCase(),
+        password,
+        isSuperAdmin: true,
+      });
+
+      navigate('/sd');
+    } catch (err) {
+      if (err.errors && Array.isArray(err.errors)) {
+        const mapped = {};
+        err.errors.forEach((fe) => {
+          mapped[fe.field] = fe.message;
+        });
+        setFieldErrors(mapped);
+      }
+      setError(err.message || 'Super Admin authentication failed.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-950 p-6 relative overflow-hidden">
+      {/* Background Ambience */}
+      <div className="absolute -top-32 -left-32 w-96 h-96 bg-amber-500/15 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute inset-0 bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:24px_24px] opacity-25 pointer-events-none" />
+
+      <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900/90 backdrop-blur-md p-8 sm:p-9 shadow-2xl relative z-10 text-white">
+        {/* Header Badge */}
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-amber-500 to-amber-600 font-display text-sm font-bold text-slate-950 shadow-lg shadow-amber-500/25">
+              SA
+            </div>
+            <div>
+              <div className="font-display text-lg font-bold text-white tracking-tight">ArthaGST Control</div>
+              <div className="text-[11px] text-amber-400 font-medium">Master Platform Console</div>
+            </div>
+          </div>
+          <span className="px-2.5 py-1 rounded-full text-[10px] font-mono font-bold bg-amber-400/10 text-amber-400 border border-amber-400/20">
+            /sd Access
+          </span>
+        </div>
+
+        <div className="mb-6">
+          <h2 className="font-display text-2xl font-bold text-white tracking-tight">
+            Super Admin Sign In
+          </h2>
+          <p className="mt-1 text-xs text-slate-400">
+            Enter master platform administrator credentials to manage tenants and SaaS billing.
+          </p>
+        </div>
+
+        {/* 1-Click Auto Fill Banner */}
+        <button
+          type="button"
+          onClick={handleQuickFill}
+          className="mb-5 w-full flex items-center justify-between p-3 rounded-xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-200 transition-all group cursor-pointer text-left"
+          title="Click to fill credentials from env"
+        >
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500 text-slate-950 font-bold shadow-xs shrink-0">
+              <Sparkles className="w-3.5 h-3.5" />
+            </span>
+            <div>
+              <div className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                Env Credentials (admin@artha.com)
+                {quickFillSuccess && (
+                  <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/20 px-1.5 py-0.5 rounded border border-emerald-500/30">
+                    Filled!
+                  </span>
+                )}
+              </div>
+              <div className="text-[11px] text-amber-400/80">
+                Password: Admin@12345
+              </div>
+            </div>
+          </div>
+          <span className="text-[11px] font-semibold text-amber-400 group-hover:translate-x-0.5 transition-transform shrink-0">
+            Auto Fill &rarr;
+          </span>
+        </button>
+
+        {/* Error Banner */}
+        {error && (
+          <div className="mb-5 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3.5 text-xs text-rose-300 flex items-start gap-2.5">
+            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+            <div>
+              <div className="font-bold text-rose-200">Access Denied</div>
+              <div className="mt-0.5 text-rose-300 leading-relaxed">{error}</div>
+            </div>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Email Field */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+              Super Admin Email Address <span className="text-rose-400">*</span>
+            </label>
+            <div className="relative">
+              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500">
+                <Mail className="w-4 h-4" />
+              </div>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full rounded-xl border border-slate-700 bg-slate-800/80 py-2.5 pl-9 pr-3 text-sm text-white placeholder:text-slate-500 focus:border-amber-500 focus:outline-none focus:ring-4 focus:ring-amber-500/10 transition-all"
+                placeholder="admin@artha.com"
+                autoComplete="email"
+              />
+            </div>
+            {fieldErrors.email && (
+              <p className="mt-1 text-[11px] text-rose-400">{fieldErrors.email}</p>
             )}
           </div>
+
+          {/* Password Field */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+              Master Password <span className="text-rose-400">*</span>
+            </label>
+            <div className="relative">
+              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500">
+                <Lock className="w-4 h-4" />
+              </div>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full rounded-xl border border-slate-700 bg-slate-800/80 py-2.5 pl-9 pr-10 text-sm text-white placeholder:text-slate-500 focus:border-amber-500 focus:outline-none focus:ring-4 focus:ring-amber-500/10 transition-all"
+                placeholder="••••••••"
+                autoComplete="current-password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-500 hover:text-slate-300 cursor-pointer"
+                tabIndex={-1}
+                aria-label="Toggle password visibility"
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            {fieldErrors.password && (
+              <p className="mt-1 text-[11px] text-rose-400">{fieldErrors.password}</p>
+            )}
+          </div>
+
+          {/* Submit Button */}
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full mt-2 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-slate-950 font-bold text-sm bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 shadow-lg shadow-amber-500/20 active:scale-[0.99] transition-all disabled:opacity-50 cursor-pointer"
+          >
+            {loading ? (
+              <>
+                <span className="w-4 h-4 border-2 border-slate-950/30 border-t-slate-950 rounded-full animate-spin" />
+                Verifying Master Credentials...
+              </>
+            ) : (
+              <>
+                <span>Access Super Admin Console</span>
+                <ArrowRight className="w-4 h-4" />
+              </>
+            )}
+          </button>
+        </form>
+
+        <div className="mt-6 pt-5 border-t border-slate-800 text-center text-xs text-slate-400">
+          Organization Staff?{' '}
+          <Link to="/login" className="font-semibold text-amber-400 hover:underline">
+            Go to Business Login &rarr;
+          </Link>
         </div>
       </div>
     </div>

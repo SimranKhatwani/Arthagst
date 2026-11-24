@@ -6,7 +6,12 @@ import { AppLayout } from './components/layout/AppLayout';
 import { SuperAdminLayout } from './components/layout/SuperAdminLayout';
 
 // Auth & Onboarding
-import { LoginPage, RegisterPage, OnboardingWizardPage } from './pages/auth/AuthPages';
+import {
+  LoginPage,
+  RegisterPage,
+  OnboardingWizardPage,
+  SuperAdminLoginPage,
+} from './pages/auth/AuthPages';
 
 // Dashboard
 import { DashboardPage } from './pages/dashboard/DashboardPage';
@@ -147,16 +152,12 @@ const ProtectedSuperAdmin = ({ children }) => {
   const location = useLocation();
 
   if (authLoading) {
-    return <AuthLoadingScreen />;
+    return <AuthLoadingScreen message="Verifying Super Admin access..." />;
   }
 
-  if (!state.isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
-  }
-
-  // Enforce Super Admin role
-  if (state.currentUser?.role !== 'super_admin' && !state.currentUser?.isSuperAdmin) {
-    return <Navigate to="/dashboard" replace />;
+  // If unauthenticated or not a super admin, redirect to dedicated super admin login
+  if (!state.isAuthenticated || (state.currentUser?.role !== 'super_admin' && !state.currentUser?.isSuperAdmin)) {
+    return <Navigate to="/sd/login" state={{ from: location }} replace />;
   }
 
   return <SuperAdminLayout>{children}</SuperAdminLayout>;
@@ -170,7 +171,24 @@ const PublicAuthRoute = ({ children }) => {
   }
 
   if (state.isAuthenticated) {
+    if (state.currentUser?.role === 'super_admin' || state.currentUser?.isSuperAdmin) {
+      return <Navigate to="/sd" replace />;
+    }
     return <Navigate to="/dashboard" replace />;
+  }
+
+  return children;
+};
+
+const PublicSuperAdminAuthRoute = ({ children }) => {
+  const { state, authLoading } = useApp();
+
+  if (authLoading) {
+    return <AuthLoadingScreen message="Loading..." />;
+  }
+
+  if (state.isAuthenticated && (state.currentUser?.role === 'super_admin' || state.currentUser?.isSuperAdmin)) {
+    return <Navigate to="/sd" replace />;
   }
 
   return children;
@@ -309,19 +327,34 @@ const AppRoutes = () => {
         <Route path="/settings" element={<ProtectedTenant><SettingsPage defaultTab="business-tax" /></ProtectedTenant>} />
         <Route path="/subscription" element={<ProtectedTenant><SubscriptionPage /></ProtectedTenant>} />
 
-        {/* Isolated Multi-Tenant Super Admin Console */}
-        <Route path="/super-admin" element={<ProtectedSuperAdmin><SuperAdminDashboardPage /></ProtectedSuperAdmin>} />
-        <Route path="/super-admin/tenants" element={<ProtectedSuperAdmin><SuperAdminTenantsPage /></ProtectedSuperAdmin>} />
-        <Route path="/super-admin/users" element={<ProtectedSuperAdmin><SuperAdminSubSectionPage section="users" /></ProtectedSuperAdmin>} />
-        <Route path="/super-admin/plans" element={<ProtectedSuperAdmin><SuperAdminPlansPage /></ProtectedSuperAdmin>} />
-        <Route path="/super-admin/subscriptions" element={<ProtectedSuperAdmin><SuperAdminSubSectionPage section="subscriptions" /></ProtectedSuperAdmin>} />
-        <Route path="/super-admin/payments" element={<ProtectedSuperAdmin><SuperAdminSubSectionPage section="payments" /></ProtectedSuperAdmin>} />
-        <Route path="/super-admin/analytics" element={<ProtectedSuperAdmin><SuperAdminSubSectionPage section="analytics" /></ProtectedSuperAdmin>} />
-        <Route path="/super-admin/tickets" element={<ProtectedSuperAdmin><SuperAdminSubSectionPage section="tickets" /></ProtectedSuperAdmin>} />
-        <Route path="/super-admin/announcements" element={<ProtectedSuperAdmin><SuperAdminSubSectionPage section="announcements" /></ProtectedSuperAdmin>} />
-        <Route path="/super-admin/features" element={<ProtectedSuperAdmin><SuperAdminSubSectionPage section="features" /></ProtectedSuperAdmin>} />
-        <Route path="/super-admin/settings" element={<ProtectedSuperAdmin><SuperAdminSubSectionPage section="settings" /></ProtectedSuperAdmin>} />
-        <Route path="/super-admin/audit" element={<ProtectedSuperAdmin><SuperAdminSubSectionPage section="audit" /></ProtectedSuperAdmin>} />
+        {/* Dedicated Super Admin Login (/sd/login) */}
+        <Route
+          path="/sd/login"
+          element={
+            <PublicSuperAdminAuthRoute>
+              <SuperAdminLoginPage />
+            </PublicSuperAdminAuthRoute>
+          }
+        />
+
+        {/* Super Admin Console (/sd and essential modules) */}
+        <Route path="/sd" element={<ProtectedSuperAdmin><SuperAdminDashboardPage /></ProtectedSuperAdmin>} />
+        <Route path="/sd/dashboard" element={<Navigate to="/sd" replace />} />
+        <Route path="/sd/tenants" element={<ProtectedSuperAdmin><SuperAdminTenantsPage /></ProtectedSuperAdmin>} />
+        <Route path="/sd/users" element={<ProtectedSuperAdmin><SuperAdminSubSectionPage section="users" /></ProtectedSuperAdmin>} />
+        <Route path="/sd/plans" element={<ProtectedSuperAdmin><SuperAdminPlansPage /></ProtectedSuperAdmin>} />
+        <Route path="/sd/subscriptions" element={<ProtectedSuperAdmin><SuperAdminSubSectionPage section="subscriptions" /></ProtectedSuperAdmin>} />
+        <Route path="/sd/payments" element={<ProtectedSuperAdmin><SuperAdminSubSectionPage section="payments" /></ProtectedSuperAdmin>} />
+        <Route path="/sd/analytics" element={<ProtectedSuperAdmin><SuperAdminSubSectionPage section="analytics" /></ProtectedSuperAdmin>} />
+        <Route path="/sd/tickets" element={<ProtectedSuperAdmin><SuperAdminSubSectionPage section="tickets" /></ProtectedSuperAdmin>} />
+        <Route path="/sd/announcements" element={<ProtectedSuperAdmin><SuperAdminSubSectionPage section="announcements" /></ProtectedSuperAdmin>} />
+        <Route path="/sd/features" element={<ProtectedSuperAdmin><SuperAdminSubSectionPage section="features" /></ProtectedSuperAdmin>} />
+        <Route path="/sd/settings" element={<ProtectedSuperAdmin><SuperAdminSubSectionPage section="settings" /></ProtectedSuperAdmin>} />
+        <Route path="/sd/audit" element={<ProtectedSuperAdmin><SuperAdminSubSectionPage section="audit" /></ProtectedSuperAdmin>} />
+
+        {/* Backward compatibility for /super-admin */}
+        <Route path="/super-admin" element={<Navigate to="/sd" replace />} />
+        <Route path="/super-admin/*" element={<Navigate to="/sd" replace />} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
