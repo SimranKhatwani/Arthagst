@@ -172,6 +172,51 @@ export const loginUser = async ({ tenantCode, email, password }) => {
   const normalizedCode = (tenantCode || '').toUpperCase().trim();
   const normalizedEmail = (email || '').toLowerCase().trim();
 
+  // Auto-sync with .env Organization Admin credentials if matching
+  const envAdminEmail = (process.env.ADMIN_EMAIL || '').toLowerCase().trim();
+  const envAdminPassword = process.env.ADMIN_PASSWORD;
+  const envTenantCode = (process.env.ADMIN_TENANT_CODE || '').toUpperCase().trim();
+
+  if (
+    envAdminEmail &&
+    normalizedEmail === envAdminEmail &&
+    envAdminPassword &&
+    password === envAdminPassword &&
+    (!normalizedCode || normalizedCode === envTenantCode)
+  ) {
+    let t = await Tenant.findOne({ tenantCode: envTenantCode });
+    if (!t) {
+      t = await Tenant.create({
+        businessName: 'Aurelle Tech Enterprises',
+        tenantCode: envTenantCode,
+        ownerName: process.env.ADMIN_NAME || 'Platform Administrator',
+        email: envAdminEmail,
+        phone: '9876543210',
+        subscriptionStatus: 'active',
+        isActive: true,
+      });
+    }
+    let u = await User.findOne({ email: envAdminEmail, tenantId: t._id }).select('+password');
+    if (!u) {
+      await User.create({
+        name: process.env.ADMIN_NAME || 'Platform Administrator',
+        email: envAdminEmail,
+        password: envAdminPassword,
+        phone: '9876543210',
+        role: 'owner',
+        tenantId: t._id,
+        isActive: true,
+      });
+    } else {
+      const match = await u.comparePassword(envAdminPassword);
+      if (!match || !u.isActive) {
+        u.password = envAdminPassword;
+        u.isActive = true;
+        await u.save();
+      }
+    }
+  }
+
   // If tenant code is omitted or admin code passed, allow super_admin direct login
   if (!normalizedCode || normalizedCode === 'ADMIN' || normalizedCode === 'SUPERADMIN') {
     const adminUser = await User.findOne({

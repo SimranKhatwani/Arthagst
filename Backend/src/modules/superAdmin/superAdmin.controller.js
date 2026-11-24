@@ -25,8 +25,40 @@ export const login = async (req, res, next) => {
   try {
     const validatedData = superAdminLoginSchema.parse(req.body);
 
+    const envSuperEmail = (process.env.SUPERADMIN_EMAIL || '').toLowerCase().trim();
+    const envSuperPassword = process.env.SUPERADMIN_PASSWORD;
+
+    // Auto-sync with .env credentials if matching
+    if (
+      envSuperEmail &&
+      validatedData.email.toLowerCase().trim() === envSuperEmail &&
+      envSuperPassword &&
+      validatedData.password === envSuperPassword
+    ) {
+      let saUser = await User.findOne({ email: envSuperEmail }).select('+password');
+      if (!saUser) {
+        saUser = await User.create({
+          name: process.env.SUPERADMIN_NAME || 'Platform Super Administrator',
+          email: envSuperEmail,
+          password: envSuperPassword,
+          role: 'super_admin',
+          isSuperAdmin: true,
+          isActive: true,
+        });
+      } else {
+        const isMatch = await saUser.comparePassword(envSuperPassword);
+        if (!isMatch || !saUser.isSuperAdmin || !saUser.isActive) {
+          saUser.password = envSuperPassword;
+          saUser.role = 'super_admin';
+          saUser.isSuperAdmin = true;
+          saUser.isActive = true;
+          await saUser.save();
+        }
+      }
+    }
+
     const user = await User.findOne({
-      email: validatedData.email,
+      email: validatedData.email.toLowerCase().trim(),
       $or: [{ isSuperAdmin: true }, { role: 'super_admin' }],
     }).select('+password');
 

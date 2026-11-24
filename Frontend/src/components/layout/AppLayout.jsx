@@ -407,22 +407,6 @@ const SidebarContent = ({
         </div>
       ))}
     </div>
-
-    {/* Bottom Workspace Switcher to Super Admin */}
-    <div className="shrink-0 border-t border-slate-800 p-2.5">
-      <button
-        type="button"
-        onClick={() => {
-          navigate('/super-admin');
-          if (isMobile) setMobileOpen(false);
-        }}
-        title="Open Super Admin Console"
-        className="flex w-full items-center gap-2.5 rounded-md border border-slate-700/80 bg-slate-800/60 px-2.5 py-2 text-xs font-medium text-slate-200 hover:bg-slate-800"
-      >
-        <ShieldAlert className="h-4 w-4 shrink-0 text-amber-400" />
-        {(!collapsed || isMobile) && <span className="truncate">Super Admin Console</span>}
-      </button>
-    </div>
   </div>
 );
 
@@ -432,7 +416,6 @@ export const AppLayout = ({ children }) => {
     selectedFY,
     setSelectedFY,
     confirmAction,
-    handleResetDemo,
     logout,
   } = useApp();
   const location = useLocation();
@@ -525,17 +508,6 @@ export const AppLayout = ({ children }) => {
     });
     return results.slice(0, 8);
   }, [searchQuery, state.invoices, state.customers, state.products]);
-
-  const onResetClick = async () => {
-    const ok = await confirmAction({
-      title: 'Reset Demo Dataset',
-      message:
-        'This will clear all local changes and restore the original Sharma Traders FY 2026-27 demo dataset. Continue?',
-      confirmText: 'Reset Demo Data',
-      danger: true,
-    });
-    if (ok) handleResetDemo();
-  };
 
   const sidebarProps = {
     collapsed,
@@ -644,20 +616,6 @@ export const AppLayout = ({ children }) => {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            {/* Demo Mode Indicator & Quick Reset */}
-            <div className="hidden md:flex items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs text-amber-800">
-              <span className="font-medium whitespace-nowrap">Demo Mode</span>
-              <span className="text-amber-400">·</span>
-              <button
-                type="button"
-                onClick={onResetClick}
-                className="inline-flex items-center gap-1 font-medium text-amber-900 hover:underline whitespace-nowrap"
-              >
-                <RotateCcw className="h-3 w-3" />
-                Reset
-              </button>
-            </div>
-
             {/* Financial Year */}
             <select
               value={selectedFY}
@@ -747,28 +705,6 @@ export const AppLayout = ({ children }) => {
                     <Building2 className="h-3.5 w-3.5" />
                     Business Setup Wizard
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setProfileOpen(false);
-                      navigate('/super-admin');
-                    }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50"
-                  >
-                    <ShieldAlert className="h-3.5 w-3.5 text-amber-600" />
-                    Super Admin Panel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setProfileOpen(false);
-                      onResetClick();
-                    }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50"
-                  >
-                    <RotateCcw className="h-3.5 w-3.5" />
-                    Reset Demo Data
-                  </button>
                   <div className="my-1 border-t border-slate-100" />
                   <button
                     type="button"
@@ -796,18 +732,12 @@ export const AppLayout = ({ children }) => {
       <Modal
         open={helpOpen}
         onClose={() => setHelpOpen(false)}
-        title="ArthaGST Prototype Guide"
-        subtitle="Indian GST Billing, Inventory & Business Management Demo"
+        title="ArthaGST Guide"
+        subtitle="Indian GST Billing, Inventory & Business Management"
         footer={
-          <>
-            <button type="button" onClick={onResetClick} className={btnSecondary}>
-              <RotateCcw className="h-3.5 w-3.5" />
-              Reset Demo Data
-            </button>
-            <button type="button" onClick={() => setHelpOpen(false)} className={btnPrimary}>
-              Close
-            </button>
-          </>
+          <button type="button" onClick={() => setHelpOpen(false)} className={btnPrimary}>
+            Close
+          </button>
         }
       >
         <div className="space-y-3 text-xs text-slate-600">

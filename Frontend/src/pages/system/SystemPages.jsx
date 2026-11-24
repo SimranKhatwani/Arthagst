@@ -276,7 +276,7 @@ const normalizeSettingsTab = (tab) => {
 };
 
 export const SettingsPage = ({ defaultTab = 'business-tax' }) => {
-  const { state, updateBusinessAndSettings, handleResetDemo, confirmAction } = useApp();
+  const { state, updateBusinessAndSettings, confirmAction } = useApp();
   const navigate = useNavigate();
   const [tab, setTab] = useState(() => normalizeSettingsTab(defaultTab));
   const [biz, setBiz] = useState(state.business);
@@ -469,26 +469,11 @@ export const SettingsPage = ({ defaultTab = 'business-tax' }) => {
         {tab === 'backup' && (
           <div className="space-y-4 text-xs">
             <p className="text-slate-600">
-              All prototype data is persisted in browser localStorage. You can export a JSON snapshot or reset the entire Sharma Traders demo dataset.
+              Export your organization business data as a JSON snapshot for local backups and audit records.
             </p>
             <div className="flex flex-wrap gap-3">
               <button type="button" onClick={() => exportAppDataJSON(state)} className={btnSecondary}>
-                <Download className="h-3.5 w-3.5" /> Export Demo Data (JSON)
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  const ok = await confirmAction({
-                    title: 'Reset All Demo Data?',
-                    message: 'All custom invoices, products, and settings edits will be replaced with the original Sharma Traders dataset.',
-                    confirmText: 'Reset Demo',
-                    danger: true,
-                  });
-                  if (ok) handleResetDemo();
-                }}
-                className={btnDanger}
-              >
-                <RotateCcw className="h-3.5 w-3.5" /> Reset Demo Data
+                <Download className="h-3.5 w-3.5" /> Export Data Snapshot (JSON)
               </button>
             </div>
           </div>
