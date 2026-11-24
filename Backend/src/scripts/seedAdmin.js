@@ -9,8 +9,8 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 import connectDB from '../config/database.js';
-import Tenant from '../modules/tenants/tenant.model.js';
-import User from '../modules/users/user.model.js';
+import Tenant from '../models/tenant.model.js';
+import User from '../models/user.model.js';
 
 export const seedAdmin = async () => {
   // 1. Organization Admin Credentials from .env

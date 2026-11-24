@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
-import User from '../modules/users/user.model.js';
-import Tenant from '../modules/tenants/tenant.model.js';
+import User from '../models/user.model.js';
+import Tenant from '../models/tenant.model.js';
 
 /**
  * JWT Authentication & Multi-Tenant Authorization Middleware
