@@ -218,19 +218,24 @@ const SidebarContent = ({
 }) => (
   <div className="flex h-full flex-col bg-slate-900 text-slate-300">
     {/* Brand */}
-    <div className="flex h-14 shrink-0 items-center justify-between border-b border-slate-800 px-3.5">
+    <div className="flex h-16 shrink-0 items-center justify-between border-b border-slate-800 px-4">
       <button
         type="button"
         onClick={() => navigate('/dashboard')}
-        className="flex items-center gap-2.5 overflow-hidden text-left"
+        className="flex items-center gap-3 overflow-hidden text-left group"
       >
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-600 font-display text-sm font-bold text-white">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-600 font-display text-sm font-bold text-white shadow-md shadow-indigo-600/30">
           A
         </div>
         {(!collapsed || isMobile) && (
-          <span className="truncate font-display text-base font-semibold tracking-tight text-white">
-            ArthaGST
-          </span>
+          <div className="flex flex-col">
+            <span className="truncate font-display text-base font-bold tracking-tight text-white group-hover:text-indigo-200 transition-colors">
+              ArthaGST
+            </span>
+            <span className="text-[10px] font-medium text-indigo-400 tracking-wide uppercase">
+              Business Suite
+            </span>
+          </div>
         )}
       </button>
       {!isMobile && (
@@ -238,7 +243,7 @@ const SidebarContent = ({
           type="button"
           onClick={() => setCollapsed((c) => !c)}
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+          className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
         >
           {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
         </button>
@@ -247,7 +252,7 @@ const SidebarContent = ({
         <button
           type="button"
           onClick={() => setMobileOpen(false)}
-          className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+          className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white"
         >
           <X className="h-4 w-4" />
         </button>
@@ -264,16 +269,16 @@ const SidebarContent = ({
             }
           : undefined
       }
-      className="no-scrollbar flex-1 overflow-y-auto px-2.5 py-3 space-y-5"
+      className="no-scrollbar flex-1 overflow-y-auto px-3 py-3.5 space-y-6"
     >
       {NAV_GROUPS.map((group) => (
         <div key={group.section}>
           {(!collapsed || isMobile) && (
-            <div className="mb-1.5 px-2.5 text-[11px] font-medium text-slate-500">
+            <div className="mb-2 px-3 text-[11px] font-bold uppercase tracking-wider text-slate-400/90">
               {group.section}
             </div>
           )}
-          <div className="space-y-0.5">
+          <div className="space-y-1">
             {group.items.map((item) => {
               const Icon = item.icon;
               const active = isGroupActive(item);
@@ -287,19 +292,19 @@ const SidebarContent = ({
                     onClick={() => isMobile && setMobileOpen(false)}
                     title={collapsed && !isMobile ? item.label : undefined}
                     className={({ isActive }) =>
-                      `flex items-center justify-between rounded-md px-2.5 py-2 text-[13px] font-medium transition-colors ${
+                      `flex items-center justify-between rounded-lg px-3 py-2.5 text-[14px] font-medium transition-all duration-150 ${
                         isActive
-                          ? 'bg-indigo-600 text-white'
-                          : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                          ? 'bg-indigo-600 text-white font-semibold shadow-sm shadow-indigo-900/50'
+                          : 'text-slate-200 hover:bg-slate-800 hover:text-white'
                       }`
                     }
                   >
-                    <span className="flex items-center gap-2.5 truncate">
-                      <Icon className="h-4 w-4 shrink-0" />
+                    <span className="flex items-center gap-3 truncate">
+                      <Icon className="h-[18px] w-[18px] shrink-0" />
                       {(!collapsed || isMobile) && <span className="truncate">{item.label}</span>}
                     </span>
                     {(!collapsed || isMobile) && item.id === 'notifications' && unreadCount > 0 && (
-                      <span className="rounded bg-rose-500 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-white">
+                      <span className="rounded-full bg-rose-500 px-2 py-0.5 font-mono text-[10px] font-bold text-white shadow-xs">
                         {unreadCount}
                       </span>
                     )}
@@ -313,25 +318,25 @@ const SidebarContent = ({
                     type="button"
                     onClick={() => toggleGroup(item.id)}
                     title={collapsed && !isMobile ? item.label : undefined}
-                    className={`flex w-full items-center justify-between rounded-md px-2.5 py-2 text-[13px] font-medium transition-colors ${
+                    className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-[14px] font-medium transition-all duration-150 ${
                       active
-                        ? 'bg-slate-800 text-white'
-                        : 'text-slate-300 hover:bg-slate-800/70 hover:text-white'
+                        ? 'bg-slate-800 text-white font-semibold'
+                        : 'text-slate-200 hover:bg-slate-800/80 hover:text-white'
                     }`}
                   >
-                    <span className="flex items-center gap-2.5 truncate">
-                      <Icon className="h-4 w-4 shrink-0" />
+                    <span className="flex items-center gap-3 truncate">
+                      <Icon className="h-[18px] w-[18px] shrink-0 text-slate-400" />
                       {(!collapsed || isMobile) && <span className="truncate">{item.label}</span>}
                     </span>
                     {(!collapsed || isMobile) &&
                       (expanded ? (
-                        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                        <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
                       ) : (
-                        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                        <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
                       ))}
                   </button>
                   {expanded && (!collapsed || isMobile) && (
-                    <div className="mt-0.5 ml-4 space-y-0.5 border-l border-slate-800 pl-3">
+                    <div className="mt-1 ml-4 space-y-1 border-l-2 border-slate-800 pl-3">
                       {item.children.map((sub) => {
                         if (sub.children) {
                           const subActive = isSubItemActive(sub);
@@ -341,21 +346,21 @@ const SidebarContent = ({
                               <button
                                 type="button"
                                 onClick={() => toggleGroup(sub.id)}
-                                className={`flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-xs transition-colors ${
+                                className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-[13px] font-medium transition-colors ${
                                   subActive
-                                    ? 'bg-indigo-600/15 font-medium text-indigo-300'
-                                    : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+                                    ? 'bg-indigo-600/20 font-semibold text-indigo-300'
+                                    : 'text-slate-300 hover:bg-slate-800/70 hover:text-white'
                                 }`}
                               >
                                 <span>{sub.label}</span>
                                 {subExpanded ? (
-                                  <ChevronDown className="h-3 w-3 text-slate-400" />
+                                  <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
                                 ) : (
-                                  <ChevronRight className="h-3 w-3 text-slate-400" />
+                                  <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
                                 )}
                               </button>
                               {subExpanded && (
-                                <div className="mt-0.5 ml-3 space-y-0.5 border-l border-slate-800 pl-2.5">
+                                <div className="mt-1 ml-3 space-y-0.5 border-l border-slate-800 pl-2.5">
                                   {sub.children.map((leaf) => (
                                     <NavLink
                                       key={leaf.path}
@@ -363,9 +368,9 @@ const SidebarContent = ({
                                       end
                                       onClick={() => isMobile && setMobileOpen(false)}
                                       className={({ isActive }) =>
-                                        `block rounded-md px-2.5 py-1 text-[11px] transition-colors ${
+                                        `block rounded-md px-3 py-1.5 text-[12px] font-medium transition-colors ${
                                           isActive
-                                            ? 'bg-indigo-600/20 font-medium text-indigo-300'
+                                            ? 'bg-indigo-600/25 font-semibold text-indigo-300'
                                             : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
                                         }`
                                       }
@@ -387,10 +392,10 @@ const SidebarContent = ({
                             end
                             onClick={() => isMobile && setMobileOpen(false)}
                             className={({ isActive }) =>
-                              `block rounded-md px-2.5 py-1.5 text-xs transition-colors ${
+                              `block rounded-md px-3 py-2 text-[13px] font-medium transition-colors ${
                                 isActive || matched
-                                  ? 'bg-indigo-600/20 font-medium text-indigo-300'
-                                  : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+                                  ? 'bg-indigo-600/20 text-indigo-300 font-semibold shadow-2xs'
+                                  : 'text-slate-300/90 hover:bg-slate-800/70 hover:text-white'
                               }`
                             }
                           >
@@ -528,7 +533,7 @@ export const AppLayout = ({ children }) => {
       {/* Desktop Sidebar */}
       <aside
         className={`no-print hidden shrink-0 lg:block transition-all duration-150 ${
-          collapsed ? 'w-[68px]' : 'w-[260px]'
+          collapsed ? 'w-[72px]' : 'w-[276px]'
         }`}
       >
         <div className="sticky top-0 h-screen">
@@ -540,7 +545,7 @@ export const AppLayout = ({ children }) => {
       {mobileOpen && (
         <div className="no-print fixed inset-0 z-50 flex lg:hidden">
           <div className="fixed inset-0 bg-slate-900/50" onClick={() => setMobileOpen(false)} />
-          <div className="relative z-10 w-[268px]">
+          <div className="relative z-10 w-[286px]">
             <SidebarContent {...sidebarProps} isMobile />
           </div>
         </div>
@@ -549,28 +554,28 @@ export const AppLayout = ({ children }) => {
       {/* Main Column */}
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Top Header */}
-        <header className="no-print sticky top-0 z-30 flex h-14 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 sm:px-6">
+        <header className="no-print sticky top-0 z-30 flex h-16 items-center justify-between gap-3 border-b border-slate-200 bg-white/95 backdrop-blur-md px-4 sm:px-6">
           <div className="flex items-center gap-3 min-w-0">
             <button
               type="button"
               onClick={() => setMobileOpen(true)}
-              className="rounded-md p-1.5 text-slate-600 hover:bg-slate-100 lg:hidden"
+              className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 lg:hidden"
             >
               <Menu className="h-5 w-5" />
             </button>
 
-            <div className="hidden sm:flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs">
-              <Building2 className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
-              <span className="font-medium text-slate-900 whitespace-nowrap">
+            <div className="hidden sm:flex items-center gap-2.5 rounded-lg border border-slate-200/90 bg-slate-50/80 px-3 py-1.5 text-xs shadow-2xs">
+              <Building2 className="h-4 w-4 text-indigo-600 shrink-0" />
+              <span className="font-semibold text-slate-900 whitespace-nowrap">
                 {state.business?.businessName}
               </span>
-              <span className="text-slate-400">·</span>
-              <span className="text-slate-500 whitespace-nowrap">{state.business?.city}</span>
+              <span className="text-slate-300">|</span>
+              <span className="text-slate-500 whitespace-nowrap font-medium">{state.business?.city}</span>
             </div>
 
             {/* Global Search */}
-            <div className="relative w-48 sm:w-72">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+            <div className="relative w-48 sm:w-72 md:w-80">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
                 value={searchQuery}
@@ -580,14 +585,14 @@ export const AppLayout = ({ children }) => {
                   setSearchOpen(true);
                 }}
                 placeholder="Search invoices, customers, SKUs..."
-                className="w-full rounded-md border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none"
+                className="w-full rounded-lg border border-slate-200 bg-slate-50/70 py-1.5 pl-8.5 pr-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:bg-white focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all"
               />
               {searchOpen && searchQuery.trim() && (
-                <div className="absolute left-0 right-0 top-full z-40 mt-1 rounded-lg border border-slate-200 bg-white shadow-lg">
+                <div className="absolute left-0 right-0 top-full z-40 mt-1.5 rounded-xl border border-slate-200 bg-white shadow-xl">
                   {searchResults.length === 0 ? (
                     <div className="p-3 text-xs text-slate-500">No matching records found.</div>
                   ) : (
-                    <div className="divide-y divide-slate-100">
+                    <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto">
                       {searchResults.map((res, idx) => (
                         <button
                           key={idx}
@@ -597,13 +602,13 @@ export const AppLayout = ({ children }) => {
                             setSearchOpen(false);
                             setSearchQuery('');
                           }}
-                          className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-slate-50"
+                          className="flex w-full items-center justify-between px-3.5 py-2.5 text-left hover:bg-slate-50 transition-colors"
                         >
                           <div className="min-w-0">
-                            <div className="truncate text-xs font-medium text-slate-900">{res.title}</div>
+                            <div className="truncate text-xs font-semibold text-slate-900">{res.title}</div>
                             <div className="truncate text-[11px] text-slate-500">{res.meta}</div>
                           </div>
-                          <span className="ml-2 shrink-0 text-[11px] font-medium text-indigo-600">
+                          <span className="ml-2 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold bg-indigo-50 text-indigo-700">
                             {res.type}
                           </span>
                         </button>
@@ -621,7 +626,7 @@ export const AppLayout = ({ children }) => {
               value={selectedFY}
               onChange={(e) => setSelectedFY(e.target.value)}
               aria-label="Financial Year"
-              className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 focus:border-indigo-500 focus:outline-none"
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 focus:border-indigo-600 focus:outline-none shadow-2xs"
             >
               {FINANCIAL_YEARS.map((fy) => (
                 <option key={fy} value={fy}>
@@ -635,7 +640,7 @@ export const AppLayout = ({ children }) => {
               type="button"
               onClick={() => navigate('/notifications')}
               title="Notifications"
-              className="relative rounded-md border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50"
+              className="relative rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50 shadow-2xs transition-colors"
             >
               <Bell className="h-4 w-4" />
               {unreadCount > 0 && (
@@ -649,8 +654,8 @@ export const AppLayout = ({ children }) => {
             <button
               type="button"
               onClick={() => setHelpOpen(true)}
-              title="Prototype Help & GST Guide"
-              className="hidden sm:inline-flex rounded-md border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50"
+              title="GST Guide & Prototype Help"
+              className="hidden sm:inline-flex rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50 shadow-2xs transition-colors"
             >
               <HelpCircle className="h-4 w-4" />
             </button>
@@ -660,14 +665,17 @@ export const AppLayout = ({ children }) => {
               <button
                 type="button"
                 onClick={() => setProfileOpen((p) => !p)}
-                className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-left hover:bg-slate-50"
+                className="flex items-center gap-2.5 rounded-lg border border-slate-200/90 bg-white px-2.5 py-1 text-left hover:bg-slate-50 transition-colors shadow-2xs"
               >
-                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-700">
-                  {(state.currentUser?.name || 'A')[0]}
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600 text-xs font-bold text-white shadow-xs">
+                  {(state.currentUser?.name || 'A')[0].toUpperCase()}
                 </div>
                 <div className="hidden md:block">
-                  <div className="text-xs font-medium text-slate-900 whitespace-nowrap">
-                    {state.currentUser?.name || 'Anil Sharma'}
+                  <div className="text-xs font-semibold text-slate-900 whitespace-nowrap leading-tight">
+                    {state.currentUser?.name || 'Platform Administrator'}
+                  </div>
+                  <div className="text-[10px] text-slate-500 font-medium">
+                    {state.currentUser?.role || 'Admin'}
                   </div>
                 </div>
                 <ChevronDown className="h-3.5 w-3.5 text-slate-400" />

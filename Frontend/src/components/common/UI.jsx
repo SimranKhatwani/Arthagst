@@ -70,24 +70,24 @@ export const StatusLabel = ({ status }) => {
 export const StatCard = ({ label, value, subtext, onClick, tone = 'neutral' }) => {
   const toneBorder =
     tone === 'success'
-      ? 'border-slate-200 hover:border-emerald-300'
+      ? 'border-slate-200/90 hover:border-emerald-300'
       : tone === 'warning'
-      ? 'border-slate-200 hover:border-amber-300'
+      ? 'border-slate-200/90 hover:border-amber-300'
       : tone === 'danger'
-      ? 'border-slate-200 hover:border-rose-300'
-      : 'border-slate-200 hover:border-indigo-300';
+      ? 'border-slate-200/90 hover:border-rose-300'
+      : 'border-slate-200/90 hover:border-indigo-300';
 
   const Tag = onClick ? 'button' : 'div';
   return (
     <Tag
       type={onClick ? 'button' : undefined}
       onClick={onClick}
-      className={`w-full text-left rounded-lg border bg-white p-4 transition-colors ${toneBorder} ${
+      className={`w-full text-left rounded-xl border bg-white p-4.5 shadow-2xs transition-all ${toneBorder} ${
         onClick ? 'cursor-pointer hover:bg-slate-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500' : ''
       }`}
     >
-      <div className="text-xs font-medium text-slate-500">{label}</div>
-      <div className="mt-1.5 font-mono text-xl font-semibold tracking-tight text-slate-900 tabular-nums">
+      <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{label}</div>
+      <div className="mt-2 font-display text-2xl font-bold tracking-tight text-slate-900 tabular-nums">
         {value}
       </div>
       {subtext && <div className="mt-1 text-xs text-slate-500 truncate">{subtext}</div>}

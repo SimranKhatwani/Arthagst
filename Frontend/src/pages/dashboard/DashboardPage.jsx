@@ -180,7 +180,7 @@ export const DashboardPage = () => {
     <div className="space-y-6">
       <PageHeader
         title={`Business Overview — ${state.business?.businessName}`}
-        subtitle={`FY ${selectedFY} · GSTIN ${state.business?.gstin} · ${state.business?.city}, ${state.business?.state}`}
+        subtitle={`FY ${selectedFY} · GSTIN ${(state.business?.gstin || '').replace(' (DEMO)', '')} · ${state.business?.city}, ${state.business?.state}`}
         breadcrumbs={['Dashboard']}
         actions={
           <>
@@ -207,12 +207,12 @@ export const DashboardPage = () => {
       />
 
       {/* Quick Actions Strip */}
-      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5">
-        <span className="mr-2 text-xs font-medium text-slate-500">Quick Actions:</span>
+      <div className="flex flex-wrap items-center gap-2.5 rounded-xl border border-slate-200/90 bg-white p-3 shadow-2xs">
+        <span className="mr-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">Quick Actions:</span>
         <button
           type="button"
           onClick={() => navigate('/sales/invoices/new')}
-          className={btnSecondary}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 hover:border-indigo-300 hover:text-indigo-600 transition-all cursor-pointer"
         >
           <Plus className="h-3.5 w-3.5 text-indigo-600" />
           New Invoice
@@ -220,7 +220,7 @@ export const DashboardPage = () => {
         <button
           type="button"
           onClick={() => navigate('/parties/customers')}
-          className={btnSecondary}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 hover:border-indigo-300 hover:text-indigo-600 transition-all cursor-pointer"
         >
           <UserPlus className="h-3.5 w-3.5 text-indigo-600" />
           Add Customer
@@ -228,7 +228,7 @@ export const DashboardPage = () => {
         <button
           type="button"
           onClick={() => navigate('/inventory/products')}
-          className={btnSecondary}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 hover:border-indigo-300 hover:text-indigo-600 transition-all cursor-pointer"
         >
           <PackagePlus className="h-3.5 w-3.5 text-indigo-600" />
           Add Product
@@ -236,7 +236,7 @@ export const DashboardPage = () => {
         <button
           type="button"
           onClick={() => navigate('/purchases/new')}
-          className={btnSecondary}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 hover:border-indigo-300 hover:text-indigo-600 transition-all cursor-pointer"
         >
           <ShoppingBag className="h-3.5 w-3.5 text-indigo-600" />
           Add Purchase
@@ -244,7 +244,7 @@ export const DashboardPage = () => {
         <button
           type="button"
           onClick={() => navigate('/payments/in')}
-          className={btnSecondary}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 hover:border-emerald-300 hover:text-emerald-700 transition-all cursor-pointer"
         >
           <IndianRupee className="h-3.5 w-3.5 text-emerald-600" />
           Record Payment
@@ -252,7 +252,7 @@ export const DashboardPage = () => {
         <button
           type="button"
           onClick={() => navigate('/expenses/new')}
-          className={btnSecondary}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 hover:border-amber-300 hover:text-amber-700 transition-all cursor-pointer"
         >
           <Receipt className="h-3.5 w-3.5 text-amber-600" />
           Add Expense
