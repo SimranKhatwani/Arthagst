@@ -20,6 +20,9 @@ import subscriptionRoutes from './subscription.routes.js';
 import superAdminRoutes from './superAdmin.routes.js';
 import notificationRoutes from './notification.routes.js';
 import auditLogRoutes from './auditLog.routes.js';
+import userRoutes from './user.routes.js';
+import tenantRoutes from './tenant.routes.js';
+import settingsRoutes from './settings.routes.js';
 
 const router = Router();
 
@@ -159,5 +162,23 @@ router.use('/notifications', notificationRoutes);
  * /api/audit-logs
  */
 router.use('/audit-logs', auditLogRoutes);
+
+/**
+ * Tenant Staff & User Management
+ * /api/users
+ */
+router.use('/users', userRoutes);
+
+/**
+ * Tenant Organization Profile
+ * /api/tenants
+ */
+router.use('/tenants', tenantRoutes);
+
+/**
+ * Organization Settings & Preferences
+ * /api/settings
+ */
+router.use('/settings', settingsRoutes);
 
 export default router;

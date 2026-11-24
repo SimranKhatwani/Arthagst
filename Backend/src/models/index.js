@@ -38,3 +38,4 @@ export { default as Tenant } from './tenant.model.js';
 export { default as Unit } from './unit.model.js';
 export { default as User } from './user.model.js';
 export { default as Warehouse } from './warehouse.model.js';
+export { default as Settings } from './settings.model.js';
