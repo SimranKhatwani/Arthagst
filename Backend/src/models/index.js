@@ -28,6 +28,7 @@ export { default as CreditNote } from './creditNote.model.js';
 export { default as DeliveryChallan } from './deliveryChallan.model.js';
 export { default as Quotation } from './quotation.model.js';
 export { default as SalesInvoice } from './salesInvoice.model.js';
+export { default as PosBill } from './posBill.model.js';
 export { default as SalesOrder } from './salesOrder.model.js';
 export { default as SalesSequence } from './salesSequence.model.js';
 export { default as Plan } from './plan.model.js';

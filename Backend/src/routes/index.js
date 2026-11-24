@@ -24,6 +24,7 @@ import userRoutes from './user.routes.js';
 import tenantRoutes from './tenant.routes.js';
 import settingsRoutes from './settings.routes.js';
 import reportsRoutes from './reports.routes.js';
+import posRoutes from './pos.routes.js';
 
 const router = Router();
 
@@ -187,5 +188,11 @@ router.use('/settings', settingsRoutes);
  * /api/reports
  */
 router.use('/reports', reportsRoutes);
+
+/**
+ * Point of Sale (POS) Module
+ * /api/pos
+ */
+router.use('/pos', posRoutes);
 
 export default router;

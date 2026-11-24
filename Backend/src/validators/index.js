@@ -19,3 +19,5 @@ export * as warehouseValidation from './warehouse.validation.js';
 export * as userValidation from './user.validation.js';
 export * as tenantValidation from './tenant.validation.js';
 export * as settingsValidation from './settings.validation.js';
+export * as reportsValidation from './reports.validation.js';
+export * as posValidation from './pos.validation.js';

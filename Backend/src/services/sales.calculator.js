@@ -92,6 +92,7 @@ export const generateDocumentNumber = async (
     order: 'SO',
     challan: 'DC',
     credit_note: 'CN',
+    pos: 'POS',
   };
   const prefix = prefixMap[documentType] || 'DOC';
 

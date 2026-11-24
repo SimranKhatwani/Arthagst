@@ -14,7 +14,7 @@ const salesSequenceSchema = new mongoose.Schema(
     documentType: {
       type: String,
       required: true,
-      enum: ['invoice', 'quotation', 'order', 'challan', 'credit_note'],
+      enum: ['invoice', 'quotation', 'order', 'challan', 'credit_note', 'pos'],
       index: true,
     },
     financialYear: {

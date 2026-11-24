@@ -342,9 +342,67 @@ const salesInvoiceSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
     },
+    isPOS: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    posBillNumber: {
+      type: String,
+      default: null,
+      index: true,
+    },
+    cashierId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+      index: true,
+    },
+    cashierName: {
+      type: String,
+      default: '',
+    },
+    isWalkIn: {
+      type: Boolean,
+      default: false,
+    },
+    posPayments: [
+      {
+        paymentId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'Payment',
+          default: null,
+        },
+        paymentMethod: {
+          type: String,
+          enum: ['cash', 'upi', 'card', 'bank', 'other'],
+          required: true,
+        },
+        amount: {
+          type: Number,
+          required: true,
+        },
+        bankAccountId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'BankAccount',
+          default: null,
+        },
+        referenceNumber: {
+          type: String,
+          default: '',
+        },
+      },
+    ],
+    changeReturned: {
+      type: Number,
+      default: 0,
+    },
   },
   { timestamps: true }
 );
+
+salesInvoiceSchema.index({ tenantId: 1, isPOS: 1, invoiceDate: -1 });
+salesInvoiceSchema.index({ tenantId: 1, cashierId: 1, invoiceDate: -1 });
 
 // Compound unique index for invoice number within tenant and financial year
 salesInvoiceSchema.index(
