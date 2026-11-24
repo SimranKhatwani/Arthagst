@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as salesController from './sales.controller.js';
 import { authenticate } from '../../middleware/authMiddleware.js';
+import { requireLimit } from '../subscriptions/subscriptionLimit.middleware.js';
 
 const router = Router();
 
@@ -18,7 +19,7 @@ router.use(authenticate);
  * @desc    Create a new draft sales invoice
  * @access  Private
  */
-router.post('/invoices', salesController.createInvoice);
+router.post('/invoices', requireLimit('invoices'), salesController.createInvoice);
 
 /**
  * @route   GET /api/sales/invoices

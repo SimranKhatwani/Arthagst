@@ -1,12 +1,13 @@
 import express from 'express';
 import * as eInvoiceController from './eInvoice.controller.js';
 import { authenticate } from '../../middleware/auth.middleware.js';
+import { requireFeature } from '../subscriptions/subscriptionLimit.middleware.js';
 
 const router = express.Router();
 
 router.use(authenticate);
 
-router.post('/generate', eInvoiceController.generateEInvoice);
+router.post('/generate', requireFeature('e_invoice'), eInvoiceController.generateEInvoice);
 router.get('/', eInvoiceController.getEInvoices);
 router.get('/:id', eInvoiceController.getEInvoiceById);
 router.post('/:id/cancel', eInvoiceController.cancelEInvoice);

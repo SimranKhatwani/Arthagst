@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import Tenant from '../tenants/tenant.model.js';
 import User from '../users/user.model.js';
 import { generateToken } from '../../utils/token.js';
+import { startTrial } from '../subscriptions/subscription.service.js';
 
 /**
  * Register a new business (Tenant) and its first Owner user atomically
@@ -23,120 +24,143 @@ export const registerBusiness = async (data) => {
     tenantCode = await Tenant.generateUniqueTenantCode();
   }
 
-  // Check if session / transactions are supported
-  let session = null;
-  let useTransaction = true;
-  try {
-    session = await mongoose.startSession();
-    session.startTransaction();
-  } catch (err) {
-    // If transactions not supported on MongoDB server (e.g. standalone)
-    useTransaction = false;
-    session = null;
-  }
+  // Transaction with retry on transient write conflicts / catalog changes
+  const maxRetries = 5;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    let session = null;
+    let useTransaction = true;
+    try {
+      session = await mongoose.startSession();
+      session.startTransaction();
+    } catch (err) {
+      useTransaction = false;
+      session = null;
+    }
 
-  try {
-    const tenantPayload = {
-      tenantCode,
-      businessName: data.businessName,
-      businessType: data.businessType || 'Wholesale & Retail',
-      ownerName: data.ownerName,
-      email: normalizedEmail,
-      phone: data.phone,
-      GSTIN: data.GSTIN || null,
-      PAN: data.PAN || null,
-      businessAddress: data.businessAddress || '',
-      city: data.city || '',
-      state: data.state || '',
-      stateCode: data.stateCode || '',
-      pincode: data.pincode || '',
-      country: data.country || 'India',
-      subscriptionStatus: 'trial',
-      isActive: true,
-    };
-
-    let tenant;
-    let user;
-
-    if (useTransaction && session) {
-      const [createdTenant] = await Tenant.create([tenantPayload], { session });
-      tenant = createdTenant;
-
-      const userPayload = {
-        tenantId: tenant._id,
-        name: data.ownerName,
+    try {
+      const tenantPayload = {
+        tenantCode,
+        businessName: data.businessName,
+        businessType: data.businessType || 'Wholesale & Retail',
+        ownerName: data.ownerName,
         email: normalizedEmail,
         phone: data.phone,
-        password: data.password, // Pre-save hook hashes password
-        role: 'owner', // The first user is always assigned 'owner' role
-        permissions: ['all'],
+        GSTIN: data.GSTIN || null,
+        PAN: data.PAN || null,
+        businessAddress: data.businessAddress || '',
+        city: data.city || '',
+        state: data.state || '',
+        stateCode: data.stateCode || '',
+        pincode: data.pincode || '',
+        country: data.country || 'India',
+        subscriptionStatus: 'trial',
         isActive: true,
       };
 
-      const [createdUser] = await User.create([userPayload], { session });
-      user = createdUser;
+      let tenant;
+      let user;
 
-      await session.commitTransaction();
-    } else {
-      // Non-transactional fallback with manual rollback
-      tenant = await Tenant.create(tenantPayload);
-      try {
-        user = await User.create({
+      if (useTransaction && session) {
+        const [createdTenant] = await Tenant.create([tenantPayload], { session });
+        tenant = createdTenant;
+
+        const userPayload = {
           tenantId: tenant._id,
           name: data.ownerName,
           email: normalizedEmail,
           phone: data.phone,
-          password: data.password,
-          role: 'owner',
+          password: data.password, // Pre-save hook hashes password
+          role: 'owner', // The first user is always assigned 'owner' role
           permissions: ['all'],
           isActive: true,
-        });
-      } catch (userErr) {
-        // Rollback tenant creation
-        await Tenant.findByIdAndDelete(tenant._id);
-        throw userErr;
+        };
+
+        const [createdUser] = await User.create([userPayload], { session });
+        user = createdUser;
+
+        // Initialize default trial subscription atomically
+        await startTrial(tenant._id, { trialDays: 14, planCode: 'TRIAL', session });
+
+        await session.commitTransaction();
+      } else {
+        // Non-transactional fallback with manual rollback
+        tenant = await Tenant.create(tenantPayload);
+        try {
+          user = await User.create({
+            tenantId: tenant._id,
+            name: data.ownerName,
+            email: normalizedEmail,
+            phone: data.phone,
+            password: data.password,
+            role: 'owner',
+            permissions: ['all'],
+            isActive: true,
+          });
+
+          // Initialize default trial subscription
+          await startTrial(tenant._id, { trialDays: 14, planCode: 'TRIAL' });
+        } catch (userErr) {
+          // Rollback tenant creation
+          await Tenant.findByIdAndDelete(tenant._id);
+          throw userErr;
+        }
       }
-    }
 
-    const token = generateToken({
-      userId: user._id,
-      tenantId: tenant._id,
-      role: user.role,
-    });
-
-    return {
-      token,
-      tenant: {
-        id: tenant._id,
-        tenantCode: tenant.tenantCode,
-        businessName: tenant.businessName,
-        ownerName: tenant.ownerName,
-        email: tenant.email,
-        subscriptionStatus: tenant.subscriptionStatus,
-        isActive: tenant.isActive,
-      },
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
+      const token = generateToken({
+        userId: user._id,
+        tenantId: tenant._id,
         role: user.role,
-      },
-    };
-  } catch (error) {
-    if (useTransaction && session) {
-      await session.abortTransaction();
-    }
-    // Handle duplicate key error nicely
-    if (error.code === 11000) {
-      const field = Object.keys(error.keyPattern || {})[0] || 'Field';
-      const customErr = new Error(`Registration failed: ${field} already exists.`);
-      customErr.statusCode = 409;
-      throw customErr;
-    }
-    throw error;
-  } finally {
-    if (session) {
-      session.endSession();
+      });
+
+      return {
+        token,
+        tenant: {
+          id: tenant._id,
+          tenantCode: tenant.tenantCode,
+          businessName: tenant.businessName,
+          ownerName: tenant.ownerName,
+          email: tenant.email,
+          subscriptionStatus: tenant.subscriptionStatus,
+          isActive: tenant.isActive,
+        },
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+        },
+      };
+    } catch (error) {
+      if (useTransaction && session) {
+        try {
+          await session.abortTransaction();
+        } catch (abortErr) {
+          // Ignore
+        }
+      }
+
+      const isTransient =
+        error.hasErrorLabel?.('TransientTransactionError') ||
+        error.code === 112 ||
+        error.codeName === 'WriteConflict';
+
+      if (isTransient && attempt < maxRetries) {
+        await new Promise((r) => setTimeout(r, 100 * attempt));
+        continue;
+      }
+
+      // Handle duplicate key error nicely
+      if (error.code === 11000) {
+        const field = Object.keys(error.keyPattern || {})[0] || 'Field';
+        const customErr = new Error(`Registration failed: ${field} already exists.`);
+        customErr.statusCode = 409;
+        throw customErr;
+      }
+      throw error;
+    } finally {
+      if (session) {
+        session.endSession();
+      }
     }
   }
 };

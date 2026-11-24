@@ -114,7 +114,7 @@ const tenantSchema = new mongoose.Schema(
     subscriptionStatus: {
       type: String,
       enum: {
-        values: ['trial', 'active', 'suspended', 'cancelled', 'expired'],
+        values: ['trial', 'active', 'past_due', 'suspended', 'cancelled', 'expired'],
         message: '{VALUE} is not a valid subscription status',
       },
       default: 'trial',

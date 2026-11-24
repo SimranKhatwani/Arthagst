@@ -15,6 +15,9 @@ import gstRoutes from '../modules/gst/gst.routes.js';
 import eInvoiceRoutes from '../modules/eInvoice/eInvoice.routes.js';
 import eWayBillRoutes from '../modules/eWayBill/eWayBill.routes.js';
 import accountingRoutes from '../modules/accounting/accounting.routes.js';
+import planRoutes from '../modules/subscriptions/plan.routes.js';
+import subscriptionRoutes from '../modules/subscriptions/subscription.routes.js';
+import superAdminRoutes from '../modules/superAdmin/superAdmin.routes.js';
 
 const router = Router();
 
@@ -124,5 +127,23 @@ router.use('/e-way-bills', eWayBillRoutes);
  * /api/accounting
  */
 router.use('/accounting', accountingRoutes);
+
+/**
+ * Public Subscription Plans
+ * /api/plans
+ */
+router.use('/plans', planRoutes);
+
+/**
+ * Tenant Subscription & Billing
+ * /api/subscription
+ */
+router.use('/subscription', subscriptionRoutes);
+
+/**
+ * Super Admin Management
+ * /api/super-admin
+ */
+router.use('/super-admin', superAdminRoutes);
 
 export default router;

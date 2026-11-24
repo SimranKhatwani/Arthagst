@@ -9,10 +9,14 @@ const userSchema = new mongoose.Schema(
     tenantId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Tenant',
-      required: [true, 'Tenant ID is required'],
+      required: function () {
+        return !this.isSuperAdmin && this.role !== 'super_admin';
+      },
       validate: {
         validator: async function (value) {
-          if (!value) return false;
+          if (!value) {
+            return this.isSuperAdmin || this.role === 'super_admin';
+          }
           const session = typeof this.$session === 'function' ? this.$session() : null;
           const query = Tenant.exists({ _id: value });
           if (session) {
@@ -24,6 +28,7 @@ const userSchema = new mongoose.Schema(
         message: 'Invalid tenantId: Referenced Tenant does not exist',
       },
       index: true,
+      default: null,
     },
     name: {
       type: String,
@@ -53,10 +58,15 @@ const userSchema = new mongoose.Schema(
     role: {
       type: String,
       enum: {
-        values: ['owner', 'admin', 'accountant', 'sales', 'inventory'],
+        values: ['owner', 'admin', 'accountant', 'sales', 'inventory', 'super_admin'],
         message: '{VALUE} is not a valid role',
       },
       default: 'admin',
+      index: true,
+    },
+    isSuperAdmin: {
+      type: Boolean,
+      default: false,
       index: true,
     },
     permissions: {
@@ -94,6 +104,11 @@ const userSchema = new mongoose.Schema(
 
 // Compound index: Enforce email uniqueness WITHIN a tenant, not globally across all tenants
 userSchema.index({ tenantId: 1, email: 1 }, { unique: true });
+// Unique index for Super Admins
+userSchema.index(
+  { email: 1 },
+  { unique: true, partialFilterExpression: { isSuperAdmin: true } }
+);
 
 // Pre-save hook to hash password and normalize fields
 userSchema.pre('save', async function () {

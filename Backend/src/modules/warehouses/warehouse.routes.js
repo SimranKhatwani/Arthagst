@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as warehouseController from './warehouse.controller.js';
 import { authenticate } from '../../middleware/authMiddleware.js';
+import { requireLimit } from '../subscriptions/subscriptionLimit.middleware.js';
 
 const router = Router();
 
@@ -12,7 +13,7 @@ router.use(authenticate);
  * @desc    Create a new warehouse
  * @access  Private
  */
-router.post('/', warehouseController.create);
+router.post('/', requireLimit('warehouses'), warehouseController.create);
 
 /**
  * @route   GET /api/warehouses

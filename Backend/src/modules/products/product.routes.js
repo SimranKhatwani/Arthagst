@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as productController from './product.controller.js';
 import { authenticate } from '../../middleware/authMiddleware.js';
+import { requireLimit } from '../subscriptions/subscriptionLimit.middleware.js';
 
 const router = Router();
 
@@ -12,7 +13,7 @@ router.use(authenticate);
  * @desc    Create a new product (goods or service)
  * @access  Private
  */
-router.post('/', productController.create);
+router.post('/', requireLimit('products'), productController.create);
 
 /**
  * @route   GET /api/products
