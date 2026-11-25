@@ -37,6 +37,7 @@ import * as gstService from '../services/gstService';
 import * as eInvoiceService from '../services/eInvoiceService';
 import * as eWayBillService from '../services/eWayBillService';
 import * as reportsService from '../services/reportsService';
+import * as superAdminService from '../services/superAdminService';
 
 const AppContext = createContext(null);
 
@@ -522,6 +523,115 @@ export const AppProvider = ({ children }) => {
     }
   }, []);
 
+  const loadSuperAdminData = useCallback(async () => {
+    const token = getToken();
+    if (!token) return;
+    try {
+      const [tenantsRes, plansRes, invoicesRes, ticketsRes, annRes, flagsRes, settingsRes, auditRes] =
+        await Promise.allSettled([
+          superAdminService.getTenants({ limit: 100 }),
+          superAdminService.getPlans(),
+          superAdminService.getInvoices({ limit: 50 }),
+          superAdminService.getTickets({ limit: 50 }),
+          superAdminService.getAnnouncements(),
+          superAdminService.getFeatureFlags(),
+          superAdminService.getPlatformSettings(),
+          superAdminService.getAuditLogs({ limit: 50 }),
+        ]);
+
+      setState((prev) => {
+        const sa = { ...prev.superAdmin };
+        if (tenantsRes.status === 'fulfilled' && tenantsRes.value?.tenants) {
+          sa.tenants = tenantsRes.value.tenants.map((t) => ({
+            id: t._id || t.id,
+            businessName: t.businessName,
+            owner: t.ownerName || t.owner || 'Admin',
+            city: t.city || 'Jaipur',
+            state: t.state || 'Rajasthan',
+            plan: t.subscription?.planName || 'Growth',
+            status: t.isActive ? 'Active' : 'Expired',
+            users: t.subscription?.limits?.maxUsers || 1,
+            invoicesCount: 0,
+            mrr: t.subscription?.planCode === 'ENTERPRISE' ? 4999 : t.subscription?.planCode === 'GROWTH' ? 1999 : 799,
+            joinedDate: t.createdAt ? new Date(t.createdAt).toISOString().slice(0, 10) : '2026-04-01',
+            renewalDate: t.subscription?.currentPeriodEnd ? new Date(t.subscription.currentPeriodEnd).toISOString().slice(0, 10) : '2027-03-31',
+          }));
+        }
+        if (plansRes.status === 'fulfilled' && plansRes.value) {
+          const plansList = Array.isArray(plansRes.value) ? plansRes.value : plansRes.value?.plans || [];
+          if (plansList.length > 0) {
+            sa.plans = plansList.map((p) => ({
+              id: p._id || p.id,
+              name: p.name,
+              audience: p.description || p.audience || '',
+              monthlyPrice: p.price,
+              annualPrice: p.annualPrice || p.price * 10,
+              maxUsers: p.limits?.maxUsers || 5,
+              maxInvoices: p.limits?.maxInvoices || 1000,
+              maxWarehouses: p.limits?.maxWarehouses || 2,
+              features: p.features || [],
+            }));
+          }
+        }
+        if (invoicesRes.status === 'fulfilled' && invoicesRes.value?.invoices) {
+          sa.platformPayments = invoicesRes.value.invoices.map((inv) => ({
+            id: inv._id || inv.id,
+            txnId: inv.paymentReference?.transactionId || inv.invoiceNumber,
+            tenant: inv.tenantId?.businessName || 'Tenant',
+            plan: inv.planName,
+            cycle: 'Monthly',
+            date: inv.invoiceDate ? new Date(inv.invoiceDate).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+            method: inv.paymentReference?.paymentMethod || 'UPI',
+            amount: inv.totalAmount,
+            status: inv.paymentStatus === 'paid' ? 'Settled' : inv.paymentStatus === 'failed' ? 'Failed' : 'Pending',
+          }));
+        }
+        if (ticketsRes.status === 'fulfilled' && ticketsRes.value?.tickets) {
+          sa.tickets = ticketsRes.value.tickets.map((t) => ({
+            id: t._id || t.id,
+            ticketNo: t.ticketNo,
+            tenant: t.tenantName || t.tenantId?.businessName || 'Platform Support',
+            subject: t.subject,
+            priority: t.priority,
+            status: t.status,
+            created: t.createdAt ? new Date(t.createdAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+          }));
+        }
+        if (annRes.status === 'fulfilled' && Array.isArray(annRes.value)) {
+          sa.announcements = annRes.value.map((a) => ({
+            id: a._id || a.id,
+            title: a.title,
+            target: a.targetAudience || 'All Active Tenants',
+            date: a.publishedAt ? new Date(a.publishedAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+            status: a.status,
+          }));
+        }
+        if (flagsRes.status === 'fulfilled' && Array.isArray(flagsRes.value)) {
+          sa.featureFlags = flagsRes.value.map((f) => ({
+            id: f._id || f.id,
+            key: f.key,
+            name: f.name,
+            description: f.description,
+            enabled: f.enabled,
+          }));
+        }
+        if (auditRes.status === 'fulfilled' && auditRes.value?.logs) {
+          sa.platformAuditLogs = auditRes.value.logs.map((l) => ({
+            id: l._id || l.id,
+            actor: l.actor?.name || l.actor?.email || 'Platform Admin',
+            action: l.action,
+            target: l.targetName || l.entityType || 'Platform',
+            timestamp: l.timestamp ? new Date(l.timestamp).toISOString().replace('T', ' ').slice(0, 16) : new Date().toISOString().slice(0, 16),
+            detail: l.description || (l.details ? JSON.stringify(l.details) : ''),
+          }));
+        }
+        return { ...prev, superAdmin: sa };
+      });
+    } catch (err) {
+      console.warn('SuperAdmin live data fetch error:', err.message);
+    }
+  }, []);
+
   // Initial authentication verification from backend /api/auth/me
   useEffect(() => {
     const token = getToken();
@@ -559,8 +669,12 @@ export const AppProvider = ({ children }) => {
               subscriptionStatus: tenant.subscriptionStatus || 'active',
             },
           }));
-          loadPhase1Data();
-          loadPhase2Data();
+          if (data.user?.isSuperAdmin || data.user?.role === 'super_admin') {
+            loadSuperAdminData();
+          } else {
+            loadPhase1Data();
+            loadPhase2Data();
+          }
         }
       })
       .catch((err) => {
@@ -694,16 +808,19 @@ export const AppProvider = ({ children }) => {
         }));
         setAuthLoading(false);
         notify(`Welcome back, ${data.user?.name || 'Administrator'}!`);
-        // Immediately fetch live tenant Phase 1 master data and Phase 2 transactional data from MongoDB
-        loadPhase1Data();
-        loadPhase2Data();
+        if (data.user?.isSuperAdmin || data.user?.role === 'super_admin') {
+          loadSuperAdminData();
+        } else {
+          loadPhase1Data();
+          loadPhase2Data();
+        }
         return data;
       } catch (err) {
         setAuthLoading(false);
         throw err;
       }
     },
-    [loadPhase1Data, loadPhase2Data, notify]
+    [loadPhase1Data, loadPhase2Data, loadSuperAdminData, notify]
   );
 
   const register = useCallback(
@@ -2151,6 +2268,7 @@ export const AppProvider = ({ children }) => {
     generateDemoEWayBill,
     updateBusinessAndSettings,
     updateSuperAdmin,
+    loadSuperAdminData,
     updateStateWithAudit,
   };
 

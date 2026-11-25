@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Edit3, CheckCircle2 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { useApp } from '../../context/AppContext';
 import { formatINR } from '../../services/calculationService';
+import * as superAdminService from '../../services/superAdminService';
 import {
   PageHeader,
   DataTable,
@@ -18,11 +19,31 @@ import {
 export const SuperAdminDashboardPage = () => {
   const { state } = useApp();
   const sa = state.superAdmin;
-  const totalBusinesses = sa.tenants.length;
-  const activeBusinesses = sa.tenants.filter((t) => t.status === 'Active').length;
-  const trialBusinesses = sa.tenants.filter((t) => t.status === 'Trial').length;
-  const expiredBusinesses = sa.tenants.filter((t) => t.status === 'Expired').length;
-  const mrr = sa.tenants.reduce((s, t) => s + (Number(t.mrr) || 0), 0);
+  const [telemetry, setTelemetry] = useState(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    superAdminService
+      .getDashboard()
+      .then((res) => {
+        if (!isMounted) return;
+        const data = res?.data || res;
+        setTelemetry(data);
+      })
+      .catch((err) => console.warn('Platform telemetry fetch error:', err.message));
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const totalBusinesses = telemetry?.tenants?.total ?? sa.tenants.length;
+  const activeBusinesses = telemetry?.tenants?.active ?? sa.tenants.filter((t) => t.status === 'Active').length;
+  const trialBusinesses = telemetry?.subscriptions?.trial ?? sa.tenants.filter((t) => t.status === 'Trial').length;
+  const expiredBusinesses =
+    telemetry
+      ? (telemetry.subscriptions?.expired || 0) + (telemetry.subscriptions?.suspended || 0)
+      : sa.tenants.filter((t) => t.status === 'Expired').length;
+  const mrr = telemetry?.financials?.mrr ?? sa.tenants.reduce((s, t) => s + (Number(t.mrr) || 0), 0);
 
   const regChart = [
     { month: 'Jun', signups: 14 },
@@ -87,8 +108,18 @@ export const SuperAdminTenantsPage = () => {
     setModalOpen(false);
   };
 
-  const toggleTenantStatus = (t) => {
-    const nextStatus = t.status === 'Active' ? 'Expired' : 'Active';
+  const toggleTenantStatus = async (t) => {
+    const isActivating = t.status !== 'Active';
+    try {
+      if (isActivating) {
+        await superAdminService.activateTenant(t.id, 'SuperAdmin console activation');
+      } else {
+        await superAdminService.suspendTenant(t.id, 'SuperAdmin console suspension');
+      }
+    } catch (err) {
+      console.warn('Tenant status update API error:', err.message);
+    }
+    const nextStatus = isActivating ? 'Active' : 'Expired';
     updateSuperAdmin(
       (sa) => ({
         ...sa,
@@ -171,7 +202,7 @@ export const SuperAdminPlansPage = () => {
     setModalOpen(true);
   };
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
     const payload = {
       ...form,
@@ -183,6 +214,38 @@ export const SuperAdminPlansPage = () => {
       maxWarehouses: Number(form.maxWarehouses),
       features: editing?.features || ['GST Invoicing', 'Inventory & Ledgers'],
     };
+    try {
+      if (editing && !String(editing.id).startsWith('plan-')) {
+        await superAdminService.updatePlan(editing.id, {
+          name: payload.name,
+          description: payload.audience,
+          price: payload.monthlyPrice,
+          annualPrice: payload.annualPrice,
+          limits: {
+            maxUsers: payload.maxUsers,
+            maxInvoices: payload.maxInvoices,
+            maxWarehouses: payload.maxWarehouses,
+          },
+          features: payload.features,
+        });
+      } else {
+        await superAdminService.createPlan({
+          name: payload.name,
+          code: payload.name.toUpperCase().replace(/\s+/g, '_'),
+          description: payload.audience,
+          price: payload.monthlyPrice,
+          annualPrice: payload.annualPrice,
+          limits: {
+            maxUsers: payload.maxUsers,
+            maxInvoices: payload.maxInvoices,
+            maxWarehouses: payload.maxWarehouses,
+          },
+          features: payload.features,
+        });
+      }
+    } catch (err) {
+      console.warn('Plan API call error:', err.message);
+    }
     updateSuperAdmin(
       (sa) => ({
         ...sa,
@@ -261,6 +324,89 @@ export const SuperAdminSubSectionPage = ({ section }) => {
   const { state, updateSuperAdmin } = useApp();
   const sa = state.superAdmin;
   const [annTitle, setAnnTitle] = useState('');
+  const [trialDays, setTrialDays] = useState(14);
+  const [supportEmail, setSupportEmail] = useState('support@arthagst.demo');
+
+  useEffect(() => {
+    let isMounted = true;
+    if (section === 'settings') {
+      superAdminService
+        .getPlatformSettings()
+        .then((res) => {
+          if (!isMounted) return;
+          const data = res?.data || res;
+          if (data?.defaultTrialDays) setTrialDays(data.defaultTrialDays);
+          if (data?.supportEmail) setSupportEmail(data.supportEmail);
+        })
+        .catch((err) => console.warn('Load settings error:', err.message));
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [section]);
+
+  const handleResolveTicket = async (r) => {
+    try {
+      await superAdminService.resolveTicket(r.id);
+    } catch (err) {
+      console.warn('Resolve ticket error:', err.message);
+    }
+    updateSuperAdmin(
+      (prev) => ({ ...prev, tickets: prev.tickets.map((t) => (t.id === r.id ? { ...t, status: 'Resolved' } : t)) }),
+      `Ticket ${r.ticketNo} marked Resolved`
+    );
+  };
+
+  const handlePublishAnnouncement = async (e) => {
+    e.preventDefault();
+    if (!annTitle.trim()) return;
+    try {
+      await superAdminService.createAnnouncement({
+        title: annTitle,
+        targetAudience: 'All Active Tenants',
+        status: 'Published',
+      });
+    } catch (err) {
+      console.warn('Announcement API error:', err.message);
+    }
+    updateSuperAdmin(
+      (prev) => ({
+        ...prev,
+        announcements: [{ id: `ann-${Date.now()}`, title: annTitle, target: 'All Active Tenants', date: new Date().toISOString().slice(0, 10), status: 'Published' }, ...prev.announcements],
+      }),
+      'Announcement published'
+    );
+    setAnnTitle('');
+  };
+
+  const handleToggleFeature = async (ff) => {
+    const nextState = !ff.enabled;
+    try {
+      await superAdminService.toggleFeatureFlag(ff.id || ff.key, nextState);
+    } catch (err) {
+      console.warn('Feature flag API error:', err.message);
+    }
+    updateSuperAdmin(
+      (prev) => ({
+        ...prev,
+        featureFlags: prev.featureFlags.map((f) => (f.id === ff.id ? { ...f, enabled: nextState } : f)),
+      }),
+      `${ff.name} ${nextState ? 'enabled' : 'disabled'}`
+    );
+  };
+
+  const handleSaveSettings = async () => {
+    try {
+      await superAdminService.updatePlatformSettings({
+        defaultTrialDays: Number(trialDays),
+        supportEmail,
+        sandboxMode: true,
+      });
+    } catch (err) {
+      console.warn('Save settings error:', err.message);
+    }
+    updateSuperAdmin((s) => s, 'Platform settings saved');
+  };
 
   if (section === 'users') {
     return (
@@ -338,12 +484,7 @@ export const SuperAdminSubSectionPage = ({ section }) => {
                 r.status !== 'Resolved' ? (
                   <button
                     type="button"
-                    onClick={() =>
-                      updateSuperAdmin(
-                        (prev) => ({ ...prev, tickets: prev.tickets.map((t) => (t.id === r.id ? { ...t, status: 'Resolved' } : t)) }),
-                        `Ticket ${r.ticketNo} marked Resolved`
-                      )
-                    }
+                    onClick={() => handleResolveTicket(r)}
                     className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 hover:underline"
                   >
                     <CheckCircle2 className="h-3.5 w-3.5" /> Resolve
@@ -363,18 +504,7 @@ export const SuperAdminSubSectionPage = ({ section }) => {
       <div className="space-y-5">
         <PageHeader title="Platform Announcements" subtitle="Broadcast compliance updates and maintenance windows to tenants" breadcrumbs={['Super Admin', 'Announcements']} />
         <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!annTitle.trim()) return;
-            updateSuperAdmin(
-              (prev) => ({
-                ...prev,
-                announcements: [{ id: `ann-${Date.now()}`, title: annTitle, target: 'All Active Tenants', date: new Date().toISOString().slice(0, 10), status: 'Published' }, ...prev.announcements],
-              }),
-              'Announcement published'
-            );
-            setAnnTitle('');
-          }}
+          onSubmit={handlePublishAnnouncement}
           className="flex gap-2 rounded-lg border border-slate-200 bg-white p-4"
         >
           <input type="text" value={annTitle} onChange={(e) => setAnnTitle(e.target.value)} placeholder="Write announcement headline..." className={inputClass} />
@@ -408,15 +538,7 @@ export const SuperAdminSubSectionPage = ({ section }) => {
               </div>
               <button
                 type="button"
-                onClick={() =>
-                  updateSuperAdmin(
-                    (prev) => ({
-                      ...prev,
-                      featureFlags: prev.featureFlags.map((f) => (f.id === ff.id ? { ...f, enabled: !f.enabled } : f)),
-                    }),
-                    `${ff.name} ${ff.enabled ? 'disabled' : 'enabled'}`
-                  )
-                }
+                onClick={() => handleToggleFeature(ff)}
                 className={ff.enabled ? btnPrimary : btnSecondary}
               >
                 {ff.enabled ? 'Enabled' : 'Disabled'}
@@ -433,10 +555,28 @@ export const SuperAdminSubSectionPage = ({ section }) => {
       <div className="space-y-5">
         <PageHeader title="Platform System Settings" subtitle="Global SaaS defaults for trial duration, GST rules, and support email" breadcrumbs={['Super Admin', 'System Settings']} />
         <div className="max-w-xl rounded-lg border border-slate-200 bg-white p-5 space-y-3 text-xs">
-          <InputField label="Default Trial Period (Days)"><input type="number" defaultValue={14} className={inputClass} /></InputField>
-          <InputField label="Platform Support Email"><input type="email" defaultValue="support@arthagst.demo" className={inputClass} /></InputField>
-          <InputField label="Default GST Portal Sandbox Mode"><input type="text" disabled value="Enabled (Demo Prototype)" className={inputClass} /></InputField>
-          <button type="button" onClick={() => updateSuperAdmin((s) => s, 'Platform settings saved')} className={btnPrimary}>Save System Settings</button>
+          <InputField label="Default Trial Period (Days)">
+            <input
+              type="number"
+              value={trialDays}
+              onChange={(e) => setTrialDays(e.target.value)}
+              className={inputClass}
+            />
+          </InputField>
+          <InputField label="Platform Support Email">
+            <input
+              type="email"
+              value={supportEmail}
+              onChange={(e) => setSupportEmail(e.target.value)}
+              className={inputClass}
+            />
+          </InputField>
+          <InputField label="Default GST Portal Sandbox Mode">
+            <input type="text" disabled value="Enabled (Demo Prototype)" className={inputClass} />
+          </InputField>
+          <button type="button" onClick={handleSaveSettings} className={btnPrimary}>
+            Save System Settings
+          </button>
         </div>
       </div>
     );

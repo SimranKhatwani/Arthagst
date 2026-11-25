@@ -41,3 +41,7 @@ export { default as Unit } from './unit.model.js';
 export { default as User } from './user.model.js';
 export { default as Warehouse } from './warehouse.model.js';
 export { default as Settings } from './settings.model.js';
+export { default as Ticket } from './ticket.model.js';
+export { default as Announcement } from './announcement.model.js';
+export { default as FeatureFlag } from './featureFlag.model.js';
+export { default as PlatformSetting } from './platformSetting.model.js';

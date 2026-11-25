@@ -315,3 +315,123 @@ export const runLifecycle = async (req, res, next) => {
     next(error);
   }
 };
+
+export const getUsers = async (req, res, next) => {
+  try {
+    const result = await superAdminService.getPlatformUsers(req.query);
+    return sendResponse(res, 200, true, 'Platform users retrieved successfully', result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const toggleUserStatus = async (req, res, next) => {
+  try {
+    const isActive = req.body.isActive === true || req.body.isActive === 'true';
+    const result = await superAdminService.toggleUserStatus(req.user, req.params.id, isActive);
+    return sendResponse(res, 200, true, result.message, result.user);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getSubscriptions = async (req, res, next) => {
+  try {
+    const result = await superAdminService.getPlatformSubscriptions(req.query);
+    return sendResponse(res, 200, true, 'Platform subscriptions retrieved successfully', result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getTickets = async (req, res, next) => {
+  try {
+    const result = await superAdminService.getTickets(req.query);
+    return sendResponse(res, 200, true, 'Support tickets retrieved successfully', result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const createTicket = async (req, res, next) => {
+  try {
+    const ticket = await superAdminService.createTicket(req.user, req.body);
+    return sendResponse(res, 201, true, 'Support ticket created successfully', ticket);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateTicketStatus = async (req, res, next) => {
+  try {
+    const status = req.body.status || 'Resolved';
+    const ticket = await superAdminService.updateTicketStatus(req.user, req.params.id, status);
+    return sendResponse(res, 200, true, `Support ticket status updated to ${status}`, ticket);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getAnnouncements = async (req, res, next) => {
+  try {
+    const announcements = await superAdminService.getAnnouncements(req.query);
+    return sendResponse(res, 200, true, 'Announcements retrieved successfully', announcements);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const createAnnouncement = async (req, res, next) => {
+  try {
+    const announcement = await superAdminService.createAnnouncement(req.user, req.body);
+    return sendResponse(res, 201, true, 'Announcement created successfully', announcement);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateAnnouncementStatus = async (req, res, next) => {
+  try {
+    const status = req.body.status || 'Published';
+    const announcement = await superAdminService.updateAnnouncementStatus(req.user, req.params.id, status);
+    return sendResponse(res, 200, true, 'Announcement status updated successfully', announcement);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getFeatureFlags = async (req, res, next) => {
+  try {
+    const flags = await superAdminService.getFeatureFlags();
+    return sendResponse(res, 200, true, 'Feature flags retrieved successfully', flags);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const toggleFeatureFlag = async (req, res, next) => {
+  try {
+    const flag = await superAdminService.toggleFeatureFlag(req.user, req.params.id, req.body.enabled);
+    return sendResponse(res, 200, true, `Feature flag '${flag.name}' updated successfully`, flag);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getPlatformSettings = async (req, res, next) => {
+  try {
+    const settings = await superAdminService.getPlatformSettings();
+    return sendResponse(res, 200, true, 'Platform system settings retrieved successfully', settings);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updatePlatformSettings = async (req, res, next) => {
+  try {
+    const settings = await superAdminService.updatePlatformSettings(req.user, req.body);
+    return sendResponse(res, 200, true, 'Platform system settings updated successfully', settings);
+  } catch (error) {
+    next(error);
+  }
+};

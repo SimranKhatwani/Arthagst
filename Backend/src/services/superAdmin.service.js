@@ -7,6 +7,10 @@ import SubscriptionInvoice from '../models/subscriptionInvoice.model.js';
 import Product from '../models/product.model.js';
 import Warehouse from '../models/warehouse.model.js';
 import SalesInvoice from '../models/salesInvoice.model.js';
+import Ticket from '../models/ticket.model.js';
+import Announcement from '../models/announcement.model.js';
+import FeatureFlag from '../models/featureFlag.model.js';
+import PlatformSetting from '../models/platformSetting.model.js';
 import { logAuditAction } from './auditLog.service.js';
 import { calculatePeriodEnd } from './subscription.service.js';
 import { round2 } from './sales.calculator.js';
@@ -498,6 +502,368 @@ export const getSubscriptionRevenueReport = async (query = {}) => {
   };
 };
 
+/**
+ * 9. Cross-Tenant Platform Users
+ */
+export const getPlatformUsers = async (query = {}) => {
+  const filter = { isSuperAdmin: { $ne: true } };
+
+  if (query.search) {
+    const regex = new RegExp(query.search.trim(), 'i');
+    filter.$or = [{ name: regex }, { email: regex }, { role: regex }];
+  }
+
+  if (query.role) {
+    filter.role = query.role;
+  }
+
+  if (query.isActive !== undefined) {
+    filter.isActive = query.isActive === 'true' || query.isActive === true;
+  }
+
+  const page = parseInt(query.page, 10) || 1;
+  const limit = parseInt(query.limit, 10) || 50;
+  const skip = (page - 1) * limit;
+
+  const [users, total] = await Promise.all([
+    User.find(filter)
+      .populate('tenantId', 'businessName tenantCode subscriptionStatus')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+    User.countDocuments(filter),
+  ]);
+
+  return {
+    users,
+    pagination: {
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit) || 1,
+    },
+  };
+};
+
+export const toggleUserStatus = async (superAdminUser, userId, isActive) => {
+  if (!mongoose.isValidObjectId(userId)) {
+    const error = new Error('Invalid user ID format');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const user = await User.findById(userId);
+  if (!user) {
+    const error = new Error('User not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  user.isActive = isActive;
+  await user.save();
+
+  await logAuditAction({
+    actor: superAdminUser,
+    action: isActive ? 'USER_ACTIVATED' : 'USER_DEACTIVATED',
+    targetType: 'user',
+    targetId: user._id,
+    targetName: user.email,
+  });
+
+  return {
+    message: `User '${user.name}' has been ${isActive ? 'activated' : 'deactivated'}`,
+    user,
+  };
+};
+
+/**
+ * 10. Cross-Tenant Subscriptions
+ */
+export const getPlatformSubscriptions = async (query = {}) => {
+  const filter = {};
+
+  if (query.status) {
+    filter.status = query.status;
+  }
+
+  const page = parseInt(query.page, 10) || 1;
+  const limit = parseInt(query.limit, 10) || 50;
+  const skip = (page - 1) * limit;
+
+  const [subscriptions, total] = await Promise.all([
+    Subscription.find(filter)
+      .populate('tenantId', 'businessName tenantCode ownerName email phone city state')
+      .populate('planId', 'name code price billingCycle')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+    Subscription.countDocuments(filter),
+  ]);
+
+  return {
+    subscriptions,
+    pagination: {
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit) || 1,
+    },
+  };
+};
+
+/**
+ * 11. Support Tickets
+ */
+export const getTickets = async (query = {}) => {
+  const filter = {};
+
+  if (query.status) {
+    filter.status = query.status;
+  }
+  if (query.priority) {
+    filter.priority = query.priority;
+  }
+  if (query.search) {
+    const regex = new RegExp(query.search.trim(), 'i');
+    filter.$or = [{ subject: regex }, { ticketNo: regex }, { tenantName: regex }];
+  }
+
+  const page = parseInt(query.page, 10) || 1;
+  const limit = parseInt(query.limit, 10) || 50;
+  const skip = (page - 1) * limit;
+
+  const [tickets, total] = await Promise.all([
+    Ticket.find(filter)
+      .populate('tenantId', 'businessName tenantCode')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+    Ticket.countDocuments(filter),
+  ]);
+
+  return {
+    tickets,
+    pagination: {
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit) || 1,
+    },
+  };
+};
+
+export const createTicket = async (superAdminUser, data) => {
+  const ticketCount = await Ticket.countDocuments();
+  const ticketNo = data.ticketNo || `SUP-${400 + ticketCount + 1}`;
+
+  const ticket = await Ticket.create({
+    ticketNo,
+    tenantId: data.tenantId || null,
+    tenantName: data.tenantName || data.tenant || 'Direct Support',
+    subject: data.subject,
+    description: data.description || '',
+    priority: data.priority || 'Medium',
+    status: data.status || 'Open',
+    assignedTo: data.assignedTo || null,
+  });
+
+  await logAuditAction({
+    actor: superAdminUser,
+    action: 'TICKET_CREATED',
+    targetType: 'ticket',
+    targetId: ticket._id,
+    targetName: ticket.ticketNo,
+    details: { subject: ticket.subject },
+  });
+
+  return ticket;
+};
+
+export const updateTicketStatus = async (superAdminUser, ticketId, status) => {
+  let ticket;
+  if (mongoose.isValidObjectId(ticketId)) {
+    ticket = await Ticket.findById(ticketId);
+  } else {
+    ticket = await Ticket.findOne({ ticketNo: ticketId });
+  }
+
+  if (!ticket) {
+    const error = new Error('Support ticket not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  ticket.status = status;
+  await ticket.save();
+
+  await logAuditAction({
+    actor: superAdminUser,
+    action: 'TICKET_STATUS_UPDATED',
+    targetType: 'ticket',
+    targetId: ticket._id,
+    targetName: ticket.ticketNo,
+    details: { status },
+  });
+
+  return ticket;
+};
+
+/**
+ * 12. Announcements
+ */
+export const getAnnouncements = async (query = {}) => {
+  const filter = {};
+  if (query.status) {
+    filter.status = query.status;
+  }
+
+  const announcements = await Announcement.find(filter)
+    .sort({ publishedAt: -1, createdAt: -1 })
+    .lean();
+
+  return announcements;
+};
+
+export const createAnnouncement = async (superAdminUser, data) => {
+  const announcement = await Announcement.create({
+    title: data.title,
+    message: data.message || '',
+    targetAudience: data.targetAudience || data.target || 'All Active Tenants',
+    status: data.status || 'Published',
+    publishedAt: data.publishedAt || new Date(),
+    createdBy: superAdminUser._id,
+  });
+
+  await logAuditAction({
+    actor: superAdminUser,
+    action: 'ANNOUNCEMENT_PUBLISHED',
+    targetType: 'announcement',
+    targetId: announcement._id,
+    targetName: announcement.title,
+  });
+
+  return announcement;
+};
+
+export const updateAnnouncementStatus = async (superAdminUser, id, status) => {
+  const announcement = await Announcement.findById(id);
+  if (!announcement) {
+    const error = new Error('Announcement not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  announcement.status = status;
+  await announcement.save();
+
+  await logAuditAction({
+    actor: superAdminUser,
+    action: 'ANNOUNCEMENT_STATUS_UPDATED',
+    targetType: 'announcement',
+    targetId: announcement._id,
+    targetName: announcement.title,
+    details: { status },
+  });
+
+  return announcement;
+};
+
+/**
+ * 13. Feature Flags
+ */
+export const getFeatureFlags = async () => {
+  let flags = await FeatureFlag.find().sort({ createdAt: 1 }).lean();
+
+  // If no flags exist yet, seed initial standard defaults
+  if (!flags || flags.length === 0) {
+    const defaultFlags = [
+      { key: 'pos_split_payment', name: 'POS Split Tender Payments', description: 'Allow Cash + UPI + Card split tender in POS Billing', enabled: true },
+      { key: 'gstr2b_auto_recon', name: 'GSTR-2B Smart Matching', description: 'Highlight tax and GSTIN mismatches in GSTR-2B recon', enabled: true },
+      { key: 'einvoice_qr_preview', name: 'E-Invoice Simulated IRN & QR', description: 'Enable simulated IRP QR preview on tax invoices', enabled: true },
+      { key: 'multi_currency_export', name: 'Multi-Currency Export Invoices', description: 'Beta support for USD/EUR export invoices', enabled: false },
+    ];
+    await FeatureFlag.insertMany(defaultFlags);
+    flags = await FeatureFlag.find().sort({ createdAt: 1 }).lean();
+  }
+
+  return flags;
+};
+
+export const toggleFeatureFlag = async (superAdminUser, idOrKey, enabled) => {
+  let flag;
+  if (mongoose.isValidObjectId(idOrKey)) {
+    flag = await FeatureFlag.findById(idOrKey);
+  }
+  if (!flag) {
+    flag = await FeatureFlag.findOne({ key: idOrKey });
+  }
+
+  if (!flag) {
+    const error = new Error('Feature flag not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  flag.enabled = enabled !== undefined ? Boolean(enabled) : !flag.enabled;
+  await flag.save();
+
+  await logAuditAction({
+    actor: superAdminUser,
+    action: 'FEATURE_FLAG_TOGGLED',
+    targetType: 'feature_flag',
+    targetId: flag._id,
+    targetName: flag.key,
+    details: { enabled: flag.enabled },
+  });
+
+  return flag;
+};
+
+/**
+ * 14. Platform System Settings
+ */
+export const getPlatformSettings = async () => {
+  let settings = await PlatformSetting.findOne({ key: 'global_platform_settings' });
+  if (!settings) {
+    settings = await PlatformSetting.create({
+      key: 'global_platform_settings',
+      defaultTrialDays: 14,
+      supportEmail: 'support@arthagst.demo',
+      sandboxMode: true,
+      maintenanceMode: false,
+    });
+  }
+  return settings;
+};
+
+export const updatePlatformSettings = async (superAdminUser, data) => {
+  let settings = await PlatformSetting.findOne({ key: 'global_platform_settings' });
+  if (!settings) {
+    settings = new PlatformSetting({ key: 'global_platform_settings' });
+  }
+
+  if (data.defaultTrialDays !== undefined) settings.defaultTrialDays = Number(data.defaultTrialDays);
+  if (data.supportEmail !== undefined) settings.supportEmail = data.supportEmail;
+  if (data.sandboxMode !== undefined) settings.sandboxMode = Boolean(data.sandboxMode);
+  if (data.maintenanceMode !== undefined) settings.maintenanceMode = Boolean(data.maintenanceMode);
+
+  await settings.save();
+
+  await logAuditAction({
+    actor: superAdminUser,
+    action: 'PLATFORM_SETTINGS_UPDATED',
+    targetType: 'system_settings',
+    targetId: settings._id,
+    targetName: 'global_platform_settings',
+    details: data,
+  });
+
+  return settings;
+};
+
 export default {
   getPlatformDashboard,
   getTenants,
@@ -507,4 +873,17 @@ export default {
   assignSubscription,
   getPlatformUsageStatistics,
   getSubscriptionRevenueReport,
+  getPlatformUsers,
+  toggleUserStatus,
+  getPlatformSubscriptions,
+  getTickets,
+  createTicket,
+  updateTicketStatus,
+  getAnnouncements,
+  createAnnouncement,
+  updateAnnouncementStatus,
+  getFeatureFlags,
+  toggleFeatureFlag,
+  getPlatformSettings,
+  updatePlatformSettings,
 };
