@@ -68,9 +68,47 @@ export const updateStatusSchema = z.object({
   isActive: z.boolean({ required_error: 'isActive status is required' }),
 });
 
+export const transferFundsSchema = z.object({
+  fromAccountId: z.string({ required_error: 'Source account ID is required' }).trim(),
+  toAccountId: z.string({ required_error: 'Destination account ID is required' }).trim(),
+  amount: z.coerce
+    .number({ required_error: 'Transfer amount is required' })
+    .positive('Transfer amount must be greater than zero'),
+  date: z.string().optional(),
+  referenceNumber: z.string().trim().max(100).optional().default(''),
+  notes: z.string().trim().max(500).optional().default(''),
+});
+
+export const createTransactionSchema = z.object({
+  bankAccountId: z.string({ required_error: 'Bank account ID is required' }).trim(),
+  transactionType: z.enum(['deposit', 'withdrawal'], {
+    required_error: "Transaction type must be 'deposit' or 'withdrawal'",
+  }),
+  amount: z.coerce
+    .number({ required_error: 'Amount is required' })
+    .positive('Amount must be greater than zero'),
+  date: z.string().optional(),
+  referenceNumber: z.string().trim().max(100).optional().default(''),
+  description: z.string().trim().max(500).optional().default(''),
+});
+
+export const queryTransactionsSchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  bankAccountId: z.string().trim().optional(),
+  transactionType: z.enum(['deposit', 'withdrawal', 'transfer_in', 'transfer_out']).optional(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  sortBy: z.string().optional().default('transactionDate'),
+  sortOrder: z.enum(['asc', 'desc']).optional().default('desc'),
+});
+
 export default {
   createBankAccountSchema,
   updateBankAccountSchema,
   queryBankAccountsSchema,
   updateStatusSchema,
+  transferFundsSchema,
+  createTransactionSchema,
+  queryTransactionsSchema,
 };

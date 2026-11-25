@@ -2,7 +2,7 @@ import api from './api.js';
 
 /**
  * Payment API Service
- * Connects directly to Backend /api/payment
+ * Connects directly to Backend /api/payments
  */
 
 export const getPayments = async (params = {}) => {
@@ -10,22 +10,27 @@ export const getPayments = async (params = {}) => {
     limit: 100,
     ...params,
   };
-  const res = await api.get('/payment', { params: query });
+  const res = await api.get('/payments', { params: query });
   return res.data; // { payments: [...], pagination: { ... } }
 };
 
 export const getPaymentById = async (id) => {
-  const res = await api.get(`/payment/${id}`);
+  const res = await api.get(`/payments/${id}`);
   return res.data;
 };
 
 export const createPayment = async (data) => {
-  const res = await api.post('/payment', data);
+  const res = await api.post('/payments', data);
   return res.data;
 };
 
 export const cancelPayment = async (id, cancellationReason = 'Cancelled by user') => {
-  const res = await api.post(`/payment/${id}/cancel`, { cancellationReason });
+  const res = await api.post(`/payments/${id}/cancel`, { cancellationReason });
+  return res.data;
+};
+
+export const allocatePayment = async (id, allocations) => {
+  const res = await api.post(`/payments/${id}/allocate`, { allocations });
   return res.data;
 };
 
@@ -34,4 +39,5 @@ export default {
   getPaymentById,
   createPayment,
   cancelPayment,
+  allocatePayment,
 };

@@ -626,6 +626,154 @@ export const getExpenseById = async (tenantId, expenseId) => {
   return expense;
 };
 
+/**
+ * Update an existing expense
+ */
+export const updateExpense = async (tenantId, userId, expenseId, data) => {
+  return runTransaction(async (session) => {
+    if (!mongoose.isValidObjectId(expenseId)) {
+      const error = new Error('Invalid expense ID format');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const expense = await Expense.findOne({
+      _id: expenseId,
+      tenantId,
+    }).session(session);
+
+    if (!expense) {
+      const error = new Error('Expense not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    if (expense.status === 'cancelled') {
+      const error = new Error('Cannot update a cancelled expense');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // Category update
+    if (data.categoryId && mongoose.isValidObjectId(data.categoryId)) {
+      const category = await ExpenseCategory.findOne({
+        _id: data.categoryId,
+        tenantId,
+        isDeleted: false,
+      }).session(session);
+
+      if (!category) {
+        const error = new Error('Expense category not found');
+        error.statusCode = 404;
+        throw error;
+      }
+      expense.categoryId = category._id;
+      expense.categoryName = category.name;
+    }
+
+    // Party update
+    if (data.partyId !== undefined) {
+      if (data.partyId && mongoose.isValidObjectId(data.partyId)) {
+        const party = await Party.findOne({ _id: data.partyId, tenantId, isDeleted: false }).session(session);
+        if (party) {
+          expense.partyId = party._id;
+          expense.payeeName = party.name;
+        }
+      } else {
+        expense.partyId = null;
+      }
+    }
+
+    if (data.payeeName !== undefined) expense.payeeName = data.payeeName;
+    if (data.referenceNumber !== undefined) expense.referenceNumber = data.referenceNumber;
+    if (data.notes !== undefined) expense.notes = data.notes;
+    if (data.expenseDate) expense.expenseDate = new Date(data.expenseDate);
+
+    // Amount & Bank Account balance adjustments
+    const hasAmountChange = data.amount !== undefined && round2(data.amount) !== expense.amount;
+    const hasAccountChange = data.bankAccountId !== undefined && String(data.bankAccountId) !== String(expense.bankAccountId);
+
+    if (hasAmountChange || hasAccountChange) {
+      // 1. Restore old amount to old bank account if was attached
+      if (expense.bankAccountId) {
+        await BankAccount.findByIdAndUpdate(
+          expense.bankAccountId,
+          { $inc: { currentBalance: expense.amount } },
+          { session }
+        );
+      }
+
+      const newAmount = data.amount !== undefined ? round2(data.amount) : expense.amount;
+      const targetBankAccountId = data.bankAccountId !== undefined ? data.bankAccountId : expense.bankAccountId;
+
+      let resolvedBankAccount = null;
+      if (targetBankAccountId) {
+        if (!mongoose.isValidObjectId(targetBankAccountId)) {
+          const error = new Error('Invalid bank account ID format');
+          error.statusCode = 400;
+          throw error;
+        }
+
+        resolvedBankAccount = await BankAccount.findOne({
+          _id: targetBankAccountId,
+          tenantId,
+          isDeleted: false,
+        }).session(session);
+
+        if (!resolvedBankAccount) {
+          const error = new Error('Bank account not found');
+          error.statusCode = 404;
+          throw error;
+        }
+
+        // Deduct new amount from new bank account
+        await BankAccount.findByIdAndUpdate(
+          resolvedBankAccount._id,
+          { $inc: { currentBalance: -newAmount } },
+          { session }
+        );
+      }
+
+      expense.amount = newAmount;
+      expense.bankAccountId = resolvedBankAccount ? resolvedBankAccount._id : null;
+      expense.bankAccountName = resolvedBankAccount ? resolvedBankAccount.accountName : '';
+      if (data.paymentMethod) expense.paymentMethod = data.paymentMethod;
+
+      // Tax recalculation
+      const isGSTApplicable = data.isGSTApplicable !== undefined ? Boolean(data.isGSTApplicable) : expense.isGSTApplicable;
+      expense.isGSTApplicable = isGSTApplicable;
+      if (data.isITCClaimable !== undefined) expense.isITCClaimable = Boolean(data.isITCClaimable);
+
+      if (isGSTApplicable) {
+        const gstRate = data.gstRate !== undefined ? Number(data.gstRate) || 0 : expense.gstRate;
+        expense.gstRate = gstRate;
+        const taxableAmount = data.taxableAmount !== undefined ? round2(data.taxableAmount) : round2(newAmount / (1 + gstRate / 100));
+        const totalTax = round2(newAmount - taxableAmount);
+        expense.taxableAmount = taxableAmount;
+        expense.cgst = round2(totalTax / 2);
+        expense.sgst = round2(totalTax - expense.cgst);
+        expense.igst = 0;
+      } else {
+        expense.taxableAmount = newAmount;
+        expense.gstRate = 0;
+        expense.cgst = 0;
+        expense.sgst = 0;
+        expense.igst = 0;
+      }
+    }
+
+    await expense.save({ session });
+    return expense;
+  });
+};
+
+/**
+ * Delete an expense by cancelling and reversing balances
+ */
+export const deleteExpense = async (tenantId, userId, expenseId) => {
+  return cancelExpense(tenantId, userId, expenseId, 'Deleted by user');
+};
+
 export default {
   createCategory,
   getCategories,
@@ -634,6 +782,8 @@ export default {
   deleteCategory,
   generateExpenseNumber,
   createExpense,
+  updateExpense,
+  deleteExpense,
   cancelExpense,
   getExpenses,
   getExpenseById,

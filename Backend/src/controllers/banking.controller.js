@@ -5,6 +5,9 @@ import {
   updateBankAccountSchema,
   queryBankAccountsSchema,
   updateStatusSchema,
+  transferFundsSchema,
+  createTransactionSchema,
+  queryTransactionsSchema,
 } from '../validators/banking.validation.js';
 import { sendResponse, formatZodErrors } from '../utils/apiResponse.js';
 
@@ -80,6 +83,45 @@ export const deleteAccount = async (req, res, next) => {
 
 export const updateStatus = updateAccountStatus;
 
+export const transferFunds = async (req, res, next) => {
+  try {
+    const validatedData = transferFundsSchema.parse(req.body);
+    const result = await bankingService.transferFunds(req.tenantId, req.user?._id || req.userId, validatedData);
+    return sendResponse(res, 200, true, result.message, result);
+  } catch (error) {
+    if (error instanceof ZodError) {
+      return res.status(400).json({ success: false, errors: formatZodErrors(error) });
+    }
+    next(error);
+  }
+};
+
+export const createTransaction = async (req, res, next) => {
+  try {
+    const validatedData = createTransactionSchema.parse(req.body);
+    const result = await bankingService.createBankTransaction(req.tenantId, req.user?._id || req.userId, validatedData);
+    return sendResponse(res, 201, true, result.message, result);
+  } catch (error) {
+    if (error instanceof ZodError) {
+      return res.status(400).json({ success: false, errors: formatZodErrors(error) });
+    }
+    next(error);
+  }
+};
+
+export const getTransactions = async (req, res, next) => {
+  try {
+    const validatedQuery = queryTransactionsSchema.parse(req.query);
+    const result = await bankingService.getBankTransactions(req.tenantId, validatedQuery);
+    return sendResponse(res, 200, true, 'Transactions retrieved successfully', result);
+  } catch (error) {
+    if (error instanceof ZodError) {
+      return res.status(400).json({ success: false, errors: formatZodErrors(error) });
+    }
+    next(error);
+  }
+};
+
 export default {
   createAccount,
   getAccounts,
@@ -88,4 +130,7 @@ export default {
   updateAccountStatus,
   updateStatus,
   deleteAccount,
+  transferFunds,
+  createTransaction,
+  getTransactions,
 };

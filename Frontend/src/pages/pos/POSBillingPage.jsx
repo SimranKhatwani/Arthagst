@@ -32,7 +32,7 @@ export const POSBillingPage = () => {
   const [barcodeInput, setBarcodeInput] = useState('');
   const [category, setCategory] = useState('All');
   const [catalogPage, setCatalogPage] = useState(1);
-  const [customerId, setCustomerId] = useState('cust-16');
+  const [customerId, setCustomerId] = useState('');
   const [cart, setCart] = useState([]);
   const [discountPct, setDiscountPct] = useState(0);
   const [payMethod, setPayMethod] = useState('UPI');
@@ -40,6 +40,14 @@ export const POSBillingPage = () => {
   const [splitUpi, setSplitUpi] = useState(0);
   const [receiptInv, setReceiptInv] = useState(null);
   const [heldModalOpen, setHeldModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (state.customers && state.customers.length > 0) {
+      if (!customerId || !state.customers.some((c) => (c.id || c._id) === customerId)) {
+        setCustomerId(state.customers[0].id || state.customers[0]._id);
+      }
+    }
+  }, [state.customers, customerId]);
 
   const activeProducts = useMemo(
     () => state.products.filter((p) => !p.archived && p.stock > 0),
@@ -71,19 +79,20 @@ export const POSBillingPage = () => {
   );
 
   const addToCart = (prod) => {
+    const pId = prod.id || prod._id;
     setCart((prev) => {
-      const existing = prev.find((c) => c.productId === prod.id);
+      const existing = prev.find((c) => c.productId === pId);
       if (existing) {
         if (existing.qty >= prod.stock) {
           notify(`Only ${prod.stock} ${prod.unit} available in stock`, 'error');
           return prev;
         }
-        return prev.map((c) => (c.productId === prod.id ? { ...c, qty: c.qty + 1 } : c));
+        return prev.map((c) => (c.productId === pId ? { ...c, qty: c.qty + 1 } : c));
       }
       return [
         ...prev,
         {
-          productId: prod.id,
+          productId: pId,
           name: prod.name,
           sku: prod.sku,
           hsn: prod.hsn,
@@ -161,72 +170,83 @@ export const POSBillingPage = () => {
     notify('Held bill resumed');
   };
 
-  const handleCheckout = () => {
+  const [isCheckingOut, setIsCheckingOut] = useState(false);
+
+  const handleCheckout = async () => {
+    if (isCheckingOut) return;
     if (!cart.length) {
       notify('Cart is empty', 'error');
       return;
     }
-    let paymentPayload = {
-      amount: computed.grandTotal,
-      method: payMethod,
-      referenceNo: `POS-${Date.now().toString().slice(-6)}`,
-    };
-    let displayMethod = payMethod;
+    setIsCheckingOut(true);
+    try {
+      let paymentPayload = {
+        amount: computed.grandTotal,
+        method: payMethod,
+        referenceNo: `POS-${Date.now().toString().slice(-6)}`,
+      };
+      let displayMethod = payMethod;
 
-    if (payMethod === 'Split') {
-      const cashAmt = Number(splitCash) || 0;
-      const upiAmt = Number(splitUpi) || 0;
-      if (cashAmt + upiAmt > computed.grandTotal + 0.05) {
-        notify('Split payment total cannot exceed payable total', 'error');
-        return;
+      if (payMethod === 'Split') {
+        const cashAmt = Number(splitCash) || 0;
+        const upiAmt = Number(splitUpi) || 0;
+        if (cashAmt + upiAmt > computed.grandTotal + 0.05) {
+          notify('Split payment total cannot exceed payable total', 'error');
+          return;
+        }
+        if (cashAmt > 0 || upiAmt > 0) {
+          paymentPayload = {
+            amount: computed.grandTotal,
+            method: cashAmt >= upiAmt ? 'Cash' : 'UPI',
+            referenceNo: `POS-SPLIT-${Date.now().toString().slice(-5)}`,
+          };
+          displayMethod = `Split (Cash ₹${cashAmt} + UPI ₹${upiAmt})`;
+        } else {
+          paymentPayload = {
+            amount: computed.grandTotal,
+            method: 'UPI',
+            referenceNo: `POS-${Date.now().toString().slice(-6)}`,
+          };
+        }
       }
-      if (cashAmt > 0 || upiAmt > 0) {
-        paymentPayload = [
-          ...(cashAmt > 0 ? [{ amount: cashAmt, method: 'Cash', referenceNo: `POS-C-${Date.now().toString().slice(-5)}` }] : []),
-          ...(upiAmt > 0 ? [{ amount: upiAmt, method: 'UPI', referenceNo: `POS-U-${Date.now().toString().slice(-5)}` }] : []),
-        ];
-        displayMethod = `Split (Cash ₹${cashAmt} + UPI ₹${upiAmt})`;
-      } else {
-        paymentPayload = {
-          amount: computed.grandTotal,
-          method: 'UPI',
-          referenceNo: `POS-${Date.now().toString().slice(-6)}`,
-        };
-      }
+
+      const today = new Date().toISOString().slice(0, 10);
+      const whId = state.warehouses?.[0]?.id || state.warehouses?.[0]?._id;
+      const custId = customer?.id || customer?._id;
+
+      const payload = {
+        date: today,
+        dueDate: today,
+        financialYear: state.business?.financialYear || '2026-27',
+        invoiceType: 'POS Retail Invoice',
+        customerId: custId,
+        partyId: custId,
+        warehouseId: whId,
+        customerName: customer?.name || 'Walk-in Customer',
+        customerGstin: customer?.gstin || '',
+        customerState: customer?.state || state.business?.state || 'Maharashtra',
+        placeOfSupply: customer?.state || state.business?.state || 'Maharashtra',
+        registrationType: customer?.registrationType || 'Unregistered / Consumer',
+        billingAddress: customer?.billingAddress || 'Counter Sale',
+        shippingAddress: customer?.billingAddress || 'Counter Sale',
+        paymentMethod: displayMethod,
+        status: 'Finalized',
+        notes: `POS Counter Sale · Cashier: ${state.currentUser?.name || 'Cashier'}`,
+        items: cart,
+        ...computed,
+      };
+
+      const saved = await saveSalesInvoice(payload, paymentPayload);
+      setReceiptInv(saved || payload);
+      setCart([]);
+      setDiscountPct(0);
+      setSplitCash(0);
+      setSplitUpi(0);
+    } catch (err) {
+      notify(err.message || 'Failed to complete POS billing', 'error');
+    } finally {
+      setIsCheckingOut(false);
     }
-
-    const invoiceNumber = generateNextDocNumber(
-      state.settings.invoice.prefix,
-      state.invoices,
-      'invoiceNumber'
-    );
-    const today = new Date().toISOString().slice(0, 10);
-    const payload = {
-      invoiceNumber,
-      date: today,
-      dueDate: today,
-      financialYear: state.business.financialYear,
-      invoiceType: 'POS Retail Invoice',
-      customerId: customer?.id,
-      customerName: customer?.name,
-      customerGstin: customer?.gstin || '',
-      customerState: customer?.state || state.business.state,
-      placeOfSupply: customer?.state || state.business.state,
-      registrationType: customer?.registrationType || 'Unregistered / Consumer',
-      billingAddress: customer?.billingAddress || 'Counter Sale',
-      shippingAddress: customer?.billingAddress || 'Counter Sale',
-      paymentMethod: displayMethod,
-      status: 'Finalized',
-      notes: `POS Counter Sale · Cashier: ${state.currentUser?.name}`,
-      ...computed,
-    };
-
-    const saved = saveSalesInvoice(payload, paymentPayload);
-    setReceiptInv(saved || payload);
-    setCart([]);
-    setDiscountPct(0);
-    setSplitCash(0);
-    setSplitUpi(0);
   };
 
   return (

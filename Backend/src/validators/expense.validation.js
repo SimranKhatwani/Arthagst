@@ -42,6 +42,23 @@ export const createExpenseSchema = z.object({
   notes: z.string().trim().max(1000).optional().default(''),
 });
 
+export const updateExpenseSchema = z.object({
+  categoryId: z.string().trim().optional(),
+  expenseDate: z.string().optional(),
+  amount: z.coerce.number().positive().optional(),
+  isGSTApplicable: z.boolean().optional(),
+  taxableAmount: z.coerce.number().min(0).optional(),
+  gstRate: z.coerce.number().min(0).max(100).optional(),
+  isITCClaimable: z.boolean().optional(),
+  paymentMethod: z.enum(['cash', 'bank', 'UPI', 'cheque', 'card', 'other']).optional(),
+  bankAccountId: z.string().trim().optional().nullable(),
+  partyId: z.string().trim().optional().nullable(),
+  payeeName: z.string().trim().max(100).optional(),
+  referenceNumber: z.string().trim().max(100).optional(),
+  receiptUrl: z.string().trim().optional(),
+  notes: z.string().trim().max(1000).optional(),
+});
+
 export const cancelExpenseSchema = z.object({
   cancellationReason: z
     .string({ required_error: 'Cancellation reason is required' })
@@ -69,6 +86,7 @@ export default {
   createCategorySchema,
   updateCategorySchema,
   createExpenseSchema,
+  updateExpenseSchema,
   cancelExpenseSchema,
   queryExpensesSchema,
 };

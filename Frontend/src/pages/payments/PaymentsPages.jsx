@@ -5,6 +5,7 @@ import { useApp } from '../../context/AppContext';
 import { PAYMENT_METHODS } from '../../data/constants';
 import { formatINR, formatDateIN } from '../../services/calculationService';
 import { CashBookSection, BankBookSection } from '../accounting/AccountingPages';
+import { cancelPayment } from '../../services/paymentService';
 import {
   PageHeader,
   DataTable,
@@ -46,8 +47,11 @@ const PaymentInSection = () => {
     }
   };
 
-  const handleSubmit = (e) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!selectedInvoice) {
       notify('Select an unpaid or partially paid invoice', 'error');
       return;
@@ -58,21 +62,28 @@ const PaymentInSection = () => {
       notify(`Amount exceeds remaining invoice balance of ${formatINR(maxBal)}`, 'error');
       return;
     }
-    const ok = recordPayment({
-      type: 'Payment In',
-      date,
-      partyId: selectedInvoice.customerId,
-      partyName: selectedInvoice.customerName,
-      invoiceId: selectedInvoice.id,
-      invoiceNumber: selectedInvoice.invoiceNumber,
-      amount: payAmt,
-      method,
-      referenceNo: refNo,
-      notes: `Receipt for ${selectedInvoice.invoiceNumber}`,
-    });
-    if (ok) {
-      setAmount('');
-      setRefNo(`UPI${Date.now().toString().slice(-6)}`);
+    setIsSubmitting(true);
+    try {
+      const bankAccId = state.bankAccounts?.[0]?.id || state.bankAccounts?.[0]?._id || null;
+      const ok = await recordPayment({
+        type: 'Payment In',
+        date,
+        partyId: selectedInvoice.customerId || selectedInvoice.partyId,
+        partyName: selectedInvoice.customerName || selectedInvoice.partyName,
+        invoiceId: selectedInvoice.id || selectedInvoice._id,
+        invoiceNumber: selectedInvoice.invoiceNumber,
+        bankAccountId: bankAccId,
+        amount: payAmt,
+        method,
+        referenceNo: refNo,
+        notes: `Receipt for ${selectedInvoice.invoiceNumber}`,
+      });
+      if (ok) {
+        setAmount('');
+        setRefNo(`UPI${Date.now().toString().slice(-6)}`);
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -192,8 +203,11 @@ const PaymentOutSection = () => {
   );
   const selectedPur = pendingBills.find((p) => p.id === purchaseId) || pendingBills[0];
 
-  const handleSubmit = (e) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!selectedPur) {
       notify('No unpaid supplier bills pending', 'error');
       return;
@@ -204,19 +218,26 @@ const PaymentOutSection = () => {
       notify(`Amount exceeds payable balance of ${formatINR(maxBal)}`, 'error');
       return;
     }
-    const ok = recordPayment({
-      type: 'Payment Out',
-      date,
-      partyId: selectedPur.supplierId,
-      partyName: selectedPur.supplierName,
-      invoiceId: selectedPur.id,
-      invoiceNumber: selectedPur.billNumber,
-      amount: payAmt,
-      method,
-      referenceNo: refNo,
-      notes: `Settlement for ${selectedPur.supplierInvoiceNo}`,
-    });
-    if (ok) setAmount('');
+    setIsSubmitting(true);
+    try {
+      const bankAccId = state.bankAccounts?.[0]?.id || state.bankAccounts?.[0]?._id || null;
+      const ok = await recordPayment({
+        type: 'Payment Out',
+        date,
+        partyId: selectedPur.supplierId || selectedPur.partyId,
+        partyName: selectedPur.supplierName || selectedPur.partyName,
+        invoiceId: selectedPur.id || selectedPur._id,
+        invoiceNumber: selectedPur.billNumber,
+        bankAccountId: bankAccId,
+        amount: payAmt,
+        method,
+        referenceNo: refNo,
+        notes: `Settlement for ${selectedPur.supplierInvoiceNo || selectedPur.billNumber}`,
+      });
+      if (ok) setAmount('');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const recentOut = state.payments.filter((p) => p.type === 'Payment Out');
@@ -297,16 +318,32 @@ const PaymentOutSection = () => {
 
 const CashBankSection = ({ onOpenBook }) => {
   const { state, transferCashBank } = useApp();
-  const [fromId, setFromId] = useState(state.bankAccounts[2]?.id || 'acc-3');
-  const [toId, setToId] = useState(state.bankAccounts[0]?.id || 'acc-1');
+  const [fromId, setFromId] = useState('');
+  const [toId, setToId] = useState('');
   const [amount, setAmount] = useState('25000');
-  const [notes, setNotes] = useState('Cash deposit to HDFC Current Account');
+  const [notes, setNotes] = useState('Contra fund transfer');
+  const [isTransferring, setIsTransferring] = useState(false);
+
+  useEffect(() => {
+    if (state.bankAccounts && state.bankAccounts.length >= 2) {
+      if (!fromId) setFromId(state.bankAccounts[0].id || state.bankAccounts[0]._id);
+      if (!toId) setToId(state.bankAccounts[1].id || state.bankAccounts[1]._id);
+    } else if (state.bankAccounts && state.bankAccounts.length === 1) {
+      if (!fromId) setFromId(state.bankAccounts[0].id || state.bankAccounts[0]._id);
+    }
+  }, [state.bankAccounts, fromId, toId]);
 
   const totalLiquid = state.bankAccounts.reduce((s, a) => s + (Number(a.balance) || 0), 0);
 
-  const handleTransfer = (e) => {
+  const handleTransfer = async (e) => {
     e.preventDefault();
-    transferCashBank({ fromId, toId, amount, notes });
+    if (isTransferring) return;
+    setIsTransferring(true);
+    try {
+      await transferCashBank({ fromId, toId, amount, notes });
+    } finally {
+      setIsTransferring(false);
+    }
   };
 
   return (
@@ -383,20 +420,19 @@ const AllTransactionsSection = () => {
 
   const simulateRefund = async (pay) => {
     const ok = await confirmAction({
-      title: `Simulate Refund for ${pay.paymentNumber}?`,
-      message: `Mark ${formatINR(pay.amount)} as Refunded (Demo simulation)?`,
-      confirmText: 'Simulate Refund',
+      title: `Refund Payment ${pay.paymentNumber}?`,
+      message: `Cancel and reverse payment voucher ${pay.paymentNumber} of ${formatINR(pay.amount)}? This will restore party balances.`,
+      confirmText: 'Refund & Reverse',
       danger: true,
     });
     if (!ok) return;
-    updateStateWithAudit(
-      (prev) => ({
-        ...prev,
-        payments: prev.payments.map((p) => (p.id === pay.id ? { ...p, status: 'Refunded (Demo)' } : p)),
-      }),
-      { action: 'Simulated Refund', module: 'Payments', recordRef: pay.paymentNumber, prevValue: 'Completed', newValue: 'Refunded (Demo)' }
-    );
-    notify('Refund simulation recorded', 'info');
+    try {
+      await cancelPayment(pay.id || pay._id, 'Refunded by operator');
+      notify('Payment refunded and reversed successfully');
+      await loadPhase2Data();
+    } catch (err) {
+      notify(err.message || 'Failed to refund payment', 'error');
+    }
   };
 
   return (

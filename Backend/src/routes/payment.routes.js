@@ -10,5 +10,6 @@ router.post('/', paymentController.createPayment);
 router.get('/', paymentController.getPayments);
 router.get('/:id', paymentController.getPaymentById);
 router.post('/:id/cancel', paymentController.cancelPayment);
+router.post('/:id/allocate', paymentController.allocatePayment);
 
 export default router;

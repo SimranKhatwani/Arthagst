@@ -28,6 +28,10 @@ import * as grnService from '../services/grnService';
 import * as purchaseBillService from '../services/purchaseBillService';
 import * as purchaseReturnService from '../services/purchaseReturnService';
 import * as paymentService from '../services/paymentService';
+import * as bankAccountService from '../services/bankAccountService';
+import * as bankTransactionService from '../services/bankTransactionService';
+import * as expenseService from '../services/expenseService';
+import * as posService from '../services/posService';
 
 const AppContext = createContext(null);
 
@@ -166,6 +170,9 @@ export const AppProvider = ({ children }) => {
         grnsRes,
         returnsRes,
         paymentsRes,
+        bankAccountsRes,
+        expensesRes,
+        categoriesRes,
       ] = await Promise.allSettled([
         salesInvoiceService.getInvoices({ limit: 100 }),
         quotationService.getQuotations({ limit: 100 }),
@@ -177,6 +184,9 @@ export const AppProvider = ({ children }) => {
         grnService.getGRNs({ limit: 100 }),
         purchaseReturnService.getPurchaseReturns({ limit: 100 }),
         paymentService.getPayments({ limit: 100 }),
+        bankAccountService.getBankAccounts({ limit: 100 }),
+        expenseService.getExpenses({ limit: 100 }),
+        expenseService.getCategories(),
       ]);
 
       setState((prev) => {
@@ -374,6 +384,46 @@ export const AppProvider = ({ children }) => {
             referenceNo: p.referenceNumber || p.referenceNo || '',
             status: p.status === 'completed' ? 'Completed' : 'Cancelled',
           }));
+        }
+
+        if (bankAccountsRes.status === 'fulfilled' && bankAccountsRes.value) {
+          const rawAccs = bankAccountsRes.value.accounts || bankAccountsRes.value.data?.accounts || [];
+          next.bankAccounts = rawAccs.map((acc) => ({
+            ...acc,
+            id: String(acc._id || acc.id),
+            name: acc.accountName || acc.name,
+            accountNo: acc.accountNumber || '',
+            type: acc.accountType === 'cash' ? 'Cash' : (acc.accountType === 'UPI' ? 'UPI' : 'Bank'),
+            balance: Number(acc.currentBalance) || 0,
+            openingBalance: Number(acc.openingBalance) || 0,
+            isActive: acc.isActive,
+            isDefault: acc.isDefault,
+          }));
+        }
+
+        if (expensesRes.status === 'fulfilled' && expensesRes.value) {
+          const rawExp = expensesRes.value.expenses || expensesRes.value.data?.expenses || [];
+          next.expenses = rawExp.map((exp) => ({
+            ...exp,
+            id: String(exp._id || exp.id),
+            expenseNumber: exp.expenseNumber,
+            title: exp.notes || exp.payeeName || exp.categoryName,
+            category: exp.categoryName,
+            vendorName: exp.payeeName || '',
+            amount: exp.taxableAmount !== undefined ? exp.taxableAmount : exp.amount,
+            gstRate: exp.gstRate || 0,
+            cgst: exp.cgst || 0,
+            sgst: exp.sgst || 0,
+            igst: exp.igst || 0,
+            totalAmount: exp.amount || 0,
+            date: exp.expenseDate ? new Date(exp.expenseDate).toISOString().slice(0, 10) : '',
+            paymentMethod: exp.paymentMethod || 'Cash',
+            status: exp.status === 'paid' ? 'Paid' : (exp.status === 'cancelled' ? 'Archived' : 'Paid'),
+          }));
+        }
+
+        if (categoriesRes.status === 'fulfilled' && categoriesRes.value) {
+          next.expenseCategories = Array.isArray(categoriesRes.value) ? categoriesRes.value : (categoriesRes.value.data || []);
         }
 
         return next;
@@ -638,6 +688,9 @@ export const AppProvider = ({ children }) => {
       grns: [],
       purchaseReturns: [],
       payments: [],
+      bankAccounts: [],
+      expenses: [],
+      expenseCategories: [],
     }));
     notify('Signed out successfully');
   }, [notify]);
@@ -686,6 +739,9 @@ export const AppProvider = ({ children }) => {
         grns: [],
         purchaseReturns: [],
         payments: [],
+        bankAccounts: [],
+        expenses: [],
+        expenseCategories: [],
       }));
       throw err;
     }
@@ -1086,6 +1142,72 @@ export const AppProvider = ({ children }) => {
           await Promise.all([loadPhase1Data(), loadPhase2Data()]);
           return saved;
         }
+
+        if (collectionKey === 'expenses') {
+          const isEdit = Boolean(record._id || (record.id && record.id.length === 24));
+          const id = record._id || record.id;
+          let cat = (state.expenseCategories || []).find(
+            (c) => c.name === record.category || String(c._id) === String(record.categoryId)
+          );
+          let categoryId = cat?._id || cat?.id || state.expenseCategories?.[0]?._id;
+          if (!categoryId) {
+            try {
+              const createdCat = await expenseService.createCategory({
+                name: record.category || 'Office & Admin Expenses',
+                description: 'General business and operating expenses',
+              });
+              categoryId = createdCat?._id || createdCat?.id || createdCat?.data?._id;
+            } catch (catErr) {
+              notify('Failed to initialize expense category: ' + (catErr.message || ''), 'error');
+              return null;
+            }
+          }
+
+          const baseAmt = Number(record.amount || 0);
+          const gstRate = Number(record.gstRate || 0);
+          const totalAmt = Number(record.totalAmount || round2(baseAmt + (baseAmt * gstRate) / 100));
+
+          const payload = {
+            categoryId: String(categoryId),
+            expenseDate: record.date || new Date().toISOString().slice(0, 10),
+            amount: totalAmt,
+            isGSTApplicable: gstRate > 0,
+            taxableAmount: baseAmt,
+            gstRate,
+            isITCClaimable: record.itcEligible !== false,
+            paymentMethod: (record.paymentMethod || 'UPI').toLowerCase(),
+            bankAccountId: record.bankAccountId ? String(record.bankAccountId) : null,
+            payeeName: record.vendorName || record.payeeName || '',
+            notes: record.title || record.notes || '',
+          };
+
+          const saved = isEdit
+            ? await expenseService.updateExpense(id, payload)
+            : await expenseService.createExpense(payload);
+          notify(`${auditModule} saved successfully`);
+          await loadPhase2Data();
+          return saved;
+        }
+
+        if (collectionKey === 'bankAccounts') {
+          const isEdit = Boolean(record._id || (record.id && record.id.length === 24));
+          const id = record._id || record.id;
+          const payload = {
+            accountName: record.name || record.accountName,
+            accountType: (record.type || record.accountType || 'bank').toLowerCase(),
+            bankName: record.bankName || '',
+            accountNumber: record.accountNo || record.accountNumber || '',
+            openingBalance: Number(record.openingBalance || 0),
+            isActive: record.isActive !== false,
+            isDefault: Boolean(record.isDefault),
+          };
+          const saved = isEdit
+            ? await bankAccountService.updateBankAccount(id, payload)
+            : await bankAccountService.createBankAccount(payload);
+          notify(`${auditModule} saved successfully`);
+          await loadPhase2Data();
+          return saved;
+        }
       }
 
       // In-memory / Prototype fallback for purely offline/demo testing
@@ -1138,6 +1260,12 @@ export const AppProvider = ({ children }) => {
             await loadPhase2Data();
           } else if (collectionKey === 'purchaseOrders') {
             await purchaseOrderService.cancelPurchaseOrder(id);
+            await loadPhase2Data();
+          } else if (collectionKey === 'expenses') {
+            await expenseService.deleteExpense(id);
+            await loadPhase2Data();
+          } else if (collectionKey === 'bankAccounts') {
+            await bankAccountService.deleteBankAccount(id);
             await loadPhase2Data();
           }
         } catch (err) {
@@ -1297,6 +1425,7 @@ export const AppProvider = ({ children }) => {
           paymentDate: paymentPayload.date || new Date().toISOString().slice(0, 10),
           amount,
           paymentMethod: paymentPayload.method === 'Cash' ? 'cash' : (paymentPayload.method === 'UPI' ? 'UPI' : 'bank'),
+          bankAccountId: paymentPayload.bankAccountId ? String(paymentPayload.bankAccountId) : null,
           referenceNumber: paymentPayload.referenceNo || '',
           notes: paymentPayload.notes || '',
           allocations,
@@ -1579,12 +1708,32 @@ export const AppProvider = ({ children }) => {
   }, [notify, updateStateWithAudit]);
 
   // Bank Contra Transfer
-  const transferCashBank = useCallback(({ fromId, toId, amount, date, notes }) => {
+  const transferCashBank = useCallback(async ({ fromId, toId, amount, date, notes }) => {
     const amt = round2(Number(amount) || 0);
     if (amt <= 0 || fromId === toId) {
       notify('Select different source and destination accounts with valid amount', 'error');
-      return;
+      return false;
     }
+
+    const isAuth = Boolean(getToken());
+    if (isAuth) {
+      try {
+        const res = await bankTransactionService.transferFunds({
+          fromAccountId: String(fromId),
+          toAccountId: String(toId),
+          amount: amt,
+          date: date || new Date().toISOString().slice(0, 10),
+          notes: notes || '',
+        });
+        notify(`Transferred ₹${amt.toLocaleString('en-IN')} between accounts`);
+        await loadPhase2Data();
+        return res;
+      } catch (err) {
+        notify(err.message || 'Transfer failed', 'error');
+        throw err;
+      }
+    }
+
     updateStateWithAudit(
       (prev) => {
         const fromAcc = prev.bankAccounts.find((a) => a.id === fromId);
@@ -1621,7 +1770,33 @@ export const AppProvider = ({ children }) => {
       }
     );
     notify(`Transferred ₹${amt.toLocaleString('en-IN')} between accounts`);
-  }, [notify, updateStateWithAudit]);
+  }, [loadPhase2Data, notify, updateStateWithAudit]);
+
+  // POS Billing directly connected to backend
+  const savePosBill = useCallback(
+    async (billPayload) => {
+      const isAuth = Boolean(getToken());
+      if (!isAuth) {
+        notify('You must be signed in to submit POS billing', 'error');
+        return null;
+      }
+      try {
+        const warehouseId = billPayload.warehouseId || state.warehouses[0]?._id || state.warehouses[0]?.id;
+        const res = await posService.createBill({
+          ...billPayload,
+          warehouseId: String(warehouseId),
+          finalize: true,
+        });
+        notify(`POS Invoice ${res.invoiceNumber} billed successfully`);
+        await Promise.all([loadPhase1Data(), loadPhase2Data()]);
+        return res;
+      } catch (err) {
+        notify(err.message || 'Failed to complete POS billing', 'error');
+        throw err;
+      }
+    },
+    [loadPhase1Data, loadPhase2Data, notify, state.warehouses]
+  );
 
   // Simulated Demo E-Invoice IRN & E-Way Bill
   const generateDemoIRN = useCallback((invoice) => {
@@ -1775,6 +1950,7 @@ export const AppProvider = ({ children }) => {
     createPurchaseReturn,
     adjustInventoryStock,
     transferCashBank,
+    savePosBill,
     generateDemoIRN,
     generateDemoEWayBill,
     updateBusinessAndSettings,

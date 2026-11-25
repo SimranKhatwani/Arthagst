@@ -4,6 +4,7 @@ export { default as JournalEntry } from './journalEntry.model.js';
 export { default as JournalSequence } from './journalSequence.model.js';
 export { default as AuditLog } from './auditLog.model.js';
 export { default as BankAccount } from './bankAccount.model.js';
+export { default as BankTransaction } from './bankTransaction.model.js';
 export { default as Category } from './category.model.js';
 export { default as EInvoice } from './eInvoice.model.js';
 export { default as EWayBill } from './eWayBill.model.js';

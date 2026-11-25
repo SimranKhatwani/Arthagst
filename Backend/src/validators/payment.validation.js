@@ -58,9 +58,16 @@ export const queryPaymentsSchema = z.object({
   sortOrder: z.enum(['asc', 'desc']).optional().default('desc'),
 });
 
+export const allocatePaymentSchema = z.object({
+  allocations: z
+    .array(allocationInputSchema)
+    .min(1, 'At least one allocation must be provided'),
+});
+
 export default {
   allocationInputSchema,
   createPaymentSchema,
   cancelPaymentSchema,
   queryPaymentsSchema,
+  allocatePaymentSchema,
 };

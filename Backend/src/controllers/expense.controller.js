@@ -4,6 +4,7 @@ import {
   createCategorySchema,
   updateCategorySchema,
   createExpenseSchema,
+  updateExpenseSchema,
   cancelExpenseSchema,
   queryExpensesSchema,
 } from '../validators/expense.validation.js';
@@ -127,6 +128,37 @@ export const cancelExpense = async (req, res, next) => {
   }
 };
 
+export const updateExpense = async (req, res, next) => {
+  try {
+    const validatedData = updateExpenseSchema.parse(req.body);
+    const expense = await expenseService.updateExpense(
+      req.tenantId,
+      req.user?._id || req.userId,
+      req.params.id,
+      validatedData
+    );
+    return sendResponse(res, 200, true, 'Expense updated successfully', expense);
+  } catch (error) {
+    if (error instanceof ZodError) {
+      return res.status(400).json({ success: false, errors: formatZodErrors(error) });
+    }
+    next(error);
+  }
+};
+
+export const deleteExpense = async (req, res, next) => {
+  try {
+    const expense = await expenseService.deleteExpense(
+      req.tenantId,
+      req.user?._id || req.userId,
+      req.params.id
+    );
+    return sendResponse(res, 200, true, 'Expense deleted successfully', expense);
+  } catch (error) {
+    next(error);
+  }
+};
+
 export default {
   createCategory,
   getCategories,
@@ -134,6 +166,8 @@ export default {
   updateCategory,
   deleteCategory,
   createExpense,
+  updateExpense,
+  deleteExpense,
   getExpenses,
   getExpenseById,
   cancelExpense,

@@ -49,4 +49,25 @@ router.patch('/accounts/:id/status', bankingController.updateAccountStatus);
  */
 router.delete('/accounts/:id', bankingController.deleteAccount);
 
+/**
+ * @route   POST /api/banking/transfers
+ * @desc    Transfer funds between two accounts (Contra transfer)
+ * @access  Private
+ */
+router.post('/transfers', bankingController.transferFunds);
+
+/**
+ * @route   POST /api/banking/transactions
+ * @desc    Record deposit or withdrawal
+ * @access  Private
+ */
+router.post('/transactions', bankingController.createTransaction);
+
+/**
+ * @route   GET /api/banking/transactions
+ * @desc    Get transaction history
+ * @access  Private
+ */
+router.get('/transactions', bankingController.getTransactions);
+
 export default router;

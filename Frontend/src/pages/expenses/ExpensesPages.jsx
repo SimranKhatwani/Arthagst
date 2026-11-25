@@ -66,36 +66,43 @@ export const ExpensesPage = () => {
     setModalOpen(true);
   };
 
-  const handleSave = (e) => {
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async (e) => {
     e.preventDefault();
+    if (isSaving) return;
     if (!form.title.trim() || !form.amount) {
       notify('Expense title and base amount are required', 'error');
       return;
     }
-    const base = round2(Number(form.amount) || 0);
-    const gstAmt = round2((base * (Number(form.gstRate) || 0)) / 100);
-    const cgst = round2(gstAmt / 2);
-    const sgst = round2(gstAmt - cgst);
-    const expenseNumber = editing?.expenseNumber || generateNextDocNumber('EXP/26-27/', state.expenses, 'expenseNumber');
+    setIsSaving(true);
+    try {
+      const base = round2(Number(form.amount) || 0);
+      const gstAmt = round2((base * (Number(form.gstRate) || 0)) / 100);
+      const cgst = round2(gstAmt / 2);
+      const sgst = round2(gstAmt - cgst);
 
-    upsertRecord(
-      'expenses',
-      {
-        ...form,
-        id: editing ? editing.id : `exp-${Date.now()}`,
-        expenseNumber,
-        amount: base,
-        gstRate: Number(form.gstRate) || 0,
-        cgst,
-        sgst,
-        igst: 0,
-        totalAmount: round2(base + gstAmt),
-        status: 'Paid',
-      },
-      'Expense',
-      'expenseNumber'
-    );
-    setModalOpen(false);
+      await upsertRecord(
+        'expenses',
+        {
+          ...form,
+          ...(editing ? { _id: editing._id || editing.id, id: editing.id || editing._id } : {}),
+          amount: base,
+          gstRate: Number(form.gstRate) || 0,
+          cgst,
+          sgst,
+          igst: 0,
+          totalAmount: round2(base + gstAmt),
+          bankAccountId: state.bankAccounts?.[0]?.id || state.bankAccounts?.[0]?._id,
+          status: 'Paid',
+        },
+        'Expense',
+        'expenseNumber'
+      );
+      setModalOpen(false);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -291,32 +298,38 @@ export const AddExpensePage = () => {
     notes: '',
   });
 
-  const handleSubmit = (e) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!form.title.trim() || !form.amount) {
       notify('Title and amount are required', 'error');
       return;
     }
-    const base = round2(Number(form.amount));
-    const gst = round2((base * Number(form.gstRate)) / 100);
-    const expenseNumber = generateNextDocNumber('EXP/26-27/', state.expenses, 'expenseNumber');
-    upsertRecord(
-      'expenses',
-      {
-        ...form,
-        id: `exp-${Date.now()}`,
-        expenseNumber,
-        amount: base,
-        cgst: round2(gst / 2),
-        sgst: round2(gst - round2(gst / 2)),
-        igst: 0,
-        totalAmount: round2(base + gst),
-        status: 'Paid',
-      },
-      'Expense',
-      'expenseNumber'
-    );
-    navigate('/expenses');
+    setIsSubmitting(true);
+    try {
+      const base = round2(Number(form.amount));
+      const gst = round2((base * Number(form.gstRate)) / 100);
+      await upsertRecord(
+        'expenses',
+        {
+          ...form,
+          amount: base,
+          cgst: round2(gst / 2),
+          sgst: round2(gst - round2(gst / 2)),
+          igst: 0,
+          totalAmount: round2(base + gst),
+          bankAccountId: state.bankAccounts?.[0]?.id || state.bankAccounts?.[0]?._id,
+          status: 'Paid',
+        },
+        'Expense',
+        'expenseNumber'
+      );
+      navigate('/expenses');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

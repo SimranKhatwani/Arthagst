@@ -617,10 +617,187 @@ export const getPaymentById = async (tenantId, paymentId) => {
   return payment;
 };
 
+/**
+ * Allocate an unallocated payment against invoices or bills
+ */
+export const allocatePayment = async (tenantId, userId, paymentId, allocationsInput) => {
+  return runTransaction(async (session) => {
+    if (!mongoose.isValidObjectId(paymentId)) {
+      const error = new Error('Invalid payment ID format');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const payment = await Payment.findOne({
+      _id: paymentId,
+      tenantId,
+    }).session(session);
+
+    if (!payment) {
+      const error = new Error('Payment not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    if (payment.status === 'cancelled') {
+      const error = new Error('Cannot allocate a cancelled payment');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    let totalAllocating = 0;
+    const newAllocations = [];
+
+    for (const alloc of allocationsInput) {
+      const allocAmt = round2(alloc.allocatedAmount);
+      if (allocAmt <= 0) {
+        const error = new Error('Allocated amount must be greater than zero');
+        error.statusCode = 400;
+        throw error;
+      }
+
+      totalAllocating = round2(totalAllocating + allocAmt);
+
+      if (payment.direction === 'in') {
+        if (!alloc.salesInvoiceId || !mongoose.isValidObjectId(alloc.salesInvoiceId)) {
+          const error = new Error('Valid salesInvoiceId is required for customer payment allocation');
+          error.statusCode = 400;
+          throw error;
+        }
+
+        const invoice = await SalesInvoice.findOne({
+          _id: alloc.salesInvoiceId,
+          tenantId,
+        }).session(session);
+
+        if (!invoice) {
+          const error = new Error(`Sales invoice ${alloc.salesInvoiceId} not found`);
+          error.statusCode = 404;
+          throw error;
+        }
+
+        if (invoice.invoiceStatus === 'cancelled') {
+          const error = new Error(`Cannot allocate payment to cancelled invoice ${invoice.invoiceNumber}`);
+          error.statusCode = 400;
+          throw error;
+        }
+
+        if (payment.partyId && invoice.partyId.toString() !== payment.partyId.toString()) {
+          const error = new Error(`Invoice ${invoice.invoiceNumber} belongs to a different party`);
+          error.statusCode = 400;
+          throw error;
+        }
+
+        if (allocAmt > round2(invoice.balanceAmount)) {
+          const error = new Error(
+            `Allocated amount (${allocAmt}) exceeds outstanding balance (${invoice.balanceAmount}) for invoice ${invoice.invoiceNumber}`
+          );
+          error.statusCode = 400;
+          throw error;
+        }
+
+        const newPaid = round2(invoice.paidAmount + allocAmt);
+        const newBalance = Math.max(0, round2(invoice.grandTotal - newPaid));
+        const newPaymentStatus = newBalance === 0 ? 'paid' : newPaid > 0 ? 'partially_paid' : 'unpaid';
+
+        await SalesInvoice.findByIdAndUpdate(
+          invoice._id,
+          {
+            paidAmount: newPaid,
+            balanceAmount: newBalance,
+            paymentStatus: newPaymentStatus,
+          },
+          { session }
+        );
+
+        newAllocations.push({
+          salesInvoiceId: invoice._id,
+          purchaseBillId: null,
+          documentNumber: invoice.invoiceNumber,
+          allocatedAmount: allocAmt,
+        });
+      } else {
+        if (!alloc.purchaseBillId || !mongoose.isValidObjectId(alloc.purchaseBillId)) {
+          const error = new Error('Valid purchaseBillId is required for supplier payment allocation');
+          error.statusCode = 400;
+          throw error;
+        }
+
+        const bill = await PurchaseBill.findOne({
+          _id: alloc.purchaseBillId,
+          tenantId,
+        }).session(session);
+
+        if (!bill) {
+          const error = new Error(`Purchase bill ${alloc.purchaseBillId} not found`);
+          error.statusCode = 404;
+          throw error;
+        }
+
+        if (bill.billStatus === 'cancelled') {
+          const error = new Error(`Cannot allocate payment to cancelled bill ${bill.billNumber}`);
+          error.statusCode = 400;
+          throw error;
+        }
+
+        if (payment.partyId && bill.supplierId.toString() !== payment.partyId.toString()) {
+          const error = new Error(`Bill ${bill.billNumber} belongs to a different supplier`);
+          error.statusCode = 400;
+          throw error;
+        }
+
+        if (allocAmt > round2(bill.balanceAmount)) {
+          const error = new Error(
+            `Allocated amount (${allocAmt}) exceeds outstanding balance (${bill.balanceAmount}) for bill ${bill.billNumber}`
+          );
+          error.statusCode = 400;
+          throw error;
+        }
+
+        const newPaid = round2(bill.paidAmount + allocAmt);
+        const newBalance = Math.max(0, round2(bill.grandTotal - newPaid));
+        const newPaymentStatus = newBalance === 0 ? 'paid' : newPaid > 0 ? 'partially_paid' : 'unpaid';
+
+        await PurchaseBill.findByIdAndUpdate(
+          bill._id,
+          {
+            paidAmount: newPaid,
+            balanceAmount: newBalance,
+            paymentStatus: newPaymentStatus,
+          },
+          { session }
+        );
+
+        newAllocations.push({
+          salesInvoiceId: null,
+          purchaseBillId: bill._id,
+          documentNumber: bill.billNumber,
+          allocatedAmount: allocAmt,
+        });
+      }
+    }
+
+    if (totalAllocating > round2(payment.unallocatedAmount)) {
+      const error = new Error(
+        `Total allocated amount (${totalAllocating}) exceeds available unallocated payment balance (${payment.unallocatedAmount})`
+      );
+      error.statusCode = 400;
+      throw error;
+    }
+
+    payment.unallocatedAmount = Math.max(0, round2(payment.unallocatedAmount - totalAllocating));
+    payment.allocations.push(...newAllocations);
+    await payment.save({ session });
+
+    return payment;
+  });
+};
+
 export default {
   generatePaymentNumber,
   createPayment,
   cancelPayment,
   getPayments,
   getPaymentById,
+  allocatePayment,
 };
