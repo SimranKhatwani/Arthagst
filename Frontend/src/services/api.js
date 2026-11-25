@@ -39,7 +39,40 @@ export const removeToken = () => {
 };
 
 /**
- * Centralized API request handler
+ * Deeply normalizes MongoDB _id and id properties recursively.
+ * Ensures any object with `_id` also has `id: String(_id)`
+ * without modifying or deleting original attributes.
+ */
+export const normalizeMongoIds = (data) => {
+  if (!data || typeof data !== 'object') {
+    return data;
+  }
+
+  if (Array.isArray(data)) {
+    return data.map(normalizeMongoIds);
+  }
+
+  // Preserve Date, RegExp, Blob, etc.
+  if (data instanceof Date || (typeof Blob !== 'undefined' && data instanceof Blob)) {
+    return data;
+  }
+
+  const normalized = { ...data };
+  if (normalized._id !== undefined && normalized.id === undefined) {
+    normalized.id = String(normalized._id);
+  }
+
+  for (const key of Object.keys(normalized)) {
+    if (normalized[key] && typeof normalized[key] === 'object') {
+      normalized[key] = normalizeMongoIds(normalized[key]);
+    }
+  }
+
+  return normalized;
+};
+
+/**
+ * Centralized API request handler using native fetch.
  */
 export const apiClient = async (endpoint, options = {}) => {
   const {
@@ -56,7 +89,7 @@ export const apiClient = async (endpoint, options = {}) => {
     const searchParams = new URLSearchParams();
     for (const [key, val] of Object.entries(params)) {
       if (val !== undefined && val !== null && val !== '') {
-        searchParams.append(key, val);
+        searchParams.append(key, String(val));
       }
     }
     const queryString = searchParams.toString();
@@ -91,14 +124,24 @@ export const apiClient = async (endpoint, options = {}) => {
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
       resData = await response.json();
-    } else {
+    } else if (contentType && (contentType.includes('text/') || contentType.includes('application/xml'))) {
       resData = { message: await response.text() };
+    } else {
+      // Binary / blob responses
+      const blob = await response.blob();
+      if (!response.ok) {
+        throw new Error(`Download failed with status ${response.status}`);
+      }
+      return blob;
     }
 
     if (!response.ok) {
-      const error = new Error(
-        resData?.message || `Request failed with status ${response.status}`
-      );
+      const errorMsg =
+        resData?.message ||
+        (Array.isArray(resData?.errors) && resData.errors.map((e) => e.message || e).join(', ')) ||
+        `Request failed with status ${response.status}`;
+
+      const error = new Error(errorMsg);
       error.status = response.status;
       error.statusCode = response.status;
       error.data = resData;
@@ -113,10 +156,10 @@ export const apiClient = async (endpoint, options = {}) => {
       throw error;
     }
 
-    return resData;
+    return normalizeMongoIds(resData);
   } catch (err) {
-    if (!err.status) {
-      err.message = err.message || 'Network error. Please check backend connection.';
+    if (!err.status && err.status !== 0) {
+      err.message = err.message || 'Network error. Please check your internet or backend connection.';
       err.status = 0;
     }
     throw err;

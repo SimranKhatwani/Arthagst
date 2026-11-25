@@ -77,36 +77,51 @@ export const ProductsPage = () => {
     setModalOpen(true);
   };
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
     if (!form.name.trim() || !form.sku.trim()) {
       notify('Product name and SKU are required', 'error');
       return;
     }
-    const payload = {
-      ...form,
-      id: editing ? editing.id : `prod-${Date.now()}`,
-      purchasePrice: Number(form.purchasePrice) || 0,
-      sellingPrice: Number(form.sellingPrice) || 0,
-      mrp: Number(form.mrp) || 0,
-      gstRate: Number(form.gstRate) || 0,
-      cessRate: Number(form.cessRate) || 0,
-      openingStock: Number(form.openingStock) || 0,
-      stock: editing ? Number(form.stock) : Number(form.openingStock || form.stock) || 0,
-      minStock: Number(form.minStock) || 0,
-    };
-    upsertRecord('products', payload, 'Product', 'name');
-    setModalOpen(false);
+    if (form.mrp && Number(form.mrp) > 0 && Number(form.sellingPrice) > Number(form.mrp)) {
+      notify('Selling price cannot exceed MRP', 'error');
+      return;
+    }
+    try {
+      const payload = {
+        ...form,
+        id: editing ? (editing.id || editing._id) : undefined,
+        _id: editing ? (editing._id || editing.id) : undefined,
+        purchasePrice: Number(form.purchasePrice) || 0,
+        sellingPrice: Number(form.sellingPrice) || 0,
+        mrp: Number(form.mrp) || 0,
+        gstRate: Number(form.gstRate) || 0,
+        cessRate: Number(form.cessRate) || 0,
+        openingStock: Number(form.openingStock) || 0,
+        stock: editing ? Number(form.stock) : Number(form.openingStock || form.stock) || 0,
+        minStock: Number(form.minStock) || 0,
+      };
+      await upsertRecord('products', payload, 'Product', 'name');
+      setModalOpen(false);
+    } catch (err) {
+      notify(err.message || 'Failed to save product', 'error');
+    }
   };
 
   const handleArchive = async (p) => {
     const ok = await confirmAction({
-      title: `Archive ${p.name}?`,
-      message: 'Archived products are hidden from new invoices while preserving historical invoice data.',
-      confirmText: 'Archive Product',
+      title: `Delete Product ${p.name}?`,
+      message: 'Are you sure you want to delete this product from your inventory?',
+      confirmText: 'Delete Product',
       danger: true,
     });
-    if (ok) upsertRecord('products', { ...p, archived: true }, 'Product', 'name');
+    if (ok) {
+      try {
+        await deleteRecord('products', p.id || p._id, 'Product', p.name);
+      } catch (err) {
+        notify(err.message || 'Failed to delete product', 'error');
+      }
+    }
   };
 
   return (
@@ -304,10 +319,19 @@ export const CategoriesPage = () => {
     setModalOpen(true);
   };
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
-    upsertRecord('categories', { ...form, id: form.id || `cat-${Date.now()}` }, 'Category', 'name');
-    setModalOpen(false);
+    try {
+      await upsertRecord(
+        'categories',
+        { ...form, id: form.id || form._id || undefined, _id: form._id || form.id || undefined },
+        'Category',
+        'name'
+      );
+      setModalOpen(false);
+    } catch (err) {
+      notify(err.message || 'Failed to save category', 'error');
+    }
   };
 
   return (
@@ -341,7 +365,11 @@ export const CategoriesPage = () => {
                   type="button"
                   onClick={async () => {
                     if (await confirmAction({ title: `Delete ${r.name}?`, message: 'Remove this category?', confirmText: 'Delete', danger: true })) {
-                      deleteRecord('categories', r.id, 'Category', r.name);
+                      try {
+                        await deleteRecord('categories', r.id || r._id, 'Category', r.name);
+                      } catch (err) {
+                        notify(err.message || 'Failed to delete category', 'error');
+                      }
                     }
                   }}
                   className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
@@ -385,10 +413,19 @@ export const UnitsPage = () => {
     setModalOpen(true);
   };
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
-    upsertRecord('units', { ...form, id: form.id || `unit-${Date.now()}` }, 'Unit', 'name');
-    setModalOpen(false);
+    try {
+      await upsertRecord(
+        'units',
+        { ...form, id: form.id || form._id || undefined, _id: form._id || form.id || undefined },
+        'Unit',
+        'name'
+      );
+      setModalOpen(false);
+    } catch (err) {
+      notify(err.message || 'Failed to save unit', 'error');
+    }
   };
 
   return (
@@ -415,7 +452,11 @@ export const UnitsPage = () => {
                   type="button"
                   onClick={async () => {
                     if (await confirmAction({ title: `Delete ${r.name}?`, message: 'Remove this measurement unit?', confirmText: 'Delete', danger: true })) {
-                      deleteRecord('units', r.id, 'Unit', r.name);
+                      try {
+                        await deleteRecord('units', r.id || r._id, 'Unit', r.name);
+                      } catch (err) {
+                        notify(err.message || 'Failed to delete unit', 'error');
+                      }
                     }
                   }}
                   className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
@@ -752,14 +793,33 @@ export const StockTransfersPage = () => {
 };
 
 export const WarehousesPage = () => {
-  const { state, upsertRecord } = useApp();
+  const { state, upsertRecord, deleteRecord, confirmAction, notify } = useApp();
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState({ id: '', name: '', code: '', city: 'Jaipur', state: 'Rajasthan', manager: '', capacity: '' });
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
-    upsertRecord('warehouses', { ...form, id: form.id || `wh-${Date.now()}` }, 'Warehouse', 'name');
-    setModalOpen(false);
+    if (!form.name.trim() || !form.code.trim()) {
+      notify('Warehouse name and code are required', 'error');
+      return;
+    }
+    try {
+      await upsertRecord(
+        'warehouses',
+        {
+          ...form,
+          id: form.id || form._id || undefined,
+          _id: form._id || form.id || undefined,
+          warehouseName: form.name,
+          warehouseCode: form.code,
+        },
+        'Warehouse',
+        'name'
+      );
+      setModalOpen(false);
+    } catch (err) {
+      notify(err.message || 'Failed to save warehouse', 'error');
+    }
   };
 
   return (
@@ -787,9 +847,27 @@ export const WarehousesPage = () => {
                   <h3 className="font-display text-base font-semibold text-slate-900">{w.name}</h3>
                   <p className="text-xs text-slate-500">{w.city}, {w.state}</p>
                 </div>
-                <button type="button" onClick={() => { setForm(w); setModalOpen(true); }} className="rounded p-1 text-slate-400 hover:bg-slate-100">
-                  <Edit3 className="h-3.5 w-3.5" />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button type="button" onClick={() => { setForm(w); setModalOpen(true); }} className="rounded p-1 text-slate-400 hover:bg-slate-100" title="Edit Warehouse">
+                    <Edit3 className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (await confirmAction({ title: `Delete ${w.name || w.warehouseName}?`, message: 'Remove this warehouse from your organization?', confirmText: 'Delete', danger: true })) {
+                        try {
+                          await deleteRecord('warehouses', w.id || w._id, 'Warehouse', w.name || w.warehouseName);
+                        } catch (err) {
+                          notify(err.message || 'Failed to delete warehouse', 'error');
+                        }
+                      }
+                    }}
+                    className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                    title="Delete Warehouse"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-3 text-xs">
                 <div>

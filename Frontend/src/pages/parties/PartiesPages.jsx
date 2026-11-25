@@ -84,26 +84,34 @@ export const CustomersPage = () => {
     setModalOpen(true);
   };
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
-    if (!form.name.trim() || !form.mobile.trim()) {
+    if (!form.name.trim() || !(form.mobile || form.phone)?.trim()) {
       notify('Customer name and mobile number are required', 'error');
       return;
     }
-    upsertRecord(
-      'customers',
-      {
-        ...form,
-        id: editing ? editing.id : `cust-${Date.now()}`,
-        businessName: form.businessName || form.name,
-        shippingAddress: form.shippingAddress || form.billingAddress,
-        openingBalance: Number(form.openingBalance) || 0,
-        creditLimit: Number(form.creditLimit) || 0,
-      },
-      'Customer',
-      'name'
-    );
-    setModalOpen(false);
+    try {
+      await upsertRecord(
+        'customers',
+        {
+          ...form,
+          id: editing ? (editing.id || editing._id) : undefined,
+          _id: editing ? (editing._id || editing.id) : undefined,
+          partyType: 'customer',
+          phone: form.mobile || form.phone,
+          GSTIN: form.gstin || form.GSTIN || null,
+          businessName: form.businessName || form.name,
+          shippingAddress: form.shippingAddress || form.billingAddress,
+          openingBalance: Number(form.openingBalance) || 0,
+          creditLimit: Number(form.creditLimit) || 0,
+        },
+        'Customer',
+        'name'
+      );
+      setModalOpen(false);
+    } catch (err) {
+      notify(err.message || 'Failed to save customer', 'error');
+    }
   };
 
   const handleDelete = async (c) => {
@@ -113,7 +121,13 @@ export const CustomersPage = () => {
       confirmText: 'Delete Customer',
       danger: true,
     });
-    if (ok) deleteRecord('customers', c.id, 'Customer', c.name);
+    if (ok) {
+      try {
+        await deleteRecord('customers', c.id || c._id, 'Customer', c.name);
+      } catch (err) {
+        notify(err.message || 'Failed to delete customer', 'error');
+      }
+    }
   };
 
   return (
@@ -251,7 +265,7 @@ export const CustomerDetailPage = () => {
   const navigate = useNavigate();
   const [detailTab, setDetailTab] = useState('ledger');
 
-  const customer = state.customers.find((c) => c.id === id) || (id === 'first' ? state.customers[0] : null);
+  const customer = state.customers.find((c) => c.id === id || c._id === id) || (id === 'first' ? state.customers[0] : null);
   if (!customer) {
     return (
       <div className="rounded-lg border border-slate-200 bg-white p-8 text-center">
@@ -415,19 +429,33 @@ export const SuppliersPage = () => {
       });
   }, [state.suppliers, state.purchases, state.purchaseReturns]);
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
-    if (!form.name.trim() || !form.mobile.trim()) {
+    if (!form.name.trim() || !(form.mobile || form.phone)?.trim()) {
       notify('Supplier name and mobile are required', 'error');
       return;
     }
-    upsertRecord(
-      'suppliers',
-      { ...form, id: editing ? editing.id : `sup-${Date.now()}`, openingBalance: Number(form.openingBalance) || 0 },
-      'Supplier',
-      'name'
-    );
-    setModalOpen(false);
+    try {
+      await upsertRecord(
+        'suppliers',
+        {
+          ...form,
+          id: editing ? (editing.id || editing._id) : undefined,
+          _id: editing ? (editing._id || editing.id) : undefined,
+          partyType: 'supplier',
+          phone: form.mobile || form.phone,
+          GSTIN: form.gstin || form.GSTIN || null,
+          PAN: form.pan || form.PAN || null,
+          billingAddress: form.address || form.billingAddress || '',
+          openingBalance: Number(form.openingBalance) || 0,
+        },
+        'Supplier',
+        'name'
+      );
+      setModalOpen(false);
+    } catch (err) {
+      notify(err.message || 'Failed to save supplier', 'error');
+    }
   };
 
   return (
@@ -480,8 +508,12 @@ export const SuppliersPage = () => {
                 <button
                   type="button"
                   onClick={async () => {
-                    if (await confirmAction({ title: `Archive ${r.name}?`, message: 'Archive this supplier from active lists?', confirmText: 'Archive', danger: true })) {
-                      upsertRecord('suppliers', { ...r, status: 'Archived' }, 'Supplier', 'name');
+                    if (await confirmAction({ title: `Delete ${r.name}?`, message: 'Remove this supplier from active directory?', confirmText: 'Delete', danger: true })) {
+                      try {
+                        await deleteRecord('suppliers', r.id || r._id, 'Supplier', r.name);
+                      } catch (err) {
+                        notify(err.message || 'Failed to delete supplier', 'error');
+                      }
                     }
                   }}
                   className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
@@ -532,7 +564,7 @@ export const SupplierDetailPage = () => {
   const navigate = useNavigate();
   const [detailTab, setDetailTab] = useState('ledger');
 
-  const supplier = state.suppliers.find((s) => s.id === id) || (id === 'first' ? state.suppliers[0] : null);
+  const supplier = state.suppliers.find((s) => s.id === id || s._id === id) || (id === 'first' ? state.suppliers[0] : null);
   if (!supplier) {
     return (
       <div className="rounded-lg border border-slate-200 bg-white p-8 text-center">

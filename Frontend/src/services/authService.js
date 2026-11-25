@@ -2,7 +2,7 @@ import api from './api.js';
 
 /**
  * Authentication API Service
- * Interacts with actual backend /api/auth endpoints
+ * Interacts with actual backend /api/auth and /api/super-admin endpoints
  */
 
 export const login = async ({ tenantCode, email, password }) => {
@@ -18,7 +18,8 @@ export const login = async ({ tenantCode, email, password }) => {
 };
 
 export const superAdminLogin = async ({ email, password }) => {
-  const res = await api.post('/super-admin/auth/login', {
+  // Correct backend route is POST /api/super-admin/login
+  const res = await api.post('/super-admin/login', {
     email: email.trim().toLowerCase(),
     password,
   });

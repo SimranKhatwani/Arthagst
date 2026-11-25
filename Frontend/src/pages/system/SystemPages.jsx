@@ -302,9 +302,13 @@ export const SettingsPage = ({ defaultTab = 'business-tax' }) => {
     { id: 'subscription', label: 'Subscription' },
   ];
 
-  const handleSaveAll = (e) => {
+  const handleSaveAll = async (e) => {
     e.preventDefault();
-    updateBusinessAndSettings(biz, cfg);
+    try {
+      await updateBusinessAndSettings(biz, cfg);
+    } catch (err) {
+      notify(err.message || 'Failed to save settings', 'error');
+    }
   };
 
   return (
@@ -349,8 +353,8 @@ export const SettingsPage = ({ defaultTab = 'business-tax' }) => {
                 Tax &amp; GST Configuration
               </h3>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <InputField label="GSTIN (Demo)"><input type="text" value={biz.gstin} onChange={(e) => setBiz({ ...biz, gstin: e.target.value })} className={`${inputClass} font-mono`} /></InputField>
-                <InputField label="PAN (Demo)"><input type="text" value={biz.pan} onChange={(e) => setBiz({ ...biz, pan: e.target.value })} className={`${inputClass} font-mono`} /></InputField>
+                <InputField label="GSTIN"><input type="text" value={biz.gstin} onChange={(e) => setBiz({ ...biz, gstin: e.target.value })} className={`${inputClass} font-mono`} /></InputField>
+                <InputField label="PAN"><input type="text" value={biz.pan} onChange={(e) => setBiz({ ...biz, pan: e.target.value })} className={`${inputClass} font-mono`} /></InputField>
                 <InputField label="E-Way Bill Threshold (₹)"><input type="number" value={cfg.gst.eWayBillThreshold} onChange={(e) => setCfg({ ...cfg, gst: { ...cfg.gst, eWayBillThreshold: Number(e.target.value) } })} className={inputClass} /></InputField>
                 <div className="space-y-2 pt-4 text-xs">
                   <label className="flex items-center gap-2"><input type="checkbox" checked={cfg.gst.priceInclusiveDefault} onChange={(e) => setCfg({ ...cfg, gst: { ...cfg.gst, priceInclusiveDefault: e.target.checked } })} /> Default rates are GST-inclusive</label>

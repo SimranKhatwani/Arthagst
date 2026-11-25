@@ -12,6 +12,12 @@ import { computePaymentStatus, generateNextDocNumber } from '../services/invoice
 import { round2 } from '../services/calculationService';
 import * as authService from '../services/authService';
 import { getToken, setToken, removeToken } from '../services/api';
+import * as partyService from '../services/partyService';
+import * as categoryService from '../services/categoryService';
+import * as unitService from '../services/unitService';
+import * as productService from '../services/productService';
+import * as warehouseService from '../services/warehouseService';
+import * as tenantService from '../services/tenantService';
 
 const AppContext = createContext(null);
 
@@ -24,6 +30,7 @@ export const useApp = () => {
 export const AppProvider = ({ children }) => {
   const [state, setState] = useState(() => loadAppState());
   const [authLoading, setAuthLoading] = useState(Boolean(getToken()));
+  const [phase1Loading, setPhase1Loading] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [confirmState, setConfirmState] = useState(null);
   const [selectedFY, setSelectedFY] = useState(state.business?.financialYear || '2026-27');
@@ -31,6 +38,105 @@ export const AppProvider = ({ children }) => {
   useEffect(() => {
     saveAppState(state);
   }, [state]);
+
+  const loadPhase1Data = useCallback(async () => {
+    const token = getToken();
+    if (!token) return;
+
+    setPhase1Loading(true);
+    try {
+      const [partiesRes, categoriesRes, unitsRes, productsRes, warehousesRes, profileRes] =
+        await Promise.allSettled([
+          partyService.getParties({ limit: 100 }),
+          categoryService.getCategories({ limit: 100 }),
+          unitService.getUnits({ limit: 100 }),
+          productService.getProducts({ limit: 100 }),
+          warehouseService.getWarehouses({ limit: 100 }),
+          tenantService.getTenantProfile(),
+        ]);
+
+      setState((prev) => {
+        const next = { ...prev };
+
+        let fetchedCategories = next.categories || [];
+        if (categoriesRes.status === 'fulfilled' && categoriesRes.value) {
+          fetchedCategories = categoriesRes.value.categories || categoriesRes.value.data?.categories || [];
+          next.categories = fetchedCategories;
+        }
+
+        let fetchedUnits = next.units || [];
+        if (unitsRes.status === 'fulfilled' && unitsRes.value) {
+          fetchedUnits = unitsRes.value.units || unitsRes.value.data?.units || [];
+          next.units = fetchedUnits;
+        }
+
+        let fetchedWarehouses = next.warehouses || [];
+        if (warehousesRes.status === 'fulfilled' && warehousesRes.value) {
+          const rawWh = warehousesRes.value.warehouses || warehousesRes.value.data?.warehouses || [];
+          fetchedWarehouses = rawWh.map((w) => ({
+            ...w,
+            name: w.warehouseName || w.name,
+            code: w.warehouseCode || w.code,
+          }));
+          next.warehouses = fetchedWarehouses;
+        }
+
+        if (partiesRes.status === 'fulfilled' && partiesRes.value) {
+          const rawParties = partiesRes.value.parties || partiesRes.value.data?.parties || [];
+          next.customers = rawParties.filter((p) => p.partyType === 'customer' || p.partyType === 'both');
+          next.suppliers = rawParties.filter((p) => p.partyType === 'supplier' || p.partyType === 'both');
+        }
+
+        if (productsRes.status === 'fulfilled' && productsRes.value) {
+          const rawProducts = productsRes.value.products || productsRes.value.data?.products || [];
+          next.products = rawProducts.map((p) => {
+            const cat = fetchedCategories.find(
+              (c) => String(c.id || c._id) === String(p.categoryId?._id || p.categoryId)
+            );
+            const un = fetchedUnits.find(
+              (u) => String(u.id || u._id) === String(p.unitId?._id || p.unitId)
+            );
+            return {
+              ...p,
+              category: cat?.name || p.categoryId?.name || p.category || 'General',
+              unit: un?.shortName || p.unitId?.shortName || p.unit || 'PCS',
+              sku: p.SKU || p.sku,
+              hsn: p.HSN || p.hsn,
+              minStock: p.lowStockAlert !== undefined ? p.lowStockAlert : p.minStock,
+              stock: p.openingStock !== undefined ? p.openingStock : (p.stock || 0),
+            };
+          });
+        }
+
+        if (profileRes.status === 'fulfilled' && profileRes.value) {
+          const t = profileRes.value.tenant || profileRes.value;
+          if (t) {
+            next.currentTenant = { ...next.currentTenant, ...t };
+            next.business = {
+              ...next.business,
+              ...t,
+              businessName: t.businessName || next.business?.businessName,
+              legalName: t.legalName || t.businessName || next.business?.legalName,
+              email: t.email || next.business?.email,
+              phone: t.phone || next.business?.phone,
+              address: t.businessAddress || t.address || next.business?.address,
+              city: t.city || next.business?.city,
+              state: t.state || next.business?.state,
+              pincode: t.pincode || next.business?.pincode,
+              gstin: t.GSTIN || t.gstin || next.business?.gstin,
+              pan: t.PAN || t.pan || next.business?.pan,
+            };
+          }
+        }
+
+        return next;
+      });
+    } catch (err) {
+      console.warn('Phase 1 data load failed:', err);
+    } finally {
+      setPhase1Loading(false);
+    }
+  }, []);
 
   // Initial authentication verification from backend /api/auth/me
   useEffect(() => {
@@ -69,6 +175,7 @@ export const AppProvider = ({ children }) => {
               subscriptionStatus: tenant.subscriptionStatus || 'active',
             },
           }));
+          loadPhase1Data();
         }
       })
       .catch((err) => {
@@ -202,13 +309,15 @@ export const AppProvider = ({ children }) => {
         }));
         setAuthLoading(false);
         notify(`Welcome back, ${data.user?.name || 'Administrator'}!`);
+        // Immediately fetch live tenant Phase 1 master data from MongoDB
+        loadPhase1Data();
         return data;
       } catch (err) {
         setAuthLoading(false);
         throw err;
       }
     },
-    [notify]
+    [loadPhase1Data, notify]
   );
 
   const register = useCallback(
@@ -235,13 +344,14 @@ export const AppProvider = ({ children }) => {
         }));
         setAuthLoading(false);
         notify(`Business account created for ${data.tenant.businessName}!`);
+        loadPhase1Data();
         return data;
       } catch (err) {
         setAuthLoading(false);
         throw err;
       }
     },
-    [notify]
+    [loadPhase1Data, notify]
   );
 
   const logout = useCallback(async () => {
@@ -251,11 +361,22 @@ export const AppProvider = ({ children }) => {
       // Non-blocking logout call
     }
     removeToken();
+    try {
+      localStorage.removeItem('arthagst_prototype_state_v1');
+    } catch {
+      // Ignore
+    }
     setState((prev) => ({
       ...prev,
       isAuthenticated: false,
       currentUser: null,
       currentTenant: null,
+      customers: [],
+      suppliers: [],
+      categories: [],
+      units: [],
+      products: [],
+      warehouses: [],
     }));
     notify('Signed out successfully');
   }, [notify]);
@@ -276,6 +397,7 @@ export const AppProvider = ({ children }) => {
             tenantCode: data.tenant.tenantCode,
           },
         }));
+        loadPhase1Data();
       }
       return data;
     } catch (err) {
@@ -285,10 +407,16 @@ export const AppProvider = ({ children }) => {
         isAuthenticated: false,
         currentUser: null,
         currentTenant: null,
+        customers: [],
+        suppliers: [],
+        categories: [],
+        units: [],
+        products: [],
+        warehouses: [],
       }));
       throw err;
     }
-  }, []);
+  }, [loadPhase1Data]);
 
   const completeOnboarding = useCallback((bizPayload) => {
     setState((prev) => ({
@@ -319,46 +447,305 @@ export const AppProvider = ({ children }) => {
     notify('Demo dataset restored to initial state');
   }, [notify]);
 
-  // Generic Master CRUD (Customers, Suppliers, Products, Categories, Units, Warehouses, Users, Expenses)
-  const upsertRecord = useCallback((collectionKey, record, auditModule, labelField = 'name') => {
-    let isNew = false;
-    updateStateWithAudit(
-      (prev) => {
-        const list = prev[collectionKey] || [];
-        const exists = list.some((item) => item.id === record.id);
-        isNew = !exists;
-        const nextList = exists
-          ? list.map((item) => (item.id === record.id ? record : item))
-          : [record, ...list];
-        return { ...prev, [collectionKey]: nextList };
-      },
-      {
-        action: record.id && state[collectionKey]?.some((i) => i.id === record.id) ? `Updated ${auditModule}` : `Created ${auditModule}`,
-        module: auditModule,
-        recordRef: record[labelField] || record.id,
-        prevValue: isNew ? '—' : 'Existing record',
-        newValue: record[labelField] || record.id,
-      }
-    );
-    notify(`${auditModule} saved successfully`);
-  }, [notify, state, updateStateWithAudit]);
+  // Master CRUD (Customers, Suppliers, Products, Categories, Units, Warehouses, Users, Expenses)
+  // Seamlessly delegates Phase 1 master data to real backend APIs when authenticated
+  const upsertRecord = useCallback(
+    async (collectionKey, record, auditModule, labelField = 'name') => {
+      const isAuth = Boolean(getToken());
 
-  const deleteRecord = useCallback((collectionKey, id, auditModule, label) => {
-    updateStateWithAudit(
-      (prev) => ({
-        ...prev,
-        [collectionKey]: (prev[collectionKey] || []).filter((item) => item.id !== id),
-      }),
-      {
-        action: `Deleted ${auditModule}`,
-        module: auditModule,
-        recordRef: label || id,
-        prevValue: label || id,
-        newValue: 'Removed',
+      if (isAuth) {
+        if (collectionKey === 'customers') {
+          const isEdit = Boolean(record._id || (record.id && record.id.length === 24));
+          const id = record._id || record.id;
+          const payload = {
+            partyType: 'customer',
+            name: record.name,
+            businessName: record.businessName || record.name,
+            phone: record.phone || record.mobile || '',
+            email: record.email || null,
+            GSTIN: record.GSTIN || record.gstin || null,
+            PAN: record.PAN || record.pan || null,
+            billingAddress: record.billingAddress || record.address || '',
+            shippingAddress: record.shippingAddress || record.billingAddress || record.address || '',
+            state: record.state || 'Rajasthan',
+            openingBalance: Number(record.openingBalance) || 0,
+            creditLimit: Number(record.creditLimit) || 0,
+            paymentTerms: record.paymentTerms || 'Net 15',
+            isActive: record.isActive !== false && record.status !== 'Inactive',
+          };
+          const saved = isEdit
+            ? await partyService.updateParty(id, payload)
+            : await partyService.createParty(payload);
+
+          setState((prev) => {
+            const list = prev.customers || [];
+            const exists = list.some((c) => (c._id || c.id) === (saved._id || saved.id));
+            const nextList = exists
+              ? list.map((c) => ((c._id || c.id) === (saved._id || saved.id) ? { ...c, ...saved } : c))
+              : [saved, ...list];
+            return { ...prev, customers: nextList };
+          });
+          notify(`${auditModule} saved successfully`);
+          return saved;
+        }
+
+        if (collectionKey === 'suppliers') {
+          const isEdit = Boolean(record._id || (record.id && record.id.length === 24));
+          const id = record._id || record.id;
+          const payload = {
+            partyType: 'supplier',
+            name: record.name,
+            businessName: record.businessName || record.name,
+            phone: record.phone || record.mobile || '',
+            email: record.email || null,
+            GSTIN: record.GSTIN || record.gstin || null,
+            PAN: record.PAN || record.pan || null,
+            billingAddress: record.billingAddress || record.address || '',
+            shippingAddress: record.shippingAddress || record.billingAddress || record.address || '',
+            state: record.state || 'Rajasthan',
+            openingBalance: Number(record.openingBalance) || 0,
+            balanceType: 'payable',
+            isActive: record.isActive !== false && record.status !== 'Inactive' && record.status !== 'Archived',
+          };
+          const saved = isEdit
+            ? await partyService.updateParty(id, payload)
+            : await partyService.createParty(payload);
+
+          setState((prev) => {
+            const list = prev.suppliers || [];
+            const exists = list.some((s) => (s._id || s.id) === (saved._id || saved.id));
+            const nextList = exists
+              ? list.map((s) => ((s._id || s.id) === (saved._id || saved.id) ? { ...s, ...saved } : s))
+              : [saved, ...list];
+            return { ...prev, suppliers: nextList };
+          });
+          notify(`${auditModule} saved successfully`);
+          return saved;
+        }
+
+        if (collectionKey === 'categories') {
+          const isEdit = Boolean(record._id || (record.id && record.id.length === 24));
+          const id = record._id || record.id;
+          const payload = {
+            name: record.name,
+            description: record.description || '',
+            parentCategory: record.parentCategory || null,
+            isActive: record.isActive !== false,
+          };
+          const saved = isEdit
+            ? await categoryService.updateCategory(id, payload)
+            : await categoryService.createCategory(payload);
+
+          setState((prev) => {
+            const list = prev.categories || [];
+            const exists = list.some((c) => (c._id || c.id) === (saved._id || saved.id));
+            const nextList = exists
+              ? list.map((c) => ((c._id || c.id) === (saved._id || saved.id) ? { ...c, ...saved } : c))
+              : [saved, ...list];
+            return { ...prev, categories: nextList };
+          });
+          notify(`${auditModule} saved successfully`);
+          return saved;
+        }
+
+        if (collectionKey === 'units') {
+          const isEdit = Boolean(record._id || (record.id && record.id.length === 24));
+          const id = record._id || record.id;
+          const payload = {
+            name: record.name,
+            shortName: record.shortName || record.code || '',
+            unitType: record.unitType || 'quantity',
+            gstUqcCode: record.gstUqcCode || record.uqc || 'PCS-PIECES',
+            allowDecimal: record.allowDecimal !== false,
+            isActive: record.isActive !== false,
+          };
+          const saved = isEdit
+            ? await unitService.updateUnit(id, payload)
+            : await unitService.createUnit(payload);
+
+          setState((prev) => {
+            const list = prev.units || [];
+            const exists = list.some((u) => (u._id || u.id) === (saved._id || saved.id));
+            const nextList = exists
+              ? list.map((u) => ((u._id || u.id) === (saved._id || saved.id) ? { ...u, ...saved } : u))
+              : [saved, ...list];
+            return { ...prev, units: nextList };
+          });
+          notify(`${auditModule} saved successfully`);
+          return saved;
+        }
+
+        if (collectionKey === 'products') {
+          const isEdit = Boolean(record._id || (record.id && record.id.length === 24));
+          const id = record._id || record.id;
+
+          const unitObj = (state.units || []).find(
+            (u) =>
+              String(u.id || u._id) === String(record.unitId) ||
+              u.shortName === record.unit ||
+              u.name === record.unit
+          );
+          const catObj = (state.categories || []).find(
+            (c) =>
+              String(c.id || c._id) === String(record.categoryId) ||
+              c.name === record.category
+          );
+
+          if (!unitObj?._id && !unitObj?.id && !record.unitId) {
+            throw new Error('Please create at least one Measurement Unit before adding products');
+          }
+
+          const payload = {
+            name: record.name,
+            productType: record.productType || 'goods',
+            categoryId: catObj ? (catObj._id || catObj.id) : record.categoryId || null,
+            unitId: unitObj ? (unitObj._id || unitObj.id) : record.unitId,
+            SKU: (record.SKU || record.sku || '').toUpperCase(),
+            barcode: record.barcode || null,
+            description: record.description || '',
+            HSN: record.HSN || record.hsn || null,
+            SAC: record.SAC || record.sac || null,
+            gstRate: Number(record.gstRate) || 0,
+            cessRate: Number(record.cessRate) || 0,
+            purchasePrice: Number(record.purchasePrice) || 0,
+            sellingPrice: Number(record.sellingPrice) || 0,
+            mrp: Number(record.mrp) || 0,
+            openingStock: Number(record.openingStock) || 0,
+            lowStockAlert: Number(record.minStock || record.lowStockAlert) || 0,
+            trackInventory: record.trackInventory !== false,
+            isActive: record.isActive !== false && !record.archived,
+          };
+
+          const saved = isEdit
+            ? await productService.updateProduct(id, payload)
+            : await productService.createProduct(payload);
+
+          const enriched = {
+            ...saved,
+            category: catObj?.name || record.category || 'General',
+            unit: unitObj?.shortName || record.unit || 'PCS',
+            sku: saved.SKU || record.sku,
+            hsn: saved.HSN || record.hsn,
+            stock: saved.openingStock !== undefined ? saved.openingStock : (record.stock || 0),
+            minStock: saved.lowStockAlert !== undefined ? saved.lowStockAlert : (record.minStock || 0),
+          };
+
+          setState((prev) => {
+            const list = prev.products || [];
+            const exists = list.some((p) => (p._id || p.id) === (enriched._id || enriched.id));
+            const nextList = exists
+              ? list.map((p) => ((p._id || p.id) === (enriched._id || enriched.id) ? { ...p, ...enriched } : p))
+              : [enriched, ...list];
+            return { ...prev, products: nextList };
+          });
+          notify(`${auditModule} saved successfully`);
+          return enriched;
+        }
+
+        if (collectionKey === 'warehouses') {
+          const isEdit = Boolean(record._id || (record.id && record.id.length === 24));
+          const id = record._id || record.id;
+          const payload = {
+            warehouseName: record.warehouseName || record.name,
+            warehouseCode: (record.warehouseCode || record.code || '').toUpperCase(),
+            address: record.address || '',
+            city: record.city || '',
+            state: record.state || '',
+            pincode: record.pincode || '',
+            isDefault: Boolean(record.isDefault),
+            isActive: record.isActive !== false,
+          };
+          const saved = isEdit
+            ? await warehouseService.updateWarehouse(id, payload)
+            : await warehouseService.createWarehouse(payload);
+
+          const enriched = {
+            ...saved,
+            name: saved.warehouseName || record.name,
+            code: saved.warehouseCode || record.code,
+          };
+
+          setState((prev) => {
+            const list = prev.warehouses || [];
+            const exists = list.some((w) => (w._id || w.id) === (enriched._id || enriched.id));
+            const nextList = exists
+              ? list.map((w) => ((w._id || w.id) === (enriched._id || enriched.id) ? { ...w, ...enriched } : w))
+              : [enriched, ...list];
+            return { ...prev, warehouses: nextList };
+          });
+          notify(`${auditModule} saved successfully`);
+          return enriched;
+        }
       }
-    );
-    notify(`${auditModule} removed`);
-  }, [notify, updateStateWithAudit]);
+
+      // In-memory / Prototype state for other non-Phase-1 modules
+      let isNew = false;
+      updateStateWithAudit(
+        (prev) => {
+          const list = prev[collectionKey] || [];
+          const exists = list.some((item) => item.id === record.id);
+          isNew = !exists;
+          const nextList = exists
+            ? list.map((item) => (item.id === record.id ? record : item))
+            : [record, ...list];
+          return { ...prev, [collectionKey]: nextList };
+        },
+        {
+          action: record.id && state[collectionKey]?.some((i) => i.id === record.id) ? `Updated ${auditModule}` : `Created ${auditModule}`,
+          module: auditModule,
+          recordRef: record[labelField] || record.id,
+          prevValue: isNew ? '—' : 'Existing record',
+          newValue: record[labelField] || record.id,
+        }
+      );
+      notify(`${auditModule} saved successfully`);
+      return record;
+    },
+    [notify, state, updateStateWithAudit]
+  );
+
+  const deleteRecord = useCallback(
+    async (collectionKey, id, auditModule, label) => {
+      const isAuth = Boolean(getToken());
+
+      if (isAuth) {
+        try {
+          if (collectionKey === 'customers' || collectionKey === 'suppliers') {
+            await partyService.deleteParty(id);
+          } else if (collectionKey === 'categories') {
+            await categoryService.deleteCategory(id);
+          } else if (collectionKey === 'units') {
+            await unitService.deleteUnit(id);
+          } else if (collectionKey === 'products') {
+            await productService.deleteProduct(id);
+          } else if (collectionKey === 'warehouses') {
+            await warehouseService.deleteWarehouse(id);
+          }
+        } catch (err) {
+          notify(err.message || `Failed to remove ${auditModule}`, 'error');
+          throw err;
+        }
+      }
+
+      updateStateWithAudit(
+        (prev) => ({
+          ...prev,
+          [collectionKey]: (prev[collectionKey] || []).filter(
+            (item) => item.id !== id && item._id !== id
+          ),
+        }),
+        {
+          action: `Deleted ${auditModule}`,
+          module: auditModule,
+          recordRef: label || id,
+          prevValue: label || id,
+          newValue: 'Removed',
+        }
+      );
+      notify(`${auditModule} removed`);
+    },
+    [notify, updateStateWithAudit]
+  );
 
   // Save or Finalize Sales Invoice
   const saveSalesInvoice = useCallback((invoicePayload, paymentDetails = null) => {
@@ -977,23 +1364,58 @@ export const AppProvider = ({ children }) => {
     return record;
   }, [notify, updateStateWithAudit]);
 
-  const updateBusinessAndSettings = useCallback((businessPatch, settingsPatch) => {
-    updateStateWithAudit(
-      (prev) => ({
-        ...prev,
-        business: businessPatch ? { ...prev.business, ...businessPatch } : prev.business,
-        settings: settingsPatch ? { ...prev.settings, ...settingsPatch } : prev.settings,
-      }),
-      {
-        action: 'Updated Settings',
-        module: 'Settings',
-        recordRef: 'Workspace Config',
-        prevValue: 'Previous preferences',
-        newValue: 'Saved changes',
+  const updateBusinessAndSettings = useCallback(
+    async (businessPatch, settingsPatch) => {
+      const isAuth = Boolean(getToken());
+
+      if (isAuth && businessPatch) {
+        try {
+          const tenantPayload = {
+            businessName: businessPatch.businessName,
+            businessType: businessPatch.businessType,
+            ownerName: businessPatch.ownerName,
+            email: businessPatch.email,
+            phone: businessPatch.phone,
+            GSTIN: businessPatch.GSTIN || businessPatch.gstin || null,
+            PAN: businessPatch.PAN || businessPatch.pan || null,
+            businessAddress: businessPatch.businessAddress || businessPatch.address || '',
+            city: businessPatch.city || '',
+            state: businessPatch.state || '',
+            pincode: businessPatch.pincode || '',
+          };
+          const updatedTenant = await tenantService.updateTenantProfile(tenantPayload);
+          setState((prev) => ({
+            ...prev,
+            currentTenant: { ...prev.currentTenant, ...updatedTenant },
+            business: {
+              ...prev.business,
+              ...updatedTenant,
+              businessName: updatedTenant.businessName || prev.business?.businessName,
+            },
+          }));
+        } catch (err) {
+          notify(err.message || 'Failed to update organization profile on server', 'error');
+        }
       }
-    );
-    notify('Settings saved to local workspace');
-  }, [notify, updateStateWithAudit]);
+
+      updateStateWithAudit(
+        (prev) => ({
+          ...prev,
+          business: businessPatch ? { ...prev.business, ...businessPatch } : prev.business,
+          settings: settingsPatch ? { ...prev.settings, ...settingsPatch } : prev.settings,
+        }),
+        {
+          action: 'Updated Settings',
+          module: 'Settings',
+          recordRef: 'Workspace Config',
+          prevValue: 'Previous preferences',
+          newValue: 'Saved changes',
+        }
+      );
+      notify('Settings saved successfully');
+    },
+    [notify, updateStateWithAudit]
+  );
 
   const updateSuperAdmin = useCallback((updater, msg = 'Platform record updated') => {
     setState((prev) => ({
@@ -1014,6 +1436,9 @@ export const AppProvider = ({ children }) => {
     confirmState,
     confirmAction,
     authLoading,
+    phase1Loading,
+    loadPhase1Data,
+    refreshPhase1Data: loadPhase1Data,
     login,
     register,
     loginUser: login,
