@@ -881,6 +881,179 @@ export const convertQuotationToInvoice = async (tenantId, userId, quotationId) =
   return invoice;
 };
 
+export const getQuotations = async (tenantId, options = {}) => {
+  const {
+    page = 1,
+    limit = 10,
+    search,
+    partyId,
+    warehouseId,
+    status,
+    startDate,
+    endDate,
+    sortBy = 'createdAt',
+    sortOrder = 'desc',
+  } = options;
+
+  const query = { tenantId };
+
+  if (partyId && mongoose.isValidObjectId(partyId)) {
+    query.partyId = partyId;
+  }
+  if (warehouseId && mongoose.isValidObjectId(warehouseId)) {
+    query.warehouseId = warehouseId;
+  }
+  if (status) {
+    query.status = status;
+  }
+  if (startDate || endDate) {
+    query.quotationDate = {};
+    if (startDate) query.quotationDate.$gte = new Date(startDate);
+    if (endDate) query.quotationDate.$lte = new Date(endDate);
+  }
+  if (search && search.trim()) {
+    const searchRegex = new RegExp(search.trim(), 'i');
+    query.$or = [
+      { quotationNumber: searchRegex },
+      { partyName: searchRegex },
+      { 'items.productName': searchRegex },
+    ];
+  }
+
+  const skip = (page - 1) * limit;
+  const sortDirection = sortOrder === 'desc' ? -1 : 1;
+  const sortOptions = { [sortBy]: sortDirection };
+
+  const [quotations, total] = await Promise.all([
+    Quotation.find(query).sort(sortOptions).skip(skip).limit(limit),
+    Quotation.countDocuments(query),
+  ]);
+
+  return {
+    quotations,
+    pagination: {
+      total,
+      page,
+      limit,
+      pages: Math.ceil(total / limit) || 1,
+    },
+  };
+};
+
+export const getQuotationById = async (tenantId, id) => {
+  if (!mongoose.isValidObjectId(id)) {
+    const error = new Error('Invalid quotation ID format');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const quotation = await Quotation.findOne({ _id: id, tenantId });
+  if (!quotation) {
+    const error = new Error('Quotation not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  return quotation;
+};
+
+export const updateQuotation = async (tenantId, id, data) => {
+  if (!mongoose.isValidObjectId(id)) {
+    const error = new Error('Invalid quotation ID format');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const quotation = await Quotation.findOne({ _id: id, tenantId });
+  if (!quotation) {
+    const error = new Error('Quotation not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  if (quotation.status === 'converted_to_order' || quotation.status === 'converted_to_invoice') {
+    const error = new Error('Cannot update an already converted quotation');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (data.items || data.partyId || data.warehouseId || data.placeOfSupply) {
+    const partyId = data.partyId || quotation.partyId;
+    const warehouseId = data.warehouseId || quotation.warehouseId;
+    const items = data.items || quotation.items.map((it) => ({
+      productId: it.productId,
+      quantity: it.quantity,
+      unitPrice: it.unitPrice,
+      discount: it.discount,
+      description: it.description,
+    }));
+    const placeOfSupply = data.placeOfSupply || quotation.placeOfSupply;
+
+    const { party, warehouse, calculation, resolvedPOS } = await validateSalesContext(tenantId, {
+      partyId,
+      warehouseId,
+      items,
+      placeOfSupply,
+    });
+
+    quotation.partyId = party._id;
+    quotation.partyName = party.name;
+    quotation.partyGSTIN = party.GSTIN || null;
+    quotation.partyPAN = party.PAN || null;
+    quotation.warehouseId = warehouse._id;
+    quotation.warehouseName = warehouse.warehouseName;
+    quotation.placeOfSupply = resolvedPOS;
+    quotation.placeOfSupplyCode = calculation.placeOfSupplyCode;
+    quotation.supplierStateCode = calculation.supplierStateCode;
+    quotation.isInterState = calculation.isInterState;
+    quotation.items = calculation.items;
+    quotation.subtotal = calculation.subtotal;
+    quotation.discountTotal = calculation.discountTotal;
+    quotation.taxableAmount = calculation.taxableAmount;
+    quotation.cgstTotal = calculation.cgstTotal;
+    quotation.sgstTotal = calculation.sgstTotal;
+    quotation.igstTotal = calculation.igstTotal;
+    quotation.cessTotal = calculation.cessTotal;
+    quotation.roundOff = calculation.roundOff;
+    quotation.grandTotal = calculation.grandTotal;
+  }
+
+  if (data.quotationDate) quotation.quotationDate = new Date(data.quotationDate);
+  if (data.validUntil !== undefined) quotation.validUntil = data.validUntil ? new Date(data.validUntil) : null;
+  if (data.billingAddress !== undefined) quotation.billingAddress = data.billingAddress;
+  if (data.shippingAddress !== undefined) quotation.shippingAddress = data.shippingAddress;
+  if (data.notes !== undefined) quotation.notes = data.notes;
+  if (data.termsAndConditions !== undefined) quotation.termsAndConditions = data.termsAndConditions;
+  if (data.status) quotation.status = data.status;
+
+  await quotation.save();
+  return quotation;
+};
+
+export const deleteQuotation = async (tenantId, id) => {
+  if (!mongoose.isValidObjectId(id)) {
+    const error = new Error('Invalid quotation ID format');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const quotation = await Quotation.findOne({ _id: id, tenantId });
+  if (!quotation) {
+    const error = new Error('Quotation not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  if (quotation.status === 'converted_to_order' || quotation.status === 'converted_to_invoice') {
+    const error = new Error('Cannot delete an already converted quotation');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  await quotation.deleteOne();
+  return { message: 'Quotation deleted successfully' };
+};
+
 /**
  * 8. Sales Order workflows
  */
@@ -999,6 +1172,180 @@ export const convertOrderToInvoice = async (tenantId, userId, orderId) => {
   return invoice;
 };
 
+export const getSalesOrders = async (tenantId, options = {}) => {
+  const {
+    page = 1,
+    limit = 10,
+    search,
+    partyId,
+    warehouseId,
+    status,
+    startDate,
+    endDate,
+    sortBy = 'createdAt',
+    sortOrder = 'desc',
+  } = options;
+
+  const query = { tenantId };
+
+  if (partyId && mongoose.isValidObjectId(partyId)) {
+    query.partyId = partyId;
+  }
+  if (warehouseId && mongoose.isValidObjectId(warehouseId)) {
+    query.warehouseId = warehouseId;
+  }
+  if (status) {
+    query.status = status;
+  }
+  if (startDate || endDate) {
+    query.orderDate = {};
+    if (startDate) query.orderDate.$gte = new Date(startDate);
+    if (endDate) query.orderDate.$lte = new Date(endDate);
+  }
+  if (search && search.trim()) {
+    const searchRegex = new RegExp(search.trim(), 'i');
+    query.$or = [
+      { orderNumber: searchRegex },
+      { partyName: searchRegex },
+      { 'items.productName': searchRegex },
+    ];
+  }
+
+  const skip = (page - 1) * limit;
+  const sortDirection = sortOrder === 'desc' ? -1 : 1;
+  const sortOptions = { [sortBy]: sortDirection };
+
+  const [salesOrders, total] = await Promise.all([
+    SalesOrder.find(query).sort(sortOptions).skip(skip).limit(limit),
+    SalesOrder.countDocuments(query),
+  ]);
+
+  return {
+    salesOrders,
+    pagination: {
+      total,
+      page,
+      limit,
+      pages: Math.ceil(total / limit) || 1,
+    },
+  };
+};
+
+export const getSalesOrderById = async (tenantId, id) => {
+  if (!mongoose.isValidObjectId(id)) {
+    const error = new Error('Invalid sales order ID format');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const salesOrder = await SalesOrder.findOne({ _id: id, tenantId });
+  if (!salesOrder) {
+    const error = new Error('Sales order not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  return salesOrder;
+};
+
+export const updateSalesOrder = async (tenantId, id, data) => {
+  if (!mongoose.isValidObjectId(id)) {
+    const error = new Error('Invalid sales order ID format');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const salesOrder = await SalesOrder.findOne({ _id: id, tenantId });
+  if (!salesOrder) {
+    const error = new Error('Sales order not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  if (salesOrder.status === 'converted_to_invoice') {
+    const error = new Error('Cannot update an already converted sales order');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (data.items || data.partyId || data.warehouseId || data.placeOfSupply) {
+    const partyId = data.partyId || salesOrder.partyId;
+    const warehouseId = data.warehouseId || salesOrder.warehouseId;
+    const items = data.items || salesOrder.items.map((it) => ({
+      productId: it.productId,
+      quantity: it.quantity,
+      unitPrice: it.unitPrice,
+      discount: it.discount,
+      description: it.description,
+    }));
+    const placeOfSupply = data.placeOfSupply || salesOrder.placeOfSupply;
+
+    const { party, warehouse, calculation, resolvedPOS } = await validateSalesContext(tenantId, {
+      partyId,
+      warehouseId,
+      items,
+      placeOfSupply,
+    });
+
+    salesOrder.partyId = party._id;
+    salesOrder.partyName = party.name;
+    salesOrder.partyGSTIN = party.GSTIN || null;
+    salesOrder.partyPAN = party.PAN || null;
+    salesOrder.warehouseId = warehouse._id;
+    salesOrder.warehouseName = warehouse.warehouseName;
+    salesOrder.placeOfSupply = resolvedPOS;
+    salesOrder.placeOfSupplyCode = calculation.placeOfSupplyCode;
+    salesOrder.supplierStateCode = calculation.supplierStateCode;
+    salesOrder.isInterState = calculation.isInterState;
+    salesOrder.items = calculation.items;
+    salesOrder.subtotal = calculation.subtotal;
+    salesOrder.discountTotal = calculation.discountTotal;
+    salesOrder.taxableAmount = calculation.taxableAmount;
+    salesOrder.cgstTotal = calculation.cgstTotal;
+    salesOrder.sgstTotal = calculation.sgstTotal;
+    salesOrder.igstTotal = calculation.igstTotal;
+    salesOrder.cessTotal = calculation.cessTotal;
+    salesOrder.roundOff = calculation.roundOff;
+    salesOrder.grandTotal = calculation.grandTotal;
+  }
+
+  if (data.orderDate) salesOrder.orderDate = new Date(data.orderDate);
+  if (data.expectedDeliveryDate !== undefined) salesOrder.expectedDeliveryDate = data.expectedDeliveryDate ? new Date(data.expectedDeliveryDate) : null;
+  if (data.billingAddress !== undefined) salesOrder.billingAddress = data.billingAddress;
+  if (data.shippingAddress !== undefined) salesOrder.shippingAddress = data.shippingAddress;
+  if (data.notes !== undefined) salesOrder.notes = data.notes;
+  if (data.termsAndConditions !== undefined) salesOrder.termsAndConditions = data.termsAndConditions;
+  if (data.status) salesOrder.status = data.status;
+
+  await salesOrder.save();
+  return salesOrder;
+};
+
+export const cancelSalesOrder = async (tenantId, id) => {
+  if (!mongoose.isValidObjectId(id)) {
+    const error = new Error('Invalid sales order ID format');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const salesOrder = await SalesOrder.findOne({ _id: id, tenantId });
+  if (!salesOrder) {
+    const error = new Error('Sales order not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  if (salesOrder.status === 'converted_to_invoice') {
+    const error = new Error('Cannot cancel an already converted sales order');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  salesOrder.status = 'cancelled';
+  await salesOrder.save();
+  return salesOrder;
+};
+
 /**
  * 9. Delivery Challan workflows
  */
@@ -1115,6 +1462,156 @@ export const convertChallanToInvoice = async (tenantId, userId, challanId) => {
   await challan.save();
 
   return invoice;
+};
+
+export const getDeliveryChallans = async (tenantId, options = {}) => {
+  const {
+    page = 1,
+    limit = 10,
+    search,
+    partyId,
+    warehouseId,
+    status,
+    startDate,
+    endDate,
+    sortBy = 'createdAt',
+    sortOrder = 'desc',
+  } = options;
+
+  const query = { tenantId };
+
+  if (partyId && mongoose.isValidObjectId(partyId)) {
+    query.partyId = partyId;
+  }
+  if (warehouseId && mongoose.isValidObjectId(warehouseId)) {
+    query.warehouseId = warehouseId;
+  }
+  if (status) {
+    query.status = status;
+  }
+  if (startDate || endDate) {
+    query.challanDate = {};
+    if (startDate) query.challanDate.$gte = new Date(startDate);
+    if (endDate) query.challanDate.$lte = new Date(endDate);
+  }
+  if (search && search.trim()) {
+    const searchRegex = new RegExp(search.trim(), 'i');
+    query.$or = [
+      { challanNumber: searchRegex },
+      { partyName: searchRegex },
+      { vehicleNumber: searchRegex },
+      { 'items.productName': searchRegex },
+    ];
+  }
+
+  const skip = (page - 1) * limit;
+  const sortDirection = sortOrder === 'desc' ? -1 : 1;
+  const sortOptions = { [sortBy]: sortDirection };
+
+  const [deliveryChallans, total] = await Promise.all([
+    DeliveryChallan.find(query).sort(sortOptions).skip(skip).limit(limit),
+    DeliveryChallan.countDocuments(query),
+  ]);
+
+  return {
+    deliveryChallans,
+    pagination: {
+      total,
+      page,
+      limit,
+      pages: Math.ceil(total / limit) || 1,
+    },
+  };
+};
+
+export const getDeliveryChallanById = async (tenantId, id) => {
+  if (!mongoose.isValidObjectId(id)) {
+    const error = new Error('Invalid delivery challan ID format');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const challan = await DeliveryChallan.findOne({ _id: id, tenantId });
+  if (!challan) {
+    const error = new Error('Delivery challan not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  return challan;
+};
+
+export const updateDeliveryChallan = async (tenantId, id, data) => {
+  if (!mongoose.isValidObjectId(id)) {
+    const error = new Error('Invalid delivery challan ID format');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const challan = await DeliveryChallan.findOne({ _id: id, tenantId });
+  if (!challan) {
+    const error = new Error('Delivery challan not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  if (challan.status === 'converted_to_invoice') {
+    const error = new Error('Cannot update an already converted delivery challan');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (data.items || data.partyId || data.warehouseId || data.placeOfSupply) {
+    const partyId = data.partyId || challan.partyId;
+    const warehouseId = data.warehouseId || challan.warehouseId;
+    const items = data.items || challan.items.map((it) => ({
+      productId: it.productId,
+      quantity: it.quantity,
+      unitPrice: it.unitPrice,
+      discount: it.discount,
+      description: it.description,
+    }));
+    const placeOfSupply = data.placeOfSupply || challan.placeOfSupply;
+
+    const { party, warehouse, calculation, resolvedPOS } = await validateSalesContext(tenantId, {
+      partyId,
+      warehouseId,
+      items,
+      placeOfSupply,
+    });
+
+    challan.partyId = party._id;
+    challan.partyName = party.name;
+    challan.partyGSTIN = party.GSTIN || null;
+    challan.partyPAN = party.PAN || null;
+    challan.warehouseId = warehouse._id;
+    challan.warehouseName = warehouse.warehouseName;
+    challan.placeOfSupply = resolvedPOS;
+    challan.placeOfSupplyCode = calculation.placeOfSupplyCode;
+    challan.supplierStateCode = calculation.supplierStateCode;
+    challan.isInterState = calculation.isInterState;
+    challan.items = calculation.items;
+    challan.subtotal = calculation.subtotal;
+    challan.discountTotal = calculation.discountTotal;
+    challan.taxableAmount = calculation.taxableAmount;
+    challan.cgstTotal = calculation.cgstTotal;
+    challan.sgstTotal = calculation.sgstTotal;
+    challan.igstTotal = calculation.igstTotal;
+    challan.cessTotal = calculation.cessTotal;
+    challan.roundOff = calculation.roundOff;
+    challan.grandTotal = calculation.grandTotal;
+  }
+
+  if (data.challanDate) challan.challanDate = new Date(data.challanDate);
+  if (data.challanType) challan.challanType = data.challanType;
+  if (data.vehicleNumber !== undefined) challan.vehicleNumber = data.vehicleNumber;
+  if (data.billingAddress !== undefined) challan.billingAddress = data.billingAddress;
+  if (data.shippingAddress !== undefined) challan.shippingAddress = data.shippingAddress;
+  if (data.notes !== undefined) challan.notes = data.notes;
+  if (data.status) challan.status = data.status;
+
+  await challan.save();
+  return challan;
 };
 
 /**

@@ -22,17 +22,19 @@ export const CreateInvoicePage = () => {
   const [searchParams] = useSearchParams();
   const duplicateId = searchParams.get('duplicate');
   const fromQuoteId = searchParams.get('fromQuote');
+  const fromOrderId = searchParams.get('fromOrder');
 
   const existingDraft = useMemo(() => {
-    if (editId) return state.invoices.find((i) => i.id === editId);
-    if (duplicateId) return state.invoices.find((i) => i.id === duplicateId);
-    if (fromQuoteId) return state.quotations.find((q) => q.id === fromQuoteId);
+    if (editId) return state.invoices.find((i) => (i.id || i._id) === editId);
+    if (duplicateId) return state.invoices.find((i) => (i.id || i._id) === duplicateId);
+    if (fromQuoteId) return state.quotations.find((q) => (q.id || q._id) === fromQuoteId);
+    if (fromOrderId) return state.salesOrders?.find((o) => (o.id || o._id) === fromOrderId);
     return null;
-  }, [editId, duplicateId, fromQuoteId, state.invoices, state.quotations]);
+  }, [editId, duplicateId, fromQuoteId, fromOrderId, state.invoices, state.quotations, state.salesOrders]);
 
   const defaultCustomer = state.customers[0];
 
-  const [customerId, setCustomerId] = useState(existingDraft?.customerId || defaultCustomer?.id || '');
+  const [customerId, setCustomerId] = useState(existingDraft?.customerId || defaultCustomer?.id || defaultCustomer?._id || '');
   const [placeOfSupply, setPlaceOfSupply] = useState(
     existingDraft?.placeOfSupply || defaultCustomer?.state || state.business.state
   );
@@ -60,15 +62,16 @@ export const CreateInvoicePage = () => {
   const [shipping, setShipping] = useState(existingDraft?.shipping || 0);
   const [otherCharges, setOtherCharges] = useState(existingDraft?.otherCharges || 0);
   const [notes, setNotes] = useState(existingDraft?.notes || 'Thank you for your business.');
+  const [isSaving, setIsSaving] = useState(false);
 
   const [lineItems, setLineItems] = useState(() => {
     if (existingDraft?.items?.length) {
-      return existingDraft.items.map((it) => ({ ...it }));
+      return existingDraft.items.map((it) => ({ ...it, productId: it.productId?._id || it.productId || it.id }));
     }
     const p = state.products[0];
     return [
       {
-        productId: p?.id || '',
+        productId: p?.id || p?._id || '',
         name: p?.name || '',
         sku: p?.sku || '',
         hsn: p?.hsn || '',
@@ -81,6 +84,35 @@ export const CreateInvoicePage = () => {
       },
     ];
   });
+
+  // Ensure customer and product populate once loaded from MongoDB
+  useEffect(() => {
+    if (!customerId && state.customers?.length > 0 && !existingDraft) {
+      const c = state.customers[0];
+      setCustomerId(c.id || c._id);
+      setPlaceOfSupply(c.state || state.business.state);
+    }
+  }, [state.customers, customerId, existingDraft, state.business.state]);
+
+  useEffect(() => {
+    if (lineItems.length === 1 && !lineItems[0].productId && state.products?.length > 0 && !existingDraft) {
+      const p = state.products[0];
+      setLineItems([
+        {
+          productId: p.id || p._id,
+          name: p.name || '',
+          sku: p.sku || '',
+          hsn: p.hsn || '',
+          unit: p.unit || 'PCS',
+          qty: 1,
+          rate: p.sellingPrice || 0,
+          discountPct: 0,
+          gstRate: p.gstRate || 18,
+          cessRate: p.cessRate || 0,
+        },
+      ]);
+    }
+  }, [state.products, lineItems, existingDraft]);
 
   // Payment Section
   const [paymentMode, setPaymentMode] = useState('Credit'); // 'Credit' | 'Full' | 'Partial' | 'Split'
@@ -105,7 +137,7 @@ export const CreateInvoicePage = () => {
   });
 
   const selectedCustomer = useMemo(
-    () => state.customers.find((c) => c.id === customerId) || defaultCustomer,
+    () => state.customers.find((c) => (c.id || c._id) === customerId) || defaultCustomer,
     [customerId, state.customers, defaultCustomer]
   );
 
@@ -130,14 +162,14 @@ export const CreateInvoicePage = () => {
   );
 
   const handleProductChange = (idx, productId) => {
-    const prod = state.products.find((p) => p.id === productId);
+    const prod = state.products.find((p) => (p.id || p._id) === productId);
     if (!prod) return;
     setLineItems((prev) =>
       prev.map((row, i) =>
         i === idx
           ? {
               ...row,
-              productId: prod.id,
+              productId: prod.id || prod._id,
               name: prod.name,
               sku: prod.sku,
               hsn: prod.hsn,
@@ -162,7 +194,7 @@ export const CreateInvoicePage = () => {
     setLineItems((prev) => [
       ...prev,
       {
-        productId: p?.id || '',
+        productId: p?.id || p?._id || '',
         name: p?.name || '',
         sku: p?.sku || '',
         hsn: p?.hsn || '',
@@ -188,9 +220,9 @@ export const CreateInvoicePage = () => {
     dueDate,
     financialYear: selectedFY,
     invoiceType,
-    customerId: selectedCustomer?.id,
+    customerId: selectedCustomer?.id || selectedCustomer?._id,
     customerName: selectedCustomer?.name,
-    customerGstin: selectedCustomer?.gstin || '',
+    customerGstin: selectedCustomer?.gstin || selectedCustomer?.GSTIN || '',
     customerState: selectedCustomer?.state || placeOfSupply,
     placeOfSupply,
     registrationType: selectedCustomer?.registrationType || 'Regular',
@@ -198,11 +230,12 @@ export const CreateInvoicePage = () => {
     shippingAddress: selectedCustomer?.shippingAddress || selectedCustomer?.billingAddress || '',
     paymentMethod: paymentMode === 'Credit' ? 'Credit' : paymentMethod,
     status,
+    warehouseId: state.warehouses[0]?.id || state.warehouses[0]?._id,
     notes,
     ...computed,
   });
 
-  const handleSave = (status, shouldPrint = false) => {
+  const handleSave = async (status, shouldPrint = false) => {
     if (!selectedCustomer) {
       notify('Select a customer first', 'error');
       return;
@@ -238,11 +271,18 @@ export const CreateInvoicePage = () => {
     }
 
     const payload = buildPayload(status);
-    saveSalesInvoice(payload, payDetail);
-    if (shouldPrint) {
-      setPreviewOpen(true);
-    } else {
-      navigate('/sales/invoices');
+    setIsSaving(true);
+    try {
+      await saveSalesInvoice(payload, payDetail);
+      if (shouldPrint) {
+        setPreviewOpen(true);
+      } else {
+        navigate('/sales/invoices');
+      }
+    } catch {
+      // Toast notification is handled in context
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -289,17 +329,18 @@ export const CreateInvoicePage = () => {
               <Eye className="h-3.5 w-3.5" />
               Preview Invoice
             </button>
-            <button type="button" onClick={() => handleSave('Draft')} className={btnSecondary}>
+            <button type="button" disabled={isSaving} onClick={() => handleSave('Draft')} className={`${btnSecondary} disabled:opacity-50`}>
               <Save className="h-3.5 w-3.5" />
-              Save Draft
+              {isSaving ? 'Saving...' : 'Save Draft'}
             </button>
             <button
               type="button"
+              disabled={isSaving}
               onClick={() => handleSave('Finalized', false)}
-              className={btnPrimary}
+              className={`${btnPrimary} disabled:opacity-50`}
             >
               <CheckCircle2 className="h-3.5 w-3.5" />
-              Generate Invoice
+              {isSaving ? 'Generating...' : 'Generate Invoice'}
             </button>
           </>
         }
@@ -737,19 +778,21 @@ export const CreateInvoicePage = () => {
           <div className="flex flex-wrap gap-2 pt-3">
             <button
               type="button"
+              disabled={isSaving}
               onClick={() => handleSave('Finalized', true)}
-              className={`${btnSecondary} flex-1`}
+              className={`${btnSecondary} flex-1 disabled:opacity-50`}
             >
               <Printer className="h-3.5 w-3.5" />
               Generate &amp; Print
             </button>
             <button
               type="button"
+              disabled={isSaving}
               onClick={() => handleSave('Finalized', false)}
-              className={`${btnPrimary} flex-1`}
+              className={`${btnPrimary} flex-1 disabled:opacity-50`}
             >
               <CheckCircle2 className="h-3.5 w-3.5" />
-              Generate Invoice
+              {isSaving ? 'Generating...' : 'Generate Invoice'}
             </button>
           </div>
         </div>

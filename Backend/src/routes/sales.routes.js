@@ -76,6 +76,10 @@ router.post('/invoices/:id/returns', salesController.createSalesReturn);
  * ==========================================
  */
 router.post('/quotations', salesController.createQuotation);
+router.get('/quotations', salesController.getQuotations);
+router.get('/quotations/:id', salesController.getQuotationById);
+router.put('/quotations/:id', salesController.updateQuotation);
+router.delete('/quotations/:id', salesController.deleteQuotation);
 router.post('/quotations/:id/convert-to-order', salesController.convertQuotationToOrder);
 router.post('/quotations/:id/convert-to-invoice', salesController.convertQuotationToInvoice);
 
@@ -85,6 +89,10 @@ router.post('/quotations/:id/convert-to-invoice', salesController.convertQuotati
  * ==========================================
  */
 router.post('/orders', salesController.createSalesOrder);
+router.get('/orders', salesController.getSalesOrders);
+router.get('/orders/:id', salesController.getSalesOrderById);
+router.put('/orders/:id', salesController.updateSalesOrder);
+router.post('/orders/:id/cancel', salesController.cancelSalesOrder);
 router.post('/orders/:id/convert-to-invoice', salesController.convertOrderToInvoice);
 
 /**
@@ -93,6 +101,9 @@ router.post('/orders/:id/convert-to-invoice', salesController.convertOrderToInvo
  * ==========================================
  */
 router.post('/challans', salesController.createDeliveryChallan);
+router.get('/challans', salesController.getDeliveryChallans);
+router.get('/challans/:id', salesController.getDeliveryChallanById);
+router.put('/challans/:id', salesController.updateDeliveryChallan);
 router.post('/challans/:id/convert-to-invoice', salesController.convertChallanToInvoice);
 
 /**
@@ -100,6 +111,7 @@ router.post('/challans/:id/convert-to-invoice', salesController.convertChallanTo
  * Credit Notes Routes
  * ==========================================
  */
+router.post('/credit-notes', salesController.createCreditNote);
 router.get('/credit-notes', salesController.getCreditNotes);
 router.get('/credit-notes/:id', salesController.getCreditNoteById);
 router.post('/credit-notes/:id/post', salesController.postCreditNote);

@@ -81,7 +81,7 @@ export const InvoicesPage = () => {
       confirmText: 'Cancel Invoice',
       danger: true,
     });
-    if (ok) cancelSalesInvoice(inv.id, 'Cancelled by user from Invoice Register');
+    if (ok) await cancelSalesInvoice(inv.id || inv._id, 'Cancelled by user from Invoice Register');
   };
 
   const openPaymentModal = (inv) => {
@@ -95,17 +95,17 @@ export const InvoicesPage = () => {
     });
   };
 
-  const submitPayment = (e) => {
+  const submitPayment = async (e) => {
     e.preventDefault();
     if (!payModalInv) return;
     const bal = Math.max(0, (payModalInv.grandTotal || 0) - (payModalInv.amountPaid || 0));
     const amt = Math.min(bal, Number(payForm.amount) || 0);
-    const ok = recordPayment({
+    const ok = await recordPayment({
       type: 'Payment In',
       date: payForm.date,
       partyId: payModalInv.customerId,
       partyName: payModalInv.customerName,
-      invoiceId: payModalInv.id,
+      invoiceId: payModalInv.id || payModalInv._id,
       invoiceNumber: payModalInv.invoiceNumber,
       amount: amt,
       method: payForm.method,

@@ -18,6 +18,16 @@ import * as unitService from '../services/unitService';
 import * as productService from '../services/productService';
 import * as warehouseService from '../services/warehouseService';
 import * as tenantService from '../services/tenantService';
+import * as salesInvoiceService from '../services/salesInvoiceService';
+import * as quotationService from '../services/quotationService';
+import * as salesOrderService from '../services/salesOrderService';
+import * as deliveryChallanService from '../services/deliveryChallanService';
+import * as creditNoteService from '../services/creditNoteService';
+import * as purchaseOrderService from '../services/purchaseOrderService';
+import * as grnService from '../services/grnService';
+import * as purchaseBillService from '../services/purchaseBillService';
+import * as purchaseReturnService from '../services/purchaseReturnService';
+import * as paymentService from '../services/paymentService';
 
 const AppContext = createContext(null);
 
@@ -31,6 +41,7 @@ export const AppProvider = ({ children }) => {
   const [state, setState] = useState(() => loadAppState());
   const [authLoading, setAuthLoading] = useState(Boolean(getToken()));
   const [phase1Loading, setPhase1Loading] = useState(false);
+  const [phase2Loading, setPhase2Loading] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [confirmState, setConfirmState] = useState(null);
   const [selectedFY, setSelectedFY] = useState(state.business?.financialYear || '2026-27');
@@ -138,6 +149,242 @@ export const AppProvider = ({ children }) => {
     }
   }, []);
 
+  const loadPhase2Data = useCallback(async () => {
+    const token = getToken();
+    if (!token) return;
+
+    setPhase2Loading(true);
+    try {
+      const [
+        invoicesRes,
+        quotationsRes,
+        salesOrdersRes,
+        challansRes,
+        creditNotesRes,
+        purchasesRes,
+        purchaseOrdersRes,
+        grnsRes,
+        returnsRes,
+        paymentsRes,
+      ] = await Promise.allSettled([
+        salesInvoiceService.getInvoices({ limit: 100 }),
+        quotationService.getQuotations({ limit: 100 }),
+        salesOrderService.getSalesOrders({ limit: 100 }),
+        deliveryChallanService.getDeliveryChallans({ limit: 100 }),
+        creditNoteService.getCreditNotes({ limit: 100 }),
+        purchaseBillService.getPurchaseBills({ limit: 100 }),
+        purchaseOrderService.getPurchaseOrders({ limit: 100 }),
+        grnService.getGRNs({ limit: 100 }),
+        purchaseReturnService.getPurchaseReturns({ limit: 100 }),
+        paymentService.getPayments({ limit: 100 }),
+      ]);
+
+      setState((prev) => {
+        const next = { ...prev };
+
+        if (invoicesRes.status === 'fulfilled' && invoicesRes.value) {
+          const rawInvoices = invoicesRes.value.invoices || invoicesRes.value.data?.invoices || [];
+          next.invoices = rawInvoices.map((inv) => ({
+            ...inv,
+            id: String(inv._id || inv.id),
+            date: inv.invoiceDate ? new Date(inv.invoiceDate).toISOString().slice(0, 10) : (inv.date || ''),
+            dueDate: inv.dueDate ? new Date(inv.dueDate).toISOString().slice(0, 10) : (inv.dueDate || ''),
+            customerId: String(inv.partyId?._id || inv.partyId || ''),
+            customerName: inv.partyName || inv.customerName || '',
+            customerGstin: inv.partyGSTIN || inv.customerGstin || '',
+            customerState: inv.placeOfSupply || inv.customerState || '',
+            status: inv.invoiceStatus === 'posted' ? 'Finalized' : (inv.invoiceStatus === 'cancelled' ? 'Cancelled' : (inv.status || 'Draft')),
+            taxableValue: inv.taxableAmount !== undefined ? inv.taxableAmount : (inv.taxableValue || 0),
+            totalTax: (inv.cgstTotal || 0) + (inv.sgstTotal || 0) + (inv.igstTotal || 0) + (inv.cessTotal || 0),
+            amountPaid: inv.paidAmount !== undefined ? inv.paidAmount : (inv.amountPaid || 0),
+            paymentStatus: inv.paymentStatus === 'paid' ? 'Paid' : (inv.paymentStatus === 'partially_paid' ? 'Partial' : (inv.paymentStatus === 'unpaid' ? 'Unpaid' : (inv.paymentStatus || 'Unpaid'))),
+            items: (inv.items || []).map((it) => ({
+              ...it,
+              productId: String(it.productId?._id || it.productId || ''),
+              name: it.productName || it.name || '',
+              qty: it.quantity !== undefined ? it.quantity : (it.qty || 1),
+              rate: it.unitPrice !== undefined ? it.unitPrice : (it.rate || 0),
+              sku: it.SKU || it.sku || '',
+              hsn: it.HSN || it.hsn || '',
+              unit: it.unitName || it.unit || 'PCS',
+            })),
+          }));
+        }
+
+        if (quotationsRes.status === 'fulfilled' && quotationsRes.value) {
+          const rawQuotations = quotationsRes.value.quotations || quotationsRes.value.data?.quotations || [];
+          next.quotations = rawQuotations.map((q) => ({
+            ...q,
+            id: String(q._id || q.id),
+            date: q.quotationDate ? new Date(q.quotationDate).toISOString().slice(0, 10) : (q.date || ''),
+            validUntil: q.validUntil ? new Date(q.validUntil).toISOString().slice(0, 10) : (q.validUntil || ''),
+            customerId: String(q.partyId?._id || q.partyId || ''),
+            customerName: q.partyName || q.customerName || '',
+            customerGstin: q.partyGSTIN || q.customerGstin || '',
+            customerState: q.placeOfSupply || q.customerState || '',
+            status: q.status ? q.status.charAt(0).toUpperCase() + q.status.slice(1) : 'Sent',
+            taxableValue: q.taxableAmount !== undefined ? q.taxableAmount : (q.taxableValue || 0),
+            totalTax: (q.cgstTotal || 0) + (q.sgstTotal || 0) + (q.igstTotal || 0) + (q.cessTotal || 0),
+            items: (q.items || []).map((it) => ({
+              ...it,
+              productId: String(it.productId?._id || it.productId || ''),
+              name: it.productName || it.name || '',
+              qty: it.quantity !== undefined ? it.quantity : (it.qty || 1),
+              rate: it.unitPrice !== undefined ? it.unitPrice : (it.rate || 0),
+            })),
+          }));
+        }
+
+        if (salesOrdersRes.status === 'fulfilled' && salesOrdersRes.value) {
+          const rawOrders = salesOrdersRes.value.salesOrders || salesOrdersRes.value.data?.salesOrders || [];
+          next.salesOrders = rawOrders.map((so) => ({
+            ...so,
+            id: String(so._id || so.id),
+            date: so.orderDate ? new Date(so.orderDate).toISOString().slice(0, 10) : (so.date || ''),
+            expectedDelivery: so.expectedDeliveryDate ? new Date(so.expectedDeliveryDate).toISOString().slice(0, 10) : (so.expectedDelivery || ''),
+            customerId: String(so.partyId?._id || so.partyId || ''),
+            customerName: so.partyName || so.customerName || '',
+            customerGstin: so.partyGSTIN || so.customerGstin || '',
+            status: so.status ? so.status.charAt(0).toUpperCase() + so.status.slice(1) : 'Confirmed',
+            taxableValue: so.taxableAmount !== undefined ? so.taxableAmount : (so.taxableValue || 0),
+            totalTax: (so.cgstTotal || 0) + (so.sgstTotal || 0) + (so.igstTotal || 0) + (so.cessTotal || 0),
+            items: (so.items || []).map((it) => ({
+              ...it,
+              productId: String(it.productId?._id || it.productId || ''),
+              name: it.productName || it.name || '',
+              qty: it.quantity !== undefined ? it.quantity : (it.qty || 1),
+              rate: it.unitPrice !== undefined ? it.unitPrice : (it.rate || 0),
+            })),
+          }));
+        }
+
+        if (challansRes.status === 'fulfilled' && challansRes.value) {
+          const rawChallans = challansRes.value.deliveryChallans || challansRes.value.data?.deliveryChallans || [];
+          next.deliveryChallans = rawChallans.map((dc) => ({
+            ...dc,
+            id: String(dc._id || dc.id),
+            date: dc.challanDate ? new Date(dc.challanDate).toISOString().slice(0, 10) : (dc.date || ''),
+            customerId: String(dc.partyId?._id || dc.partyId || ''),
+            customerName: dc.partyName || dc.customerName || '',
+            vehicleNo: dc.vehicleNumber || dc.vehicleNo || '',
+            status: dc.status ? dc.status.charAt(0).toUpperCase() + dc.status.slice(1) : 'Dispatched',
+            taxableValue: dc.taxableAmount !== undefined ? dc.taxableAmount : (dc.taxableValue || 0),
+            totalTax: (dc.cgstTotal || 0) + (dc.sgstTotal || 0) + (dc.igstTotal || 0) + (dc.cessTotal || 0),
+          }));
+        }
+
+        if (creditNotesRes.status === 'fulfilled' && creditNotesRes.value) {
+          const rawCNs = creditNotesRes.value.creditNotes || creditNotesRes.value.data?.creditNotes || [];
+          next.creditNotes = rawCNs.map((cn) => ({
+            ...cn,
+            id: String(cn._id || cn.id),
+            date: cn.creditNoteDate ? new Date(cn.creditNoteDate).toISOString().slice(0, 10) : (cn.date || ''),
+            customerId: String(cn.partyId?._id || cn.partyId || ''),
+            customerName: cn.partyName || cn.customerName || '',
+            status: cn.status === 'posted' ? 'Issued' : (cn.status === 'cancelled' ? 'Cancelled' : 'Draft'),
+            taxableValue: cn.taxableAmount !== undefined ? cn.taxableAmount : (cn.taxableValue || 0),
+            totalTax: (cn.cgstTotal || 0) + (cn.sgstTotal || 0) + (cn.igstTotal || 0) + (cn.cessTotal || 0),
+          }));
+        }
+
+        if (purchasesRes.status === 'fulfilled' && purchasesRes.value) {
+          const rawBills = purchasesRes.value.bills || purchasesRes.value.data?.bills || [];
+          next.purchases = rawBills.map((pb) => ({
+            ...pb,
+            id: String(pb._id || pb.id),
+            supplierInvoiceNo: pb.supplierInvoiceNumber || pb.supplierInvoiceNo || '',
+            date: pb.billDate ? new Date(pb.billDate).toISOString().slice(0, 10) : (pb.date || ''),
+            dueDate: pb.dueDate ? new Date(pb.dueDate).toISOString().slice(0, 10) : (pb.dueDate || ''),
+            supplierId: String(pb.supplierId?._id || pb.supplierId || ''),
+            supplierName: pb.supplierName || '',
+            supplierGstin: pb.supplierGSTIN || pb.supplierGstin || '',
+            taxableValue: pb.taxableAmount !== undefined ? pb.taxableAmount : (pb.taxableValue || 0),
+            totalTax: (pb.cgstTotal || 0) + (pb.sgstTotal || 0) + (pb.igstTotal || 0) + (pb.cessTotal || 0),
+            amountPaid: pb.paidAmount !== undefined ? pb.paidAmount : (pb.amountPaid || 0),
+            paymentStatus: pb.paymentStatus === 'paid' ? 'Paid' : (pb.paymentStatus === 'partially_paid' ? 'Partial' : 'Unpaid'),
+            status: pb.status === 'posted' ? 'Received' : (pb.status || 'Received'),
+            items: (pb.items || []).map((it) => ({
+              ...it,
+              productId: String(it.productId?._id || it.productId || ''),
+              name: it.productName || it.name || '',
+              qty: it.quantity !== undefined ? it.quantity : (it.qty || 1),
+              rate: it.unitPrice !== undefined ? it.unitPrice : (it.rate || 0),
+              hsn: it.HSN || it.hsn || '',
+            })),
+          }));
+        }
+
+        if (purchaseOrdersRes.status === 'fulfilled' && purchaseOrdersRes.value) {
+          const rawPOs = purchaseOrdersRes.value.purchaseOrders || purchaseOrdersRes.value.data?.purchaseOrders || [];
+          next.purchaseOrders = rawPOs.map((po) => ({
+            ...po,
+            id: String(po._id || po.id),
+            date: po.orderDate ? new Date(po.orderDate).toISOString().slice(0, 10) : (po.date || ''),
+            supplierId: String(po.partyId?._id || po.partyId || ''),
+            supplierName: po.partyName || po.supplierName || '',
+          }));
+        }
+
+        if (grnsRes.status === 'fulfilled' && grnsRes.value) {
+          const rawGRNs = grnsRes.value.grns || grnsRes.value.data?.grns || [];
+          next.grns = rawGRNs.map((grn) => ({
+            ...grn,
+            id: String(grn._id || grn.id),
+            date: grn.receiptDate ? new Date(grn.receiptDate).toISOString().slice(0, 10) : (grn.date || ''),
+            poReference: grn.purchaseOrderId?.orderNumber || grn.supplierChallanNumber || grn.poReference || 'Direct',
+            supplierId: String(grn.supplierId?._id || grn.supplierId || ''),
+            supplierName: grn.supplierName || '',
+            status: grn.status === 'posted' ? 'Completed' : (grn.status === 'cancelled' ? 'Cancelled' : 'Draft'),
+            items: (grn.items || []).map((it) => ({
+              ...it,
+              orderedQty: it.orderedQuantity !== undefined ? it.orderedQuantity : (it.orderedQty || 0),
+              receivedQty: it.receivedQuantity !== undefined ? it.receivedQuantity : (it.receivedQty || 0),
+              damagedQty: it.rejectedQuantity !== undefined ? it.rejectedQuantity : (it.damagedQty || 0),
+              missingQty: Math.max(0, (it.orderedQuantity || 0) - (it.receivedQuantity || 0)),
+            })),
+          }));
+        }
+
+        if (returnsRes.status === 'fulfilled' && returnsRes.value) {
+          const rawPRs = returnsRes.value.debitNotes || returnsRes.value.data?.debitNotes || [];
+          next.purchaseReturns = rawPRs.map((dn) => ({
+            ...dn,
+            id: String(dn._id || dn.id),
+            returnNumber: dn.debitNoteNumber || dn.returnNumber,
+            billNumber: dn.billNumber || '',
+            date: dn.debitNoteDate ? new Date(dn.debitNoteDate).toISOString().slice(0, 10) : (dn.date || ''),
+            supplierId: String(dn.supplierId?._id || dn.supplierId || ''),
+            supplierName: dn.supplierName || '',
+            status: dn.status === 'posted' ? 'Completed' : (dn.status === 'cancelled' ? 'Cancelled' : 'Draft'),
+            taxableValue: dn.taxableAmount !== undefined ? dn.taxableAmount : (dn.taxableValue || 0),
+            totalTax: (dn.cgstTotal || 0) + (dn.sgstTotal || 0) + (dn.igstTotal || 0) + (dn.cessTotal || 0),
+          }));
+          next.debitNotes = next.purchaseReturns;
+        }
+
+        if (paymentsRes.status === 'fulfilled' && paymentsRes.value) {
+          const rawPay = paymentsRes.value.payments || paymentsRes.value.data?.payments || [];
+          next.payments = rawPay.map((p) => ({
+            ...p,
+            id: String(p._id || p.id),
+            type: p.direction === 'in' ? 'Payment In' : 'Payment Out',
+            date: p.paymentDate ? new Date(p.paymentDate).toISOString().slice(0, 10) : (p.date || ''),
+            amount: p.amount || 0,
+            method: p.paymentMethod || p.method || 'Bank',
+            referenceNo: p.referenceNumber || p.referenceNo || '',
+            status: p.status === 'completed' ? 'Completed' : 'Cancelled',
+          }));
+        }
+
+        return next;
+      });
+    } catch (err) {
+      console.warn('Phase 2 transactional data load failed:', err);
+    } finally {
+      setPhase2Loading(false);
+    }
+  }, []);
+
   // Initial authentication verification from backend /api/auth/me
   useEffect(() => {
     const token = getToken();
@@ -176,6 +423,7 @@ export const AppProvider = ({ children }) => {
             },
           }));
           loadPhase1Data();
+          loadPhase2Data();
         }
       })
       .catch((err) => {
@@ -309,15 +557,16 @@ export const AppProvider = ({ children }) => {
         }));
         setAuthLoading(false);
         notify(`Welcome back, ${data.user?.name || 'Administrator'}!`);
-        // Immediately fetch live tenant Phase 1 master data from MongoDB
+        // Immediately fetch live tenant Phase 1 master data and Phase 2 transactional data from MongoDB
         loadPhase1Data();
+        loadPhase2Data();
         return data;
       } catch (err) {
         setAuthLoading(false);
         throw err;
       }
     },
-    [loadPhase1Data, notify]
+    [loadPhase1Data, loadPhase2Data, notify]
   );
 
   const register = useCallback(
@@ -345,13 +594,14 @@ export const AppProvider = ({ children }) => {
         setAuthLoading(false);
         notify(`Business account created for ${data.tenant.businessName}!`);
         loadPhase1Data();
+        loadPhase2Data();
         return data;
       } catch (err) {
         setAuthLoading(false);
         throw err;
       }
     },
-    [loadPhase1Data, notify]
+    [loadPhase1Data, loadPhase2Data, notify]
   );
 
   const logout = useCallback(async () => {
@@ -377,6 +627,17 @@ export const AppProvider = ({ children }) => {
       units: [],
       products: [],
       warehouses: [],
+      invoices: [],
+      quotations: [],
+      salesOrders: [],
+      deliveryChallans: [],
+      creditNotes: [],
+      debitNotes: [],
+      purchases: [],
+      purchaseOrders: [],
+      grns: [],
+      purchaseReturns: [],
+      payments: [],
     }));
     notify('Signed out successfully');
   }, [notify]);
@@ -398,6 +659,7 @@ export const AppProvider = ({ children }) => {
           },
         }));
         loadPhase1Data();
+        loadPhase2Data();
       }
       return data;
     } catch (err) {
@@ -413,10 +675,21 @@ export const AppProvider = ({ children }) => {
         units: [],
         products: [],
         warehouses: [],
+        invoices: [],
+        quotations: [],
+        salesOrders: [],
+        deliveryChallans: [],
+        creditNotes: [],
+        debitNotes: [],
+        purchases: [],
+        purchaseOrders: [],
+        grns: [],
+        purchaseReturns: [],
+        payments: [],
       }));
       throw err;
     }
-  }, [loadPhase1Data]);
+  }, [loadPhase1Data, loadPhase2Data]);
 
   const completeOnboarding = useCallback((bizPayload) => {
     setState((prev) => ({
@@ -676,9 +949,146 @@ export const AppProvider = ({ children }) => {
           notify(`${auditModule} saved successfully`);
           return enriched;
         }
+
+        if (collectionKey === 'quotations') {
+          const warehouseId = record.warehouseId || state.warehouses[0]?.id || state.warehouses[0]?._id;
+          const payload = {
+            partyId: String(record.customerId || record.partyId),
+            warehouseId: String(warehouseId),
+            quotationDate: record.date || new Date().toISOString().slice(0, 10),
+            validUntil: record.validUntil || record.secondDate || null,
+            placeOfSupply: record.placeOfSupply || record.customerState,
+            items: (record.items && record.items.length)
+              ? record.items.map((it) => ({
+                  productId: String(it.productId || it.id),
+                  quantity: Number(it.qty || it.quantity || 1),
+                  unitPrice: Number(it.rate || it.unitPrice || 0),
+                  discount: Number(it.discountPct || it.discount || 0),
+                  description: it.description || '',
+                }))
+              : [{
+                  productId: String(record.productId),
+                  quantity: Number(record.qty || 1),
+                }],
+            notes: record.notes || '',
+          };
+          const saved = await quotationService.createQuotation(payload);
+          notify(`${auditModule} saved successfully`);
+          await loadPhase2Data();
+          return saved;
+        }
+
+        if (collectionKey === 'salesOrders') {
+          const warehouseId = record.warehouseId || state.warehouses[0]?.id || state.warehouses[0]?._id;
+          const payload = {
+            partyId: String(record.customerId || record.partyId),
+            warehouseId: String(warehouseId),
+            orderDate: record.date || new Date().toISOString().slice(0, 10),
+            expectedDeliveryDate: record.expectedDelivery || record.secondDate || null,
+            placeOfSupply: record.placeOfSupply || record.customerState,
+            items: (record.items && record.items.length)
+              ? record.items.map((it) => ({
+                  productId: String(it.productId || it.id),
+                  quantity: Number(it.qty || it.quantity || 1),
+                  unitPrice: Number(it.rate || it.unitPrice || 0),
+                  discount: Number(it.discountPct || it.discount || 0),
+                  description: it.description || '',
+                }))
+              : [{
+                  productId: String(record.productId),
+                  quantity: Number(record.qty || 1),
+                }],
+            notes: record.notes || '',
+          };
+          const saved = await salesOrderService.createSalesOrder(payload);
+          notify(`${auditModule} saved successfully`);
+          await loadPhase2Data();
+          return saved;
+        }
+
+        if (collectionKey === 'deliveryChallans') {
+          const warehouseId = record.warehouseId || state.warehouses[0]?.id || state.warehouses[0]?._id;
+          const payload = {
+            partyId: String(record.customerId || record.partyId),
+            warehouseId: String(warehouseId),
+            challanDate: record.date || new Date().toISOString().slice(0, 10),
+            vehicleNumber: record.vehicleNo || record.vehicleNumber || '',
+            placeOfSupply: record.placeOfSupply || record.customerState,
+            items: (record.items && record.items.length)
+              ? record.items.map((it) => ({
+                  productId: String(it.productId || it.id),
+                  quantity: Number(it.qty || it.quantity || 1),
+                  unitPrice: Number(it.rate || it.unitPrice || 0),
+                  discount: Number(it.discountPct || it.discount || 0),
+                  description: it.description || '',
+                }))
+              : [{
+                  productId: String(record.productId),
+                  quantity: Number(record.qty || 1),
+                }],
+            notes: record.notes || '',
+          };
+          const saved = await deliveryChallanService.createDeliveryChallan(payload);
+          notify(`${auditModule} saved successfully`);
+          await loadPhase2Data();
+          return saved;
+        }
+
+        if (collectionKey === 'purchaseOrders') {
+          const warehouseId = record.warehouseId || state.warehouses[0]?.id || state.warehouses[0]?._id;
+          const payload = {
+            partyId: String(record.supplierId || record.partyId),
+            warehouseId: String(warehouseId),
+            orderDate: record.date || new Date().toISOString().slice(0, 10),
+            expectedDeliveryDate: record.expectedDelivery || record.secondDate || null,
+            placeOfSupply: record.placeOfSupply || record.supplierState || state.business.state,
+            items: (record.items && record.items.length)
+              ? record.items.map((it) => ({
+                  productId: String(it.productId || it.id),
+                  quantity: Number(it.qty || it.quantity || 1),
+                  unitPrice: Number(it.rate || it.unitPrice || 0),
+                  discount: Number(it.discountPct || it.discount || 0),
+                  description: it.description || '',
+                }))
+              : [{
+                  productId: String(record.productId),
+                  quantity: Number(record.qty || 1),
+                }],
+            notes: record.notes || '',
+          };
+          const saved = await purchaseOrderService.createPurchaseOrder(payload);
+          notify(`${auditModule} saved successfully`);
+          await loadPhase2Data();
+          return saved;
+        }
+
+        if (collectionKey === 'grns') {
+          const warehouseId = record.warehouseId || state.warehouses[0]?.id || state.warehouses[0]?._id;
+          const payload = {
+            supplierId: String(record.supplierId),
+            warehouseId: String(warehouseId),
+            supplierChallanNumber: record.poReference || '',
+            receiptDate: record.date || new Date().toISOString().slice(0, 10),
+            items: (record.items || []).map((it) => ({
+              productId: String(it.productId),
+              receivedQuantity: Number(it.receivedQty || it.quantity || 1),
+              acceptedQuantity: Number(it.receivedQty || it.quantity || 1),
+              rejectedQuantity: Number(it.damagedQty || 0),
+              remarks: record.notes || '',
+            })),
+          };
+          const saved = await grnService.createGRN(payload);
+          const grn = saved?.grn || saved;
+          if (grn && (grn._id || grn.id)) {
+            await grnService.postGRN(grn._id || grn.id);
+          }
+          notify(`${auditModule} recorded and stock updated`);
+          await Promise.all([loadPhase1Data(), loadPhase2Data()]);
+          return saved;
+        }
       }
 
-      // In-memory / Prototype state for other non-Phase-1 modules
+      // In-memory / Prototype fallback for purely offline/demo testing
       let isNew = false;
       updateStateWithAudit(
         (prev) => {
@@ -701,7 +1111,7 @@ export const AppProvider = ({ children }) => {
       notify(`${auditModule} saved successfully`);
       return record;
     },
-    [notify, state, updateStateWithAudit]
+    [loadPhase1Data, loadPhase2Data, notify, state, updateStateWithAudit]
   );
 
   const deleteRecord = useCallback(
@@ -720,6 +1130,15 @@ export const AppProvider = ({ children }) => {
             await productService.deleteProduct(id);
           } else if (collectionKey === 'warehouses') {
             await warehouseService.deleteWarehouse(id);
+          } else if (collectionKey === 'quotations') {
+            await quotationService.deleteQuotation(id);
+            await loadPhase2Data();
+          } else if (collectionKey === 'salesOrders') {
+            await salesOrderService.cancelSalesOrder(id);
+            await loadPhase2Data();
+          } else if (collectionKey === 'purchaseOrders') {
+            await purchaseOrderService.cancelPurchaseOrder(id);
+            await loadPhase2Data();
           }
         } catch (err) {
           notify(err.message || `Failed to remove ${auditModule}`, 'error');
@@ -744,491 +1163,383 @@ export const AppProvider = ({ children }) => {
       );
       notify(`${auditModule} removed`);
     },
-    [notify, updateStateWithAudit]
+    [loadPhase2Data, notify, updateStateWithAudit]
   );
 
-  // Save or Finalize Sales Invoice
-  const saveSalesInvoice = useCallback((invoicePayload, paymentDetails = null) => {
-    const paymentList = Array.isArray(paymentDetails)
-      ? paymentDetails.filter((p) => Number(p?.amount) > 0)
-      : paymentDetails && Number(paymentDetails.amount) > 0
-      ? [paymentDetails]
-      : [];
-    const totalPaidInput = round2(paymentList.reduce((s, p) => s + Number(p.amount), 0));
-    const amountPaid =
-      totalPaidInput > 0 ? Math.min(invoicePayload.grandTotal, totalPaidInput) : Number(invoicePayload.amountPaid) || 0;
-    const status = invoicePayload.status || 'Finalized';
-    const paymentStatus =
-      status === 'Draft'
-        ? 'Draft'
-        : status === 'Cancelled'
-        ? 'Cancelled'
-        : computePaymentStatus(invoicePayload.grandTotal, amountPaid);
+  // Save or Finalize Sales Invoice (Directly with Backend & MongoDB)
+  const saveSalesInvoice = useCallback(
+    async (invoicePayload, paymentDetails = null) => {
+      const isAuth = Boolean(getToken());
+      if (!isAuth) {
+        notify('You must be signed in to save invoices', 'error');
+        return null;
+      }
 
-    const invId = invoicePayload.id || `inv-${Date.now()}`;
-    const invNumber =
-      invoicePayload.invoiceNumber ||
-      generateNextDocNumber(state.settings.invoice.prefix, state.invoices, 'invoiceNumber');
+      try {
+        const backendItems = (invoicePayload.items || []).map((it) => ({
+          productId: String(it.productId || it.id),
+          quantity: Number(it.qty || it.quantity || 1),
+          unitPrice: Number(it.rate || it.unitPrice || 0),
+          discount: Number(it.discountPct || it.discount || 0),
+          description: it.description || '',
+        }));
 
-    const savedInv = {
-      ...invoicePayload,
-      id: invId,
-      invoiceNumber: invNumber,
-      status,
-      amountPaid: status === 'Draft' ? 0 : amountPaid,
-      paymentStatus,
-    };
+        const warehouseId =
+          invoicePayload.warehouseId ||
+          state.warehouses[0]?._id ||
+          state.warehouses[0]?.id;
 
-    updateStateWithAudit(
-      (prev) => {
-        const isExisting = prev.invoices.some((i) => i.id === savedInv.id);
-        const nextInvoices = isExisting
-          ? prev.invoices.map((i) => (i.id === savedInv.id ? savedInv : i))
-          : [savedInv, ...prev.invoices];
+        if (!warehouseId) {
+          notify('A warehouse is required to generate invoices. Please create one in Warehouses master.', 'error');
+          return null;
+        }
 
-        let nextProducts = prev.products;
-        let nextMovements = prev.stockMovements;
-        let nextPayments = prev.payments;
-        let nextBankAccounts = prev.bankAccounts;
-        let nextNotifications = prev.notifications;
+        const partyId = String(invoicePayload.customerId || invoicePayload.partyId);
 
-        if (status === 'Finalized') {
-          const movements = (savedInv.items || [])
-            .filter((it) => it.productId)
-            .map((it) => {
-              const p = prev.products.find((pr) => pr.id === it.productId);
-              return createStockMovementRecord({
-                productId: it.productId,
-                productName: it.name,
-                sku: it.sku || p?.sku || '',
-                warehouseId: p?.warehouseId || 'wh-1',
-                warehouseName: prev.warehouses.find((w) => w.id === (p?.warehouseId || 'wh-1'))?.name || 'Jaipur Main Godown',
-                type: 'Sale',
-                qtyChange: -Math.abs(Number(it.qty) || 0),
-                reference: savedInv.invoiceNumber,
-                date: savedInv.date,
-                notes: `Invoiced to ${savedInv.customerName}`,
-              });
+        const createPayload = {
+          partyId,
+          warehouseId: String(warehouseId),
+          invoiceDate: invoicePayload.date || new Date().toISOString().slice(0, 10),
+          dueDate: invoicePayload.dueDate || null,
+          placeOfSupply: invoicePayload.placeOfSupply || invoicePayload.customerState,
+          items: backendItems,
+          notes: invoicePayload.notes || '',
+          paidAmount: Number(invoicePayload.amountPaid) || 0,
+        };
+
+        let savedInv;
+        const isExisting = invoicePayload.id && !invoicePayload.id.startsWith('inv-');
+
+        if (isExisting) {
+          savedInv = await salesInvoiceService.updateInvoice(invoicePayload.id, createPayload);
+        } else {
+          savedInv = await salesInvoiceService.createInvoice(createPayload);
+        }
+
+        const invoiceRecord = savedInv?.invoice || savedInv;
+        const invId = invoiceRecord._id || invoiceRecord.id;
+
+        if (invoicePayload.status === 'Finalized' && invoiceRecord.invoiceStatus !== 'posted') {
+          const postedRes = await salesInvoiceService.postInvoice(invId);
+          Object.assign(invoiceRecord, postedRes?.invoice || postedRes);
+        }
+
+        if (paymentDetails && Number(paymentDetails.amount) > 0) {
+          try {
+            await paymentService.createPayment({
+              direction: 'in',
+              partyId,
+              paymentDate: invoicePayload.date || new Date().toISOString().slice(0, 10),
+              amount: Number(paymentDetails.amount),
+              paymentMethod: paymentDetails.method === 'Cash' ? 'cash' : (paymentDetails.method === 'UPI' ? 'UPI' : 'bank'),
+              referenceNumber: paymentDetails.referenceNo || `INV-${invoiceRecord.invoiceNumber}`,
+              allocations: [{ salesInvoiceId: String(invId), allocatedAmount: Number(paymentDetails.amount) }],
             });
-
-          const stockRes = applyProductStockUpdates(prev.products, movements, prev.stockMovements);
-          nextProducts = stockRes.updatedProducts;
-          nextMovements = [...stockRes.addedMovements, ...prev.stockMovements];
-
-          // Low stock alert generation
-          stockRes.addedMovements.forEach((mv) => {
-            const updatedProd = nextProducts.find((p) => p.id === mv.productId);
-            if (updatedProd && updatedProd.stock <= (updatedProd.minStock || 5)) {
-              const notifExists = nextNotifications.some(
-                (n) => n.title.includes(updatedProd.name) && !n.read
-              );
-              if (!notifExists) {
-                nextNotifications = [
-                  {
-                    id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
-                    category: 'Low Stock',
-                    title: `${updatedProd.stock <= 0 ? 'Out of Stock' : 'Low Stock Alert'}: ${updatedProd.name}`,
-                    message: `Remaining stock is ${updatedProd.stock} ${updatedProd.unit} after invoice ${savedInv.invoiceNumber}.`,
-                    date: savedInv.date,
-                    read: false,
-                  },
-                  ...nextNotifications,
-                ];
-              }
-            }
-          });
-
-          if (paymentList.length > 0) {
-            let existingReceipts = prev.payments.filter((p) => p.type === 'Payment In');
-            const newPayRecords = [];
-
-            paymentList.forEach((pItem, idx) => {
-              const amt = round2(Number(pItem.amount));
-              const payNo = generateNextDocNumber('RCPT/26-27/', [...newPayRecords, ...existingReceipts], 'paymentNumber');
-              const targetAccountName =
-                pItem.method === 'Cash'
-                  ? 'Petty Cash Counter'
-                  : pItem.method === 'UPI'
-                  ? 'Business UPI Wallet'
-                  : 'HDFC Bank Current A/c';
-
-              newPayRecords.push({
-                id: `pay-in-${Date.now()}-${idx}`,
-                paymentNumber: payNo,
-                type: 'Payment In',
-                date: savedInv.date,
-                partyId: savedInv.customerId,
-                partyName: savedInv.customerName,
-                invoiceId: savedInv.id,
-                invoiceNumber: savedInv.invoiceNumber,
-                amount: amt,
-                method: pItem.method || 'UPI',
-                accountName: targetAccountName,
-                referenceNo: pItem.referenceNo || `REF-${Date.now().toString().slice(-6)}-${idx + 1}`,
-                status: 'Completed',
-                notes: `Initial payment for ${savedInv.invoiceNumber}`,
-              });
-
-              nextBankAccounts = nextBankAccounts.map((acc) =>
-                acc.name === targetAccountName
-                  ? { ...acc, balance: round2(acc.balance + amt) }
-                  : acc
-              );
-            });
-
-            nextPayments = [...newPayRecords, ...prev.payments];
+          } catch (payErr) {
+            console.warn('Initial invoice payment warning:', payErr.message);
           }
         }
 
-        return {
-          ...prev,
-          invoices: nextInvoices,
-          products: nextProducts,
-          stockMovements: nextMovements,
-          payments: nextPayments,
-          bankAccounts: nextBankAccounts,
-          notifications: nextNotifications,
-        };
-      },
-      {
-        action: status === 'Draft' ? 'Saved Draft Invoice' : 'Generated Tax Invoice',
-        module: 'Sales',
-        recordRef: savedInv.invoiceNumber,
-        prevValue: '—',
-        newValue: `${savedInv.customerName} · ₹${savedInv.grandTotal}`,
+        notify(invoicePayload.status === 'Draft' ? 'Draft invoice saved' : 'Tax invoice generated and stock updated');
+        await Promise.all([loadPhase1Data(), loadPhase2Data()]);
+        return invoiceRecord;
+      } catch (err) {
+        notify(err.message || 'Failed to save sales invoice', 'error');
+        throw err;
       }
-    );
-    notify(status === 'Draft' ? 'Draft invoice saved' : 'Tax invoice generated and stock updated');
-    return savedInv;
-  }, [notify, state.invoices, state.settings.invoice.prefix, updateStateWithAudit]);
+    },
+    [loadPhase1Data, loadPhase2Data, notify, state.warehouses]
+  );
 
-  const cancelSalesInvoice = useCallback((invoiceId, reason = 'Cancelled by user') => {
-    updateStateWithAudit(
-      (prev) => {
-        const inv = prev.invoices.find((i) => i.id === invoiceId);
-        if (!inv || inv.status === 'Cancelled') return prev;
+  const cancelSalesInvoice = useCallback(
+    async (invoiceId, reason = 'Cancelled by user') => {
+      const isAuth = Boolean(getToken());
+      if (!isAuth) return;
 
-        const nextInvoices = prev.invoices.map((i) =>
-          i.id === invoiceId
-            ? { ...i, status: 'Cancelled', paymentStatus: 'Cancelled', cancelReason: reason }
-            : i
-        );
+      try {
+        await salesInvoiceService.cancelInvoice(invoiceId, reason);
+        notify('Invoice cancelled and inventory restored', 'info');
+        await Promise.all([loadPhase1Data(), loadPhase2Data()]);
+      } catch (err) {
+        notify(err.message || 'Failed to cancel invoice', 'error');
+        throw err;
+      }
+    },
+    [loadPhase1Data, loadPhase2Data, notify]
+  );
 
-        let nextProducts = prev.products;
-        let nextMovements = prev.stockMovements;
-        if (inv.status === 'Finalized') {
-          const movements = (inv.items || [])
-            .filter((it) => it.productId)
-            .map((it) =>
-              createStockMovementRecord({
-                productId: it.productId,
-                productName: it.name,
-                sku: it.sku || '',
-                type: 'Return In',
-                qtyChange: Math.abs(Number(it.qty) || 0),
-                reference: `${inv.invoiceNumber}-CXL`,
-                date: new Date().toISOString().slice(0, 10),
-                notes: `Stock restored on invoice cancellation: ${reason}`,
-              })
-            );
-          const res = applyProductStockUpdates(prev.products, movements, prev.stockMovements);
-          nextProducts = res.updatedProducts;
-          nextMovements = [...res.addedMovements, ...prev.stockMovements];
+  // Record Payment In / Payment Out (Directly with Backend & MongoDB)
+  const recordPayment = useCallback(
+    async (paymentPayload) => {
+      const amount = round2(Number(paymentPayload.amount) || 0);
+      if (amount <= 0) {
+        notify('Payment amount must be greater than zero', 'error');
+        return false;
+      }
+
+      const isAuth = Boolean(getToken());
+      if (!isAuth) return false;
+
+      try {
+        const isIn = paymentPayload.type === 'Payment In';
+        const allocations = [];
+        if (paymentPayload.invoiceId) {
+          if (isIn) {
+            allocations.push({ salesInvoiceId: String(paymentPayload.invoiceId), allocatedAmount: amount });
+          } else {
+            allocations.push({ purchaseBillId: String(paymentPayload.invoiceId), allocatedAmount: amount });
+          }
         }
 
-        return {
-          ...prev,
-          invoices: nextInvoices,
-          products: nextProducts,
-          stockMovements: nextMovements,
-        };
-      },
-      {
-        action: 'Cancelled Invoice',
-        module: 'Sales',
-        recordRef: invoiceId,
-        prevValue: 'Finalized',
-        newValue: `Cancelled (${reason})`,
-      }
-    );
-    notify('Invoice cancelled and inventory restored', 'info');
-  }, [notify, updateStateWithAudit]);
-
-  // Record Payment In / Payment Out
-  const recordPayment = useCallback((paymentPayload) => {
-    const amount = round2(Number(paymentPayload.amount) || 0);
-    if (amount <= 0) {
-      notify('Payment amount must be greater than zero', 'error');
-      return false;
-    }
-
-    // Prevent exact duplicate reference submission within same invoice
-    const dup = state.payments.find(
-      (p) =>
-        p.invoiceId === paymentPayload.invoiceId &&
-        p.referenceNo &&
-        paymentPayload.referenceNo &&
-        p.referenceNo.toLowerCase() === paymentPayload.referenceNo.toLowerCase() &&
-        Math.abs(p.amount - amount) < 0.01
-    );
-    if (dup) {
-      notify('Duplicate payment reference detected for this invoice', 'error');
-      return false;
-    }
-
-    const isIn = paymentPayload.type === 'Payment In';
-
-    updateStateWithAudit(
-      (prev) => {
-        const prefix = isIn ? 'RCPT/26-27/' : 'PYMT/26-27/';
-        const payNumber = generateNextDocNumber(
-          prefix,
-          prev.payments.filter((p) => p.type === paymentPayload.type),
-          'paymentNumber'
-        );
-
-        const targetAccName =
-          paymentPayload.accountName ||
-          (paymentPayload.method === 'Cash'
-            ? 'Petty Cash Counter'
-            : paymentPayload.method === 'UPI'
-            ? 'Business UPI Wallet'
-            : 'HDFC Bank Current A/c');
-
-        const newPay = {
-          id: `pay-${Date.now()}`,
-          paymentNumber: payNumber,
-          ...paymentPayload,
+        await paymentService.createPayment({
+          direction: isIn ? 'in' : 'out',
+          partyId: paymentPayload.partyId ? String(paymentPayload.partyId) : null,
+          paymentDate: paymentPayload.date || new Date().toISOString().slice(0, 10),
           amount,
-          accountName: targetAccName,
-          status: 'Completed',
-        };
+          paymentMethod: paymentPayload.method === 'Cash' ? 'cash' : (paymentPayload.method === 'UPI' ? 'UPI' : 'bank'),
+          referenceNumber: paymentPayload.referenceNo || '',
+          notes: paymentPayload.notes || '',
+          allocations,
+        });
 
-        let nextInvoices = prev.invoices;
-        let nextPurchases = prev.purchases;
+        notify(`${paymentPayload.type} of ₹${amount.toLocaleString('en-IN')} recorded`);
+        await Promise.all([loadPhase1Data(), loadPhase2Data()]);
+        return true;
+      } catch (err) {
+        notify(err.message || 'Failed to record payment', 'error');
+        return false;
+      }
+    },
+    [loadPhase1Data, loadPhase2Data, notify]
+  );
 
-        if (isIn && paymentPayload.invoiceId) {
-          nextInvoices = prev.invoices.map((inv) => {
-            if (inv.id !== paymentPayload.invoiceId) return inv;
-            const nextPaid = round2((Number(inv.amountPaid) || 0) + amount);
-            return {
-              ...inv,
-              amountPaid: Math.min(inv.grandTotal, nextPaid),
-              paymentStatus: computePaymentStatus(inv.grandTotal, nextPaid),
-            };
-          });
-        } else if (!isIn && paymentPayload.invoiceId) {
-          nextPurchases = prev.purchases.map((pur) => {
-            if (pur.id !== paymentPayload.invoiceId) return pur;
-            const nextPaid = round2((Number(pur.amountPaid) || 0) + amount);
-            return {
-              ...pur,
-              amountPaid: Math.min(pur.grandTotal, nextPaid),
-              paymentStatus: computePaymentStatus(pur.grandTotal, nextPaid),
-            };
-          });
+  // Save Purchase Bill + Update Inventory (Directly with Backend & MongoDB)
+  const savePurchaseBill = useCallback(
+    async (purchasePayload) => {
+      const isAuth = Boolean(getToken());
+      if (!isAuth) {
+        notify('You must be signed in to save purchase bills', 'error');
+        return null;
+      }
+
+      try {
+        const warehouseId =
+          purchasePayload.warehouseId ||
+          state.warehouses[0]?._id ||
+          state.warehouses[0]?.id;
+
+        if (!warehouseId) {
+          notify('A warehouse is required for purchases. Please create one in Warehouses master.', 'error');
+          return null;
         }
 
-        const nextBankAccounts = prev.bankAccounts.map((acc) => {
-          if (acc.name !== targetAccName) return acc;
+        const supplierId = String(purchasePayload.supplierId);
+        const backendItems = (purchasePayload.items || []).map((it) => ({
+          productId: String(it.productId || it.id),
+          quantity: Number(it.qty || it.quantity || 1),
+          unitPrice: Number(it.rate || it.unitPrice || 0),
+          discount: Number(it.discountPct || it.discount || 0),
+          description: it.description || '',
+        }));
+
+        const createPayload = {
+          supplierId,
+          supplierInvoiceNumber: purchasePayload.supplierInvoiceNo || purchasePayload.supplierInvoiceNumber || `SUP-${Date.now().toString().slice(-4)}`,
+          warehouseId: String(warehouseId),
+          billDate: purchasePayload.date || new Date().toISOString().slice(0, 10),
+          dueDate: purchasePayload.dueDate || null,
+          placeOfSupply: purchasePayload.placeOfSupply || state.business.state,
+          items: backendItems,
+          paidAmount: Number(purchasePayload.amountPaid) || 0,
+        };
+
+        let savedBill;
+        const isExisting = purchasePayload.id && !purchasePayload.id.startsWith('pur-');
+        if (isExisting) {
+          savedBill = await purchaseBillService.updatePurchaseBill(purchasePayload.id, createPayload);
+        } else {
+          savedBill = await purchaseBillService.createPurchaseBill(createPayload);
+        }
+
+        const billRecord = savedBill?.bill || savedBill;
+        const billId = billRecord._id || billRecord.id;
+
+        if (billRecord.status !== 'posted') {
+          const postedRes = await purchaseBillService.postPurchaseBill(billId);
+          Object.assign(billRecord, postedRes?.bill || postedRes);
+        }
+
+        if (Number(purchasePayload.amountPaid) > 0) {
+          try {
+            await paymentService.createPayment({
+              direction: 'out',
+              partyId: supplierId,
+              paymentDate: purchasePayload.date || new Date().toISOString().slice(0, 10),
+              amount: Number(purchasePayload.amountPaid),
+              paymentMethod: purchasePayload.paymentMethod === 'Cash' ? 'cash' : (purchasePayload.paymentMethod === 'UPI' ? 'UPI' : 'bank'),
+              referenceNumber: `BILL-${billRecord.billNumber}`,
+              allocations: [{ purchaseBillId: String(billId), allocatedAmount: Number(purchasePayload.amountPaid) }],
+            });
+          } catch (payErr) {
+            console.warn('Initial purchase payment warning:', payErr.message);
+          }
+        }
+
+        notify('Purchase bill saved and inventory stock increased');
+        await Promise.all([loadPhase1Data(), loadPhase2Data()]);
+        return billRecord;
+      } catch (err) {
+        notify(err.message || 'Failed to save purchase bill', 'error');
+        throw err;
+      }
+    },
+    [loadPhase1Data, loadPhase2Data, notify, state.business.state, state.warehouses]
+  );
+
+  // Sales Return -> Credit Note + optional stock restoration (Directly with Backend & MongoDB)
+  const createSalesReturnCreditNote = useCallback(
+    async (cnPayload) => {
+      const isAuth = Boolean(getToken());
+      if (!isAuth) return;
+
+      try {
+        const invoice = state.invoices.find((i) => i.id === cnPayload.invoiceId || i._id === cnPayload.invoiceId);
+        if (!invoice) {
+          notify('Original sales invoice not found', 'error');
+          return;
+        }
+
+        const returnItems = (cnPayload.items || []).map((retIt) => {
+          const invIt = (invoice.items || []).find((i) => String(i.productId?._id || i.productId) === String(retIt.productId));
           return {
-            ...acc,
-            balance: round2(isIn ? acc.balance + amount : acc.balance - amount),
+            invoiceItemId: String(invIt?._id || invIt?.id || retIt.productId),
+            returnedQuantity: Number(retIt.qty || retIt.returnedQuantity || 1),
           };
         });
 
-        return {
-          ...prev,
-          payments: [newPay, ...prev.payments],
-          invoices: nextInvoices,
-          purchases: nextPurchases,
-          bankAccounts: nextBankAccounts,
+        const payload = {
+          invoiceId: String(invoice._id || invoice.id),
+          reason: 'sales_return',
+          items: returnItems,
+          remarks: cnPayload.reason || 'Sales return',
+          restoreStock: cnPayload.restoreStock !== false,
         };
-      },
-      {
-        action: `Recorded ${paymentPayload.type}`,
-        module: 'Payments',
-        recordRef: paymentPayload.invoiceNumber || paymentPayload.partyName,
-        prevValue: 'Pending',
-        newValue: `${paymentPayload.method} · ₹${amount}`,
+
+        await creditNoteService.createCreditNote(payload);
+        notify('Credit Note issued and stock restored');
+        await Promise.all([loadPhase1Data(), loadPhase2Data()]);
+      } catch (err) {
+        notify(err.message || 'Failed to issue credit note', 'error');
+        throw err;
       }
-    );
+    },
+    [loadPhase1Data, loadPhase2Data, notify, state.invoices]
+  );
 
-    notify(`${paymentPayload.type} of ₹${amount.toLocaleString('en-IN')} recorded`);
-    return true;
-  }, [notify, state.payments, updateStateWithAudit]);
+  // Purchase Return -> Reduce Stock (Directly with Backend & MongoDB)
+  const createPurchaseReturn = useCallback(
+    async (prPayload) => {
+      const isAuth = Boolean(getToken());
+      if (!isAuth) return;
 
-  // Save Purchase Bill + Update Inventory
-  const savePurchaseBill = useCallback((purchasePayload) => {
-    updateStateWithAudit(
-      (prev) => {
-        const billNumber =
-          purchasePayload.billNumber ||
-          generateNextDocNumber('PB/26-27/', prev.purchases, 'billNumber');
-        const newPurchase = {
-          ...purchasePayload,
-          id: purchasePayload.id || `pur-${Date.now()}`,
-          billNumber,
-          status: 'Received',
-          paymentStatus: computePaymentStatus(purchasePayload.grandTotal, purchasePayload.amountPaid || 0),
-        };
-
-        const movements = (newPurchase.items || [])
-          .filter((it) => it.productId)
-          .map((it) => {
-            const prod = prev.products.find((p) => p.id === it.productId);
-            return createStockMovementRecord({
-              productId: it.productId,
-              productName: it.name,
-              sku: it.sku || prod?.sku || '',
-              warehouseId: prod?.warehouseId || 'wh-1',
-              warehouseName: prev.warehouses.find((w) => w.id === (prod?.warehouseId || 'wh-1'))?.name || 'Jaipur Main Godown',
-              type: 'Purchase',
-              qtyChange: Math.abs(Number(it.qty) || 0),
-              reference: billNumber,
-              date: newPurchase.date,
-              notes: `Purchased from ${newPurchase.supplierName}`,
-            });
-          });
-
-        const stockRes = applyProductStockUpdates(prev.products, movements, prev.stockMovements);
-
-        let nextPayments = prev.payments;
-        let nextBankAccounts = prev.bankAccounts;
-        if (Number(newPurchase.amountPaid) > 0) {
-          const payNo = generateNextDocNumber('PYMT/26-27/', prev.payments.filter((p) => p.type === 'Payment Out'), 'paymentNumber');
-          nextPayments = [
-            {
-              id: `pay-out-${Date.now()}`,
-              paymentNumber: payNo,
-              type: 'Payment Out',
-              date: newPurchase.date,
-              partyId: newPurchase.supplierId,
-              partyName: newPurchase.supplierName,
-              invoiceId: newPurchase.id,
-              invoiceNumber: billNumber,
-              amount: round2(newPurchase.amountPaid),
-              method: newPurchase.paymentMethod || 'NEFT',
-              accountName: 'HDFC Bank Current A/c',
-              referenceNo: `NEFT-${Date.now().toString().slice(-6)}`,
-              status: 'Completed',
-              notes: `Purchase payment for ${newPurchase.supplierInvoiceNo}`,
-            },
-            ...prev.payments,
-          ];
-          nextBankAccounts = prev.bankAccounts.map((acc) =>
-            acc.name === 'HDFC Bank Current A/c'
-              ? { ...acc, balance: round2(acc.balance - Number(newPurchase.amountPaid)) }
-              : acc
-          );
+      try {
+        const bill = state.purchases.find((p) => p.id === prPayload.purchaseId || p._id === prPayload.purchaseId);
+        if (!bill) {
+          notify('Original purchase bill not found', 'error');
+          return;
         }
 
-        return {
-          ...prev,
-          purchases: [newPurchase, ...prev.purchases],
-          products: stockRes.updatedProducts,
-          stockMovements: [...stockRes.addedMovements, ...prev.stockMovements],
-          payments: nextPayments,
-          bankAccounts: nextBankAccounts,
-        };
-      },
-      {
-        action: 'Created Purchase Bill',
-        module: 'Purchases',
-        recordRef: purchasePayload.supplierInvoiceNo || 'New Purchase',
-        prevValue: '—',
-        newValue: `${purchasePayload.supplierName} · ₹${purchasePayload.grandTotal}`,
-      }
-    );
-    notify('Purchase bill saved and inventory stock increased');
-  }, [notify, updateStateWithAudit]);
+        const returnItems = (prPayload.items || []).map((retIt) => {
+          const billIt = (bill.items || []).find((i) => String(i.productId?._id || i.productId) === String(retIt.productId));
+          return {
+            billItemId: String(billIt?._id || billIt?.id || retIt.productId),
+            returnedQuantity: Number(retIt.qty || retIt.returnedQuantity || 1),
+          };
+        });
 
-  // Sales Return -> Credit Note + optional stock restoration
-  const createSalesReturnCreditNote = useCallback((cnPayload) => {
-    updateStateWithAudit(
-      (prev) => {
-        const creditNoteNumber = generateNextDocNumber('CN/26-27/', prev.creditNotes, 'creditNoteNumber');
-        const newCN = {
-          ...cnPayload,
-          id: `cn-${Date.now()}`,
-          creditNoteNumber,
-          status: 'Issued',
+        const payload = {
+          billId: String(bill._id || bill.id),
+          reason: 'purchase_return',
+          items: returnItems,
+          remarks: prPayload.reason || 'Purchase return',
         };
 
-        let nextProducts = prev.products;
-        let nextMovements = prev.stockMovements;
-        if (cnPayload.restoreStock) {
-          const movements = (cnPayload.items || []).map((it) =>
-            createStockMovementRecord({
-              productId: it.productId,
-              productName: it.name,
-              sku: it.sku || '',
-              type: 'Return In',
-              qtyChange: Math.abs(Number(it.qty) || 0),
-              reference: creditNoteNumber,
-              date: cnPayload.date,
-              notes: `Sales return from ${cnPayload.customerName}`,
-            })
-          );
-          const res = applyProductStockUpdates(prev.products, movements, prev.stockMovements);
-          nextProducts = res.updatedProducts;
-          nextMovements = [...res.addedMovements, ...prev.stockMovements];
+        const res = await purchaseReturnService.createPurchaseReturn(payload);
+        const debitNote = res?.debitNote || res;
+        if (debitNote && (debitNote._id || debitNote.id)) {
+          await purchaseReturnService.postDebitNote(debitNote._id || debitNote.id);
         }
 
-        return {
-          ...prev,
-          creditNotes: [newCN, ...prev.creditNotes],
-          products: nextProducts,
-          stockMovements: nextMovements,
-        };
-      },
-      {
-        action: 'Issued Credit Note',
-        module: 'Sales Returns',
-        recordRef: cnPayload.invoiceNumber,
-        prevValue: '—',
-        newValue: `₹${cnPayload.grandTotal} (${cnPayload.restoreStock ? 'Stock Restored' : 'Financial Adj'})`,
+        notify('Purchase return recorded and stock deducted');
+        await Promise.all([loadPhase1Data(), loadPhase2Data()]);
+      } catch (err) {
+        notify(err.message || 'Failed to record purchase return', 'error');
+        throw err;
       }
-    );
-    notify('Credit Note issued successfully');
-  }, [notify, updateStateWithAudit]);
+    },
+    [loadPhase1Data, loadPhase2Data, notify, state.purchases]
+  );
 
-  // Purchase Return -> Reduce Stock
-  const createPurchaseReturn = useCallback((prPayload) => {
-    updateStateWithAudit(
-      (prev) => {
-        const returnNumber = generateNextDocNumber('PR/26-27/', prev.purchaseReturns, 'returnNumber');
-        const newPR = { ...prPayload, id: `pr-${Date.now()}`, returnNumber, status: 'Completed' };
-        const movements = (prPayload.items || []).map((it) =>
-          createStockMovementRecord({
-            productId: it.productId,
-            productName: it.name,
-            sku: it.sku || '',
-            type: 'Return Out',
-            qtyChange: -Math.abs(Number(it.qty) || 0),
-            reference: returnNumber,
-            date: prPayload.date,
-            notes: `Returned to ${prPayload.supplierName}`,
-          })
-        );
-        const res = applyProductStockUpdates(prev.products, movements, prev.stockMovements);
-        return {
-          ...prev,
-          purchaseReturns: [newPR, ...prev.purchaseReturns],
-          products: res.updatedProducts,
-          stockMovements: [...res.addedMovements, ...prev.stockMovements],
-        };
-      },
-      {
-        action: 'Created Purchase Return',
-        module: 'Purchases',
-        recordRef: prPayload.billNumber,
-        prevValue: '—',
-        newValue: `₹${prPayload.grandTotal}`,
+  // Conversions between Documents
+  const convertQuotationToInvoice = useCallback(
+    async (quotationId) => {
+      try {
+        const res = await quotationService.convertQuotationToInvoice(quotationId);
+        notify('Quotation converted to draft invoice');
+        await loadPhase2Data();
+        return res;
+      } catch (err) {
+        notify(err.message || 'Failed to convert quotation', 'error');
+        throw err;
       }
-    );
-    notify('Purchase return recorded and stock deducted');
-  }, [notify, updateStateWithAudit]);
+    },
+    [loadPhase2Data, notify]
+  );
+
+  const convertQuotationToOrder = useCallback(
+    async (quotationId) => {
+      try {
+        const res = await quotationService.convertQuotationToOrder(quotationId);
+        notify('Quotation converted to sales order');
+        await loadPhase2Data();
+        return res;
+      } catch (err) {
+        notify(err.message || 'Failed to convert quotation', 'error');
+        throw err;
+      }
+    },
+    [loadPhase2Data, notify]
+  );
+
+  const convertOrderToInvoice = useCallback(
+    async (orderId) => {
+      try {
+        const res = await salesOrderService.convertOrderToInvoice(orderId);
+        notify('Sales order converted to draft invoice');
+        await loadPhase2Data();
+        return res;
+      } catch (err) {
+        notify(err.message || 'Failed to convert sales order', 'error');
+        throw err;
+      }
+    },
+    [loadPhase2Data, notify]
+  );
+
+  const convertChallanToInvoice = useCallback(
+    async (challanId) => {
+      try {
+        const res = await deliveryChallanService.convertChallanToInvoice(challanId);
+        notify('Delivery challan converted to draft invoice');
+        await loadPhase2Data();
+        return res;
+      } catch (err) {
+        notify(err.message || 'Failed to convert delivery challan', 'error');
+        throw err;
+      }
+    },
+    [loadPhase2Data, notify]
+  );
 
   // Stock Adjustment / Transfer
   const adjustInventoryStock = useCallback(({ productId, type, qtyChange, warehouseId, notes, reference }) => {
@@ -1437,8 +1748,15 @@ export const AppProvider = ({ children }) => {
     confirmAction,
     authLoading,
     phase1Loading,
+    phase2Loading,
     loadPhase1Data,
     refreshPhase1Data: loadPhase1Data,
+    loadPhase2Data,
+    refreshPhase2Data: loadPhase2Data,
+    convertQuotationToInvoice,
+    convertQuotationToOrder,
+    convertOrderToInvoice,
+    convertChallanToInvoice,
     login,
     register,
     loginUser: login,

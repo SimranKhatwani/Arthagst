@@ -123,6 +123,62 @@ export const returnItemInputSchema = z.object({
   returnedQuantity: z.coerce.number().positive('Returned quantity must be greater than zero'),
 });
 
+export const updateQuotationSchema = z.object({
+  partyId: z.string().trim().min(1).optional(),
+  warehouseId: z.string().trim().min(1).optional(),
+  quotationDate: z.string().optional(),
+  validUntil: z.string().optional().nullable(),
+  placeOfSupply: z.string().trim().optional(),
+  isExport: z.boolean().optional(),
+  exportType: z.enum(['WPAY', 'WOPAY']).optional().nullable(),
+  billingAddress: z.string().trim().optional(),
+  shippingAddress: z.string().trim().optional(),
+  items: z.array(salesItemInputSchema).min(1).optional(),
+  status: z.enum(['draft', 'sent', 'accepted', 'rejected', 'cancelled']).optional(),
+  notes: z.string().trim().max(1000).optional(),
+  termsAndConditions: z.string().trim().max(2000).optional(),
+});
+
+export const updateSalesOrderSchema = z.object({
+  partyId: z.string().trim().min(1).optional(),
+  warehouseId: z.string().trim().min(1).optional(),
+  orderDate: z.string().optional(),
+  expectedDeliveryDate: z.string().optional().nullable(),
+  placeOfSupply: z.string().trim().optional(),
+  isExport: z.boolean().optional(),
+  exportType: z.enum(['WPAY', 'WOPAY']).optional().nullable(),
+  billingAddress: z.string().trim().optional(),
+  shippingAddress: z.string().trim().optional(),
+  items: z.array(salesItemInputSchema).min(1).optional(),
+  status: z.enum(['draft', 'confirmed', 'cancelled']).optional(),
+  notes: z.string().trim().max(1000).optional(),
+  termsAndConditions: z.string().trim().max(2000).optional(),
+});
+
+export const updateDeliveryChallanSchema = z.object({
+  partyId: z.string().trim().min(1).optional(),
+  warehouseId: z.string().trim().min(1).optional(),
+  challanDate: z.string().optional(),
+  challanType: z.enum(['supply_on_approval', 'job_work', 'for_reasons_other_than_supply', 'others']).optional(),
+  vehicleNumber: z.string().trim().optional(),
+  placeOfSupply: z.string().trim().optional(),
+  billingAddress: z.string().trim().optional(),
+  shippingAddress: z.string().trim().optional(),
+  items: z.array(salesItemInputSchema).min(1).optional(),
+  status: z.enum(['draft', 'dispatched', 'delivered', 'cancelled']).optional(),
+  notes: z.string().trim().max(1000).optional(),
+});
+
+export const createCreditNoteDirectSchema = z.object({
+  invoiceId: z.string({ required_error: 'Invoice ID is required' }).trim().min(1),
+  reason: z
+    .enum(['sales_return', 'post_sale_discount', 'deficiency_in_services', 'correction_in_invoice', 'other'])
+    .default('sales_return'),
+  items: z.array(returnItemInputSchema).min(1, 'At least one return item must be specified'),
+  remarks: z.string().trim().max(500).optional().default('Sales return'),
+  restoreStock: z.boolean().optional().default(true),
+});
+
 export const createSalesReturnSchema = z.object({
   reason: z
     .enum(['sales_return', 'post_sale_discount', 'deficiency_in_services', 'correction_in_invoice', 'other'])
@@ -149,8 +205,12 @@ export default {
   updateSalesInvoiceSchema,
   cancelInvoiceSchema,
   createQuotationSchema,
+  updateQuotationSchema,
   createSalesOrderSchema,
+  updateSalesOrderSchema,
   createDeliveryChallanSchema,
+  updateDeliveryChallanSchema,
   createSalesReturnSchema,
+  createCreditNoteDirectSchema,
   querySalesDocumentsSchema,
 };

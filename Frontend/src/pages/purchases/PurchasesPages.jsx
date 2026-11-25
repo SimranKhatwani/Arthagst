@@ -52,17 +52,17 @@ export const PurchasesPage = ({ defaultTab = 'bills' }) => {
     });
   };
 
-  const submitPay = (e) => {
+  const submitPay = async (e) => {
     e.preventDefault();
     if (!payPurchase) return;
     const bal = Math.max(0, (payPurchase.grandTotal || 0) - (payPurchase.amountPaid || 0));
     const amt = Math.min(bal, Number(payForm.amount) || 0);
-    const ok = recordPayment({
+    const ok = await recordPayment({
       type: 'Payment Out',
       date: payForm.date,
       partyId: payPurchase.supplierId,
       partyName: payPurchase.supplierName,
-      invoiceId: payPurchase.id,
+      invoiceId: payPurchase.id || payPurchase._id,
       invoiceNumber: payPurchase.billNumber,
       amount: amt,
       method: payForm.method,
@@ -280,19 +280,20 @@ export const AddPurchasePage = () => {
   const { state, selectedFY, savePurchaseBill, notify } = useApp();
   const navigate = useNavigate();
 
-  const [supplierId, setSupplierId] = useState(state.suppliers[0]?.id || '');
+  const [supplierId, setSupplierId] = useState(state.suppliers[0]?.id || state.suppliers[0]?._id || '');
   const [supplierInvoiceNo, setSupplierInvoiceNo] = useState(`SUP/${Math.floor(100 + Math.random() * 900)}`);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [dueDate, setDueDate] = useState(new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10));
   const [shipping, setShipping] = useState(0);
   const [payStatus, setPayStatus] = useState('Unpaid');
   const [paymentMethod, setPaymentMethod] = useState('NEFT');
+  const [isSaving, setIsSaving] = useState(false);
 
   const [items, setItems] = useState(() => {
     const p = state.products[0];
     return [
       {
-        productId: p?.id || '',
+        productId: p?.id || p?._id || '',
         name: p?.name || '',
         sku: p?.sku || '',
         hsn: p?.hsn || '',
@@ -305,7 +306,32 @@ export const AddPurchasePage = () => {
     ];
   });
 
-  const supplier = state.suppliers.find((s) => s.id === supplierId);
+  useEffect(() => {
+    if (!supplierId && state.suppliers?.length > 0) {
+      setSupplierId(state.suppliers[0].id || state.suppliers[0]._id);
+    }
+  }, [state.suppliers, supplierId]);
+
+  useEffect(() => {
+    if (items.length === 1 && !items[0].productId && state.products?.length > 0) {
+      const p = state.products[0];
+      setItems([
+        {
+          productId: p.id || p._id,
+          name: p.name || '',
+          sku: p.sku || '',
+          hsn: p.hsn || '',
+          unit: p.unit || 'PCS',
+          qty: 10,
+          rate: p.purchasePrice || 0,
+          discountPct: 0,
+          gstRate: p.gstRate || 18,
+        },
+      ]);
+    }
+  }, [state.products, items]);
+
+  const supplier = state.suppliers.find((s) => (s.id || s._id) === supplierId);
   const computed = useMemo(
     () =>
       calculateInvoiceTotals({
@@ -317,27 +343,35 @@ export const AddPurchasePage = () => {
     [items, supplier, state.business.state, shipping]
   );
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
     if (!supplier || !supplierInvoiceNo.trim()) {
       notify('Supplier and Supplier Invoice Number are required', 'error');
       return;
     }
-    savePurchaseBill({
-      supplierInvoiceNo,
-      date,
-      dueDate,
-      financialYear: selectedFY,
-      supplierId: supplier.id,
-      supplierName: supplier.name,
-      supplierGstin: supplier.gstin,
-      supplierState: supplier.state,
-      paymentMethod,
-      amountPaid: payStatus === 'Paid' ? computed.grandTotal : 0,
-      itcEligible: true,
-      ...computed,
-    });
-    navigate('/purchases');
+    setIsSaving(true);
+    try {
+      await savePurchaseBill({
+        supplierInvoiceNo,
+        date,
+        dueDate,
+        financialYear: selectedFY,
+        supplierId: supplier.id || supplier._id,
+        supplierName: supplier.name,
+        supplierGstin: supplier.gstin || supplier.GSTIN || '',
+        supplierState: supplier.state,
+        warehouseId: state.warehouses[0]?.id || state.warehouses[0]?._id,
+        paymentMethod,
+        amountPaid: payStatus === 'Paid' ? computed.grandTotal : 0,
+        itcEligible: true,
+        ...computed,
+      });
+      navigate('/purchases');
+    } catch {
+      // error handled in context
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -477,17 +511,27 @@ export const AddPurchasePage = () => {
 
 export const PurchaseReturnsPage = () => {
   const { state, createPurchaseReturn, notify } = useApp();
-  const [purchaseId, setPurchaseId] = useState(state.purchases[0]?.id || '');
+  const [purchaseId, setPurchaseId] = useState(state.purchases[0]?.id || state.purchases[0]?._id || '');
   const [qtyMap, setQtyMap] = useState({});
   const [reason, setReason] = useState('Damaged stock returned to supplier');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const selectedPur = state.purchases.find((p) => p.id === purchaseId);
+  useEffect(() => {
+    if (!purchaseId && state.purchases?.length > 0) {
+      setPurchaseId(state.purchases[0].id || state.purchases[0]._id);
+    }
+  }, [state.purchases, purchaseId]);
 
-  const handleReturn = (e) => {
+  const selectedPur = state.purchases.find((p) => (p.id || p._id) === purchaseId);
+
+  const handleReturn = async (e) => {
     e.preventDefault();
     if (!selectedPur) return;
     const retItems = (selectedPur.items || [])
-      .map((it) => ({ ...it, qty: Number(qtyMap[it.productId] || 0) }))
+      .map((it) => {
+        const pid = it.productId?._id || it.productId || it.id;
+        return { ...it, productId: pid, qty: Number(qtyMap[pid] || 0) };
+      })
       .filter((it) => it.qty > 0);
     if (!retItems.length) {
       notify('Enter return quantity for at least one item', 'error');
@@ -498,16 +542,23 @@ export const PurchaseReturnsPage = () => {
       sellerState: selectedPur.supplierState,
       placeOfSupply: state.business.state,
     });
-    createPurchaseReturn({
-      date: new Date().toISOString().slice(0, 10),
-      purchaseId: selectedPur.id,
-      billNumber: selectedPur.billNumber,
-      supplierId: selectedPur.supplierId,
-      supplierName: selectedPur.supplierName,
-      reason,
-      ...calc,
-    });
-    setQtyMap({});
+    setIsSubmitting(true);
+    try {
+      await createPurchaseReturn({
+        date: new Date().toISOString().slice(0, 10),
+        purchaseId: selectedPur._id || selectedPur.id,
+        billNumber: selectedPur.billNumber,
+        supplierId: selectedPur.supplierId,
+        supplierName: selectedPur.supplierName,
+        reason,
+        ...calc,
+      });
+      setQtyMap({});
+    } catch {
+      // handled in context
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -522,7 +573,7 @@ export const PurchaseReturnsPage = () => {
           <InputField label="Select Original Purchase Bill">
             <select value={purchaseId} onChange={(e) => { setPurchaseId(e.target.value); setQtyMap({}); }} className={inputClass}>
               {state.purchases.map((p) => (
-                <option key={p.id} value={p.id}>{p.billNumber} — {p.supplierName} ({formatINR(p.grandTotal)})</option>
+                <option key={p.id || p._id} value={p.id || p._id}>{p.billNumber} — {p.supplierName} ({formatINR(p.grandTotal)})</option>
               ))}
             </select>
           </InputField>
@@ -541,29 +592,32 @@ export const PurchaseReturnsPage = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {(selectedPur.items || []).map((it) => (
-                <tr key={it.productId}>
-                  <td className="px-3 py-2 font-medium">{it.name}</td>
-                  <td className="px-3 py-2 text-right font-mono">{it.qty}</td>
-                  <td className="px-3 py-2 text-right font-mono">{formatINR(it.rate)}</td>
-                  <td className="px-3 py-2 text-right">
-                    <input
-                      type="number"
-                      min="0"
-                      max={it.qty}
-                      value={qtyMap[it.productId] || 0}
-                      onChange={(e) => setQtyMap({ ...qtyMap, [it.productId]: Math.min(it.qty, Number(e.target.value)) })}
-                      className="w-24 rounded border border-slate-200 px-2 py-1 text-right font-mono"
-                    />
-                  </td>
-                </tr>
-              ))}
+              {(selectedPur.items || []).map((it) => {
+                const pid = it.productId?._id || it.productId || it.id;
+                return (
+                  <tr key={pid}>
+                    <td className="px-3 py-2 font-medium">{it.name}</td>
+                    <td className="px-3 py-2 text-right font-mono">{it.qty}</td>
+                    <td className="px-3 py-2 text-right font-mono">{formatINR(it.rate)}</td>
+                    <td className="px-3 py-2 text-right">
+                      <input
+                        type="number"
+                        min="0"
+                        max={it.qty}
+                        value={qtyMap[pid] || 0}
+                        onChange={(e) => setQtyMap({ ...qtyMap, [pid]: Math.min(it.qty, Number(e.target.value)) })}
+                        className="w-24 rounded border border-slate-200 px-2 py-1 text-right font-mono"
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
         <div className="flex justify-end">
-          <button type="submit" className={btnPrimary}>
-            <RotateCcw className="h-3.5 w-3.5" /> Record Purchase Return
+          <button type="submit" disabled={isSubmitting} className={`${btnPrimary} disabled:opacity-50`}>
+            <RotateCcw className="h-3.5 w-3.5" /> {isSubmitting ? 'Recording...' : 'Record Purchase Return'}
           </button>
         </div>
       </form>
@@ -586,13 +640,14 @@ export const PurchaseReturnsPage = () => {
 };
 
 export const GRNPage = () => {
-  const { state, upsertRecord, adjustInventoryStock } = useApp();
+  const { state, upsertRecord } = useApp();
   const [modalOpen, setModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [form, setForm] = useState({
     poReference: `PO-26-${Math.floor(120 + Math.random() * 80)}`,
-    supplierId: state.suppliers[0]?.id || '',
-    warehouseId: state.warehouses[0]?.id || 'wh-1',
-    productId: state.products[0]?.id || '',
+    supplierId: state.suppliers[0]?.id || state.suppliers[0]?._id || '',
+    warehouseId: state.warehouses[0]?.id || state.warehouses[0]?._id || '',
+    productId: state.products[0]?.id || state.products[0]?._id || '',
     orderedQty: 20,
     receivedQty: 18,
     damagedQty: 1,
@@ -600,48 +655,59 @@ export const GRNPage = () => {
     notes: '',
   });
 
-  const handleCreateGRN = (e) => {
-    e.preventDefault();
-    const sup = state.suppliers.find((s) => s.id === form.supplierId);
-    const prod = state.products.find((p) => p.id === form.productId);
-    const grnNumber = generateNextDocNumber('GRN/26-27/', state.grns, 'grnNumber');
-    upsertRecord(
-      'grns',
-      {
-        id: `grn-${Date.now()}`,
-        grnNumber,
-        date: new Date().toISOString().slice(0, 10),
-        poReference: form.poReference,
-        supplierId: form.supplierId,
-        supplierName: sup?.name || '',
-        warehouseId: form.warehouseId,
-        items: [
-          {
-            productId: prod?.id,
-            productName: prod?.name,
-            orderedQty: Number(form.orderedQty),
-            receivedQty: Number(form.receivedQty),
-            damagedQty: Number(form.damagedQty),
-            missingQty: Number(form.missingQty),
-          },
-        ],
-        status: 'Completed',
-        notes: form.notes || 'Goods received and verified',
-      },
-      'GRN',
-      'grnNumber'
-    );
-    if (Number(form.receivedQty) > 0 && prod) {
-      adjustInventoryStock({
-        productId: prod.id,
-        type: 'Purchase',
-        qtyChange: Number(form.receivedQty),
-        warehouseId: form.warehouseId,
-        reference: grnNumber,
-        notes: `GRN receipt against ${form.poReference}`,
-      });
+  useEffect(() => {
+    if (!form.supplierId && state.suppliers?.length > 0) {
+      setForm((prev) => ({ ...prev, supplierId: state.suppliers[0].id || state.suppliers[0]._id }));
     }
-    setModalOpen(false);
+    if (!form.productId && state.products?.length > 0) {
+      setForm((prev) => ({ ...prev, productId: state.products[0].id || state.products[0]._id }));
+    }
+    if (!form.warehouseId && state.warehouses?.length > 0) {
+      setForm((prev) => ({ ...prev, warehouseId: state.warehouses[0].id || state.warehouses[0]._id }));
+    }
+  }, [state.suppliers, state.products, state.warehouses, form.supplierId, form.productId, form.warehouseId]);
+
+  const handleCreateGRN = async (e) => {
+    e.preventDefault();
+    const sup = state.suppliers.find((s) => (s.id || s._id) === form.supplierId);
+    const prod = state.products.find((p) => (p.id || p._id) === form.productId);
+    const wh = state.warehouses.find((w) => (w.id || w._id) === form.warehouseId) || state.warehouses[0];
+    const warehouseId = wh?.id || wh?._id;
+    const grnNumber = generateNextDocNumber('GRN/26-27/', state.grns, 'grnNumber');
+    setIsSubmitting(true);
+    try {
+      await upsertRecord(
+        'grns',
+        {
+          id: `grn-${Date.now()}`,
+          grnNumber,
+          date: new Date().toISOString().slice(0, 10),
+          poReference: form.poReference,
+          supplierId: sup?._id || sup?.id || form.supplierId,
+          supplierName: sup?.name || '',
+          warehouseId: String(warehouseId),
+          items: [
+            {
+              productId: prod?._id || prod?.id || form.productId,
+              productName: prod?.name,
+              orderedQty: Number(form.orderedQty),
+              receivedQty: Number(form.receivedQty),
+              damagedQty: Number(form.damagedQty),
+              missingQty: Number(form.missingQty),
+            },
+          ],
+          status: 'Completed',
+          notes: form.notes || 'Goods received and verified',
+        },
+        'GRN',
+        'grnNumber'
+      );
+      setModalOpen(false);
+    } catch {
+      // Handled in context
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -685,7 +751,9 @@ export const GRNPage = () => {
         footer={
           <>
             <button type="button" onClick={() => setModalOpen(false)} className={btnSecondary}>Cancel</button>
-            <button type="submit" form="grn-form" className={btnPrimary}>Save GRN &amp; Update Stock</button>
+            <button type="submit" form="grn-form" disabled={isSubmitting} className={`${btnPrimary} disabled:opacity-50`}>
+              {isSubmitting ? 'Saving...' : 'Save GRN & Update Stock'}
+            </button>
           </>
         }
       >
@@ -696,17 +764,17 @@ export const GRNPage = () => {
             </InputField>
             <InputField label="Supplier" required>
               <select value={form.supplierId} onChange={(e) => setForm({ ...form, supplierId: e.target.value })} className={inputClass}>
-                {state.suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                {state.suppliers.map((s) => <option key={s.id || s._id} value={s.id || s._id}>{s.name}</option>)}
               </select>
             </InputField>
             <InputField label="Product" required>
               <select value={form.productId} onChange={(e) => setForm({ ...form, productId: e.target.value })} className={inputClass}>
-                {state.products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                {state.products.map((p) => <option key={p.id || p._id} value={p.id || p._id}>{p.name}</option>)}
               </select>
             </InputField>
             <InputField label="Warehouse">
               <select value={form.warehouseId} onChange={(e) => setForm({ ...form, warehouseId: e.target.value })} className={inputClass}>
-                {state.warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+                {state.warehouses.map((w) => <option key={w.id || w._id} value={w.id || w._id}>{w.name}</option>)}
               </select>
             </InputField>
           </div>

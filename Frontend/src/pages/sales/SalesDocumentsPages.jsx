@@ -18,24 +18,36 @@ import {
 
 // Shared helper modal to create Quotation / Sales Order / Delivery Challan / Debit Note
 const SimpleSalesDocModal = ({ open, onClose, docType, onSave, state }) => {
-  const [customerId, setCustomerId] = useState(state.customers[0]?.id || '');
+  const [customerId, setCustomerId] = useState(state.customers[0]?.id || state.customers[0]?._id || '');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [secondDate, setSecondDate] = useState(new Date(Date.now() + 15 * 86400000).toISOString().slice(0, 10));
-  const [productId, setProductId] = useState(state.products[0]?.id || '');
+  const [productId, setProductId] = useState(state.products[0]?.id || state.products[0]?._id || '');
   const [qty, setQty] = useState(5);
   const [vehicleNo, setVehicleNo] = useState('RJ-14-GC-4412');
   const [transporter, setTransporter] = useState('Self / Local Courier');
   const [reason, setReason] = useState('');
 
+  useEffect(() => {
+    if (!customerId && state.customers?.length > 0) {
+      setCustomerId(state.customers[0].id || state.customers[0]._id);
+    }
+  }, [state.customers, customerId]);
+
+  useEffect(() => {
+    if (!productId && state.products?.length > 0) {
+      setProductId(state.products[0].id || state.products[0]._id);
+    }
+  }, [state.products, productId]);
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    const cust = state.customers.find((c) => c.id === customerId);
-    const prod = state.products.find((p) => p.id === productId);
+    const cust = state.customers.find((c) => (c.id || c._id) === customerId);
+    const prod = state.products.find((p) => (p.id || p._id) === productId);
     if (!cust || !prod) return;
     const totals = calculateInvoiceTotals({
       items: [
         {
-          productId: prod.id,
+          productId: prod.id || prod._id,
           name: prod.name,
           sku: prod.sku,
           hsn: prod.hsn,
@@ -47,14 +59,15 @@ const SimpleSalesDocModal = ({ open, onClose, docType, onSave, state }) => {
         },
       ],
       sellerState: state.business.state,
-      placeOfSupply: cust.state,
+      placeOfSupply: cust.state || state.business.state,
     });
     onSave({
-      customerId: cust.id,
+      customerId: cust.id || cust._id,
       customerName: cust.name,
-      customerGstin: cust.gstin,
-      customerState: cust.state,
-      placeOfSupply: cust.state,
+      customerGstin: cust.gstin || cust.GSTIN || '',
+      customerState: cust.state || state.business.state,
+      placeOfSupply: cust.state || state.business.state,
+      warehouseId: state.warehouses[0]?.id || state.warehouses[0]?._id,
       date,
       secondDate,
       vehicleNo,
@@ -85,7 +98,7 @@ const SimpleSalesDocModal = ({ open, onClose, docType, onSave, state }) => {
         <InputField label="Customer" required>
           <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} className={inputClass}>
             {state.customers.map((c) => (
-              <option key={c.id} value={c.id}>{c.name} ({c.state})</option>
+              <option key={c.id || c._id} value={c.id || c._id}>{c.name} ({c.state})</option>
             ))}
           </select>
         </InputField>
@@ -102,7 +115,7 @@ const SimpleSalesDocModal = ({ open, onClose, docType, onSave, state }) => {
             <InputField label="Primary Product" required>
               <select value={productId} onChange={(e) => setProductId(e.target.value)} className={inputClass}>
                 {state.products.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name} (₹{p.sellingPrice})</option>
+                  <option key={p.id || p._id} value={p.id || p._id}>{p.name} (₹{p.sellingPrice})</option>
                 ))}
               </select>
             </InputField>
@@ -136,9 +149,9 @@ export const QuotationsPage = () => {
   const navigate = useNavigate();
   const [modalOpen, setModalOpen] = useState(false);
 
-  const handleSave = (payload) => {
+  const handleSave = async (payload) => {
     const quotationNumber = generateNextDocNumber('QT/26-27/', state.quotations, 'quotationNumber');
-    upsertRecord(
+    await upsertRecord(
       'quotations',
       {
         id: `qt-${Date.now()}`,
@@ -159,7 +172,7 @@ export const QuotationsPage = () => {
       confirmText: 'Delete',
       danger: true,
     });
-    if (ok) deleteRecord('quotations', row.id, 'Quotation', row.quotationNumber);
+    if (ok) await deleteRecord('quotations', row.id || row._id, 'Quotation', row.quotationNumber);
   };
 
   return (
@@ -193,7 +206,7 @@ export const QuotationsPage = () => {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => navigate(`/sales/invoices/new?fromQuote=${r.id}`)}
+                  onClick={() => navigate(`/sales/invoices/new?fromQuote=${r.id || r._id}`)}
                   className="inline-flex items-center gap-1 rounded border border-indigo-200 bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100"
                 >
                   Convert to Invoice <ArrowRight className="h-3 w-3" />
@@ -226,9 +239,9 @@ export const SalesOrdersPage = () => {
   const navigate = useNavigate();
   const [modalOpen, setModalOpen] = useState(false);
 
-  const handleSave = (payload) => {
+  const handleSave = async (payload) => {
     const orderNumber = generateNextDocNumber('SO/26-27/', state.salesOrders, 'orderNumber');
-    upsertRecord(
+    await upsertRecord(
       'salesOrders',
       { id: `so-${Date.now()}`, orderNumber, expectedDelivery: payload.secondDate, status: 'Confirmed', ...payload },
       'Sales Order',
@@ -265,7 +278,7 @@ export const SalesOrdersPage = () => {
             render: (r) => (
               <button
                 type="button"
-                onClick={() => navigate('/sales/invoices/new')}
+                onClick={() => navigate(`/sales/invoices/new?fromOrder=${r.id || r._id}`)}
                 className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:underline"
               >
                 <FileCheck2 className="h-3.5 w-3.5" />
@@ -284,9 +297,9 @@ export const DeliveryChallansPage = () => {
   const { state, upsertRecord } = useApp();
   const [modalOpen, setModalOpen] = useState(false);
 
-  const handleSave = (payload) => {
+  const handleSave = async (payload) => {
     const challanNumber = generateNextDocNumber('DC/26-27/', state.deliveryChallans, 'challanNumber');
-    upsertRecord(
+    await upsertRecord(
       'deliveryChallans',
       { id: `dc-${Date.now()}`, challanNumber, status: 'Dispatched', ...payload },
       'Delivery Challan',
@@ -335,15 +348,21 @@ export const SalesReturnsPage = () => {
     [state.invoices]
   );
 
-  const initialInvId = searchParams.get('invoiceId') || finalizedInvoices[0]?.id || '';
+  const initialInvId = searchParams.get('invoiceId') || finalizedInvoices[0]?.id || finalizedInvoices[0]?._id || '';
   const [selectedInvId, setSelectedInvId] = useState(initialInvId);
   const [returnDate, setReturnDate] = useState(new Date().toISOString().slice(0, 10));
   const [reason, setReason] = useState('Damaged or excess goods returned by customer');
   const [restoreStock, setRestoreStock] = useState(true);
   const [returnQtyMap, setReturnQtyMap] = useState({});
 
+  useEffect(() => {
+    if (!selectedInvId && finalizedInvoices.length > 0) {
+      setSelectedInvId(finalizedInvoices[0].id || finalizedInvoices[0]._id);
+    }
+  }, [finalizedInvoices, selectedInvId]);
+
   const selectedInvoice = useMemo(
-    () => finalizedInvoices.find((i) => i.id === selectedInvId),
+    () => finalizedInvoices.find((i) => (i.id || i._id) === selectedInvId),
     [finalizedInvoices, selectedInvId]
   );
 
@@ -351,10 +370,12 @@ export const SalesReturnsPage = () => {
     if (!selectedInvoice) return null;
     const items = (selectedInvoice.items || [])
       .map((it) => {
-        const rq = Number(returnQtyMap[it.productId] ?? 0);
+        const pid = it.productId?._id || it.productId || it.id;
+        const rq = Number(returnQtyMap[pid] ?? 0);
         if (rq <= 0) return null;
         return {
           ...it,
+          productId: pid,
           qty: Math.min(it.qty, rq),
         };
       })
@@ -367,26 +388,30 @@ export const SalesReturnsPage = () => {
     });
   }, [selectedInvoice, returnQtyMap, state.business.state]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!selectedInvoice || !computedReturn) {
       notify('Enter return quantity for at least one item', 'error');
       return;
     }
-    createSalesReturnCreditNote({
-      date: returnDate,
-      invoiceId: selectedInvoice.id,
-      invoiceNumber: selectedInvoice.invoiceNumber,
-      customerId: selectedInvoice.customerId,
-      customerName: selectedInvoice.customerName,
-      customerState: selectedInvoice.customerState,
-      placeOfSupply: selectedInvoice.placeOfSupply,
-      reason,
-      restoreStock,
-      ...computedReturn,
-    });
-    setReturnQtyMap({});
-    navigate('/sales/notes');
+    try {
+      await createSalesReturnCreditNote({
+        date: returnDate,
+        invoiceId: selectedInvoice.id || selectedInvoice._id,
+        invoiceNumber: selectedInvoice.invoiceNumber,
+        customerId: selectedInvoice.customerId,
+        customerName: selectedInvoice.customerName,
+        customerState: selectedInvoice.customerState,
+        placeOfSupply: selectedInvoice.placeOfSupply,
+        reason,
+        restoreStock,
+        ...computedReturn,
+      });
+      setReturnQtyMap({});
+      navigate('/sales/notes');
+    } catch {
+      // Handled in context
+    }
   };
 
   return (

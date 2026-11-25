@@ -18,3 +18,11 @@ export const computePaymentStatus = (grandTotal, amountPaid) => {
   if (paid >= total - 0.5) return 'Paid';
   return 'Partial';
 };
+
+export * from './salesInvoiceService.js';
+import salesInvoiceService from './salesInvoiceService.js';
+export default {
+  generateNextDocNumber,
+  computePaymentStatus,
+  ...salesInvoiceService,
+};
