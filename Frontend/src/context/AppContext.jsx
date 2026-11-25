@@ -32,6 +32,11 @@ import * as bankAccountService from '../services/bankAccountService';
 import * as bankTransactionService from '../services/bankTransactionService';
 import * as expenseService from '../services/expenseService';
 import * as posService from '../services/posService';
+import * as accountingService from '../services/accountingService';
+import * as gstService from '../services/gstService';
+import * as eInvoiceService from '../services/eInvoiceService';
+import * as eWayBillService from '../services/eWayBillService';
+import * as reportsService from '../services/reportsService';
 
 const AppContext = createContext(null);
 
@@ -173,6 +178,11 @@ export const AppProvider = ({ children }) => {
         bankAccountsRes,
         expensesRes,
         categoriesRes,
+        accountsRes,
+        journalEntriesRes,
+        eInvoicesRes,
+        eWayBillsRes,
+        calendarRes,
       ] = await Promise.allSettled([
         salesInvoiceService.getInvoices({ limit: 100 }),
         quotationService.getQuotations({ limit: 100 }),
@@ -187,6 +197,11 @@ export const AppProvider = ({ children }) => {
         bankAccountService.getBankAccounts({ limit: 100 }),
         expenseService.getExpenses({ limit: 100 }),
         expenseService.getCategories(),
+        accountingService.getAccounts(),
+        accountingService.getJournalEntries({ limit: 100 }),
+        eInvoiceService.getEInvoices({ limit: 100 }),
+        eWayBillService.getEWayBills({ limit: 100 }),
+        gstService.getFilingCalendar(),
       ]);
 
       setState((prev) => {
@@ -424,6 +439,78 @@ export const AppProvider = ({ children }) => {
 
         if (categoriesRes.status === 'fulfilled' && categoriesRes.value) {
           next.expenseCategories = Array.isArray(categoriesRes.value) ? categoriesRes.value : (categoriesRes.value.data || []);
+        }
+
+        if (accountsRes.status === 'fulfilled' && accountsRes.value) {
+          const rawAccounts = Array.isArray(accountsRes.value) ? accountsRes.value : (accountsRes.value.data || []);
+          next.chartOfAccounts = rawAccounts.map((a) => ({
+            ...a,
+            id: String(a._id || a.id),
+            code: a.accountCode || a.code,
+            name: a.accountName || a.name,
+            group: a.accountSubType || a.group || 'General',
+            type: a.accountType ? a.accountType.charAt(0).toUpperCase() + a.accountType.slice(1) : (a.type || 'Asset'),
+            normalBalance: a.balanceType ? a.balanceType.charAt(0).toUpperCase() + a.balanceType.slice(1) : (a.normalBalance || 'Debit'),
+            openingBalance: Number(a.openingBalance) || 0,
+          }));
+        }
+
+        if (journalEntriesRes.status === 'fulfilled' && journalEntriesRes.value) {
+          const rawJournals = journalEntriesRes.value.entries || journalEntriesRes.value.data?.entries || [];
+          next.journalEntries = rawJournals.map((je) => ({
+            ...je,
+            id: String(je._id || je.id),
+            entryNumber: je.entryNumber,
+            date: je.entryDate ? new Date(je.entryDate).toISOString().slice(0, 10) : (je.date || ''),
+            voucherType: je.sourceType === 'manual' ? 'Journal' : (je.sourceType || 'Journal'),
+            narration: je.narration || '',
+            lines: (je.lines || []).map((l) => ({
+              ...l,
+              accountName: l.accountName || '',
+              accountCode: l.accountCode || '',
+              debit: Number(l.debit) || 0,
+              credit: Number(l.credit) || 0,
+            })),
+          }));
+        }
+
+        if (eInvoicesRes.status === 'fulfilled' && eInvoicesRes.value) {
+          const rawEInvs = eInvoicesRes.value.eInvoices || eInvoicesRes.value.data?.eInvoices || [];
+          next.eInvoices = rawEInvs.map((e) => ({
+            ...e,
+            id: String(e._id || e.id),
+            invoiceId: String(e.salesInvoiceId?._id || e.salesInvoiceId || ''),
+            invoiceNumber: e.documentNumber,
+            customerName: e.recipientGSTIN || '',
+            gstin: e.recipientGSTIN || 'URP',
+            irn: e.IRN || '',
+            ackNo: e.ackNo || '',
+            ackDate: e.ackDate ? new Date(e.ackDate).toISOString().replace('T', ' ').slice(0, 19) : '',
+            status: e.status === 'generated' ? 'Generated' : (e.status === 'cancelled' ? 'Cancelled' : 'Pending'),
+            qrPayload: e.signedQRCode || '',
+          }));
+        }
+
+        if (eWayBillsRes.status === 'fulfilled' && eWayBillsRes.value) {
+          const rawEWBs = eWayBillsRes.value.eWayBills || eWayBillsRes.value.data?.eWayBills || [];
+          next.eWayBills = rawEWBs.map((ewb) => ({
+            ...ewb,
+            id: String(ewb._id || ewb.id),
+            invoiceId: String(ewb.salesInvoiceId?._id || ewb.salesInvoiceId || ''),
+            invoiceNumber: ewb.documentNumber,
+            ewbNumber: ewb.eWayBillNumber || ewb.ewbNumber,
+            generatedDate: ewb.eWayBillDate ? new Date(ewb.eWayBillDate).toISOString().slice(0, 10) : '',
+            validUpto: ewb.validUpto ? new Date(ewb.validUpto).toISOString().slice(0, 10) : '',
+            vehicleNo: ewb.vehicleNumber || '',
+            fromPlace: ewb.fromPlace || '',
+            toPlace: ewb.toPlace || '',
+            distanceKm: ewb.distanceKm || 0,
+            status: ewb.status === 'active' ? 'Active' : (ewb.status === 'cancelled' ? 'Cancelled' : (ewb.status || 'Active')),
+          }));
+        }
+
+        if (calendarRes.status === 'fulfilled' && calendarRes.value) {
+          next.gstCalendar = Array.isArray(calendarRes.value) ? calendarRes.value : (calendarRes.value.calendar || calendarRes.value.data || []);
         }
 
         return next;
@@ -691,6 +778,11 @@ export const AppProvider = ({ children }) => {
       bankAccounts: [],
       expenses: [],
       expenseCategories: [],
+      chartOfAccounts: [],
+      journalEntries: [],
+      eInvoices: [],
+      eWayBills: [],
+      gstCalendar: [],
     }));
     notify('Signed out successfully');
   }, [notify]);
@@ -1208,6 +1300,26 @@ export const AppProvider = ({ children }) => {
           await loadPhase2Data();
           return saved;
         }
+
+        if (collectionKey === 'chartOfAccounts' || collectionKey === 'accounts') {
+          const isEdit = Boolean(record._id || (record.id && record.id.length === 24));
+          const id = record._id || record.id;
+          const payload = {
+            accountName: record.name || record.accountName,
+            accountCode: String(record.code || record.accountCode),
+            accountType: (record.type || record.accountType || 'asset').toLowerCase(),
+            accountSubType: record.group || record.accountSubType || 'general',
+            balanceType: (record.normalBalance || record.balanceType || 'debit').toLowerCase(),
+            openingBalance: Number(record.openingBalance || 0),
+            description: record.description || '',
+          };
+          const saved = isEdit
+            ? await accountingService.updateAccount(id, payload)
+            : await accountingService.createAccount(payload);
+          notify(`${auditModule} saved successfully`);
+          await loadPhase2Data();
+          return saved;
+        }
       }
 
       // In-memory / Prototype fallback for purely offline/demo testing
@@ -1266,6 +1378,9 @@ export const AppProvider = ({ children }) => {
             await loadPhase2Data();
           } else if (collectionKey === 'bankAccounts') {
             await bankAccountService.deleteBankAccount(id);
+            await loadPhase2Data();
+          } else if (collectionKey === 'chartOfAccounts' || collectionKey === 'accounts') {
+            await accountingService.deleteAccount(id);
             await loadPhase2Data();
           }
         } catch (err) {
@@ -1798,57 +1913,132 @@ export const AppProvider = ({ children }) => {
     [loadPhase1Data, loadPhase2Data, notify, state.warehouses]
   );
 
-  // Simulated Demo E-Invoice IRN & E-Way Bill
-  const generateDemoIRN = useCallback((invoice) => {
-    const hash = Math.random().toString(16).slice(2, 18) + Date.now().toString(16);
-    const record = {
-      id: `einv-${Date.now()}`,
-      invoiceId: invoice.id,
-      invoiceNumber: invoice.invoiceNumber,
-      customerName: invoice.customerName,
-      gstin: invoice.customerGstin || 'URP',
-      grandTotal: invoice.grandTotal,
-      irn: `DEMO-IRN-${hash}`,
-      ackNo: `DEMO-ACK-${Date.now().toString().slice(-10)}`,
-      ackDate: new Date().toISOString().replace('T', ' ').slice(0, 19),
-      status: 'Generated (Demo)',
-      qrPayload: `DEMO-EINV|08AABCS1234F1Z5|${invoice.invoiceNumber}|${invoice.grandTotal}`,
-    };
-    updateStateWithAudit(
-      (prev) => ({ ...prev, eInvoices: [record, ...prev.eInvoices] }),
-      {
-        action: 'Generated Demo IRN',
-        module: 'E-Invoice',
-        recordRef: invoice.invoiceNumber,
-        prevValue: 'Pending',
-        newValue: record.irn.slice(0, 22),
+  // E-Invoice Generation (Live with Backend /api/e-invoices)
+  const generateEInvoice = useCallback(
+    async (invoiceOrData) => {
+      const isAuth = Boolean(getToken());
+      if (!isAuth) {
+        notify('You must be signed in to generate e-invoices', 'error');
+        return null;
       }
-    );
-    notify('Simulated Demo IRN generated (Not an official IRP filing)');
-    return record;
-  }, [notify, updateStateWithAudit]);
+      try {
+        const payload = invoiceOrData.salesInvoiceId
+          ? invoiceOrData
+          : { salesInvoiceId: String(invoiceOrData._id || invoiceOrData.id || invoiceOrData.invoiceId) };
+        const res = await eInvoiceService.generateEInvoice(payload);
+        notify(`IRN generated successfully: ${res.IRN || ''}`);
+        await loadPhase2Data();
+        return res;
+      } catch (err) {
+        notify(err.message || 'Failed to generate e-invoice', 'error');
+        throw err;
+      }
+    },
+    [loadPhase2Data, notify]
+  );
 
-  const generateDemoEWayBill = useCallback((payload) => {
-    const record = {
-      id: `ewb-${Date.now()}`,
-      ewbNumber: `DEMO-EWB-${Math.floor(741000000000 + Math.random() * 99999999)}`,
-      ...payload,
-      generatedDate: new Date().toISOString().slice(0, 10),
-      status: 'Active (Demo)',
-    };
-    updateStateWithAudit(
-      (prev) => ({ ...prev, eWayBills: [record, ...prev.eWayBills] }),
-      {
-        action: 'Generated Demo E-Way Bill',
-        module: 'E-Way Bill',
-        recordRef: payload.invoiceNumber,
-        prevValue: '—',
-        newValue: record.ewbNumber,
+  const cancelEInvoice = useCallback(
+    async (eInvoiceId, cancellationReason = '1', cancellationRemarks = 'Cancelled by user') => {
+      const isAuth = Boolean(getToken());
+      if (!isAuth) return null;
+      try {
+        const res = await eInvoiceService.cancelEInvoice(eInvoiceId, {
+          cancellationReason: String(cancellationReason),
+          cancellationRemarks: String(cancellationRemarks),
+        });
+        notify('E-Invoice cancelled successfully');
+        await loadPhase2Data();
+        return res;
+      } catch (err) {
+        notify(err.message || 'Failed to cancel e-invoice', 'error');
+        throw err;
       }
-    );
-    notify('Simulated Demo E-Way Bill created');
-    return record;
-  }, [notify, updateStateWithAudit]);
+    },
+    [loadPhase2Data, notify]
+  );
+
+  // E-Way Bill Generation (Live with Backend /api/e-way-bills)
+  const generateEWayBill = useCallback(
+    async (ewbPayload) => {
+      const isAuth = Boolean(getToken());
+      if (!isAuth) {
+        notify('You must be signed in to generate e-way bills', 'error');
+        return null;
+      }
+      try {
+        const res = await eWayBillService.generateEWayBill(ewbPayload);
+        notify(`E-Way Bill generated successfully: ${res.eWayBillNumber || res.ewbNumber || ''}`);
+        await loadPhase2Data();
+        return res;
+      } catch (err) {
+        notify(err.message || 'Failed to generate e-way bill', 'error');
+        throw err;
+      }
+    },
+    [loadPhase2Data, notify]
+  );
+
+  const cancelEWayBill = useCallback(
+    async (ewbId, cancellationReason = '1', cancellationRemarks = 'Cancelled by user') => {
+      const isAuth = Boolean(getToken());
+      if (!isAuth) return null;
+      try {
+        const res = await eWayBillService.cancelEWayBill(ewbId, {
+          cancellationReason: String(cancellationReason),
+          cancellationRemarks: String(cancellationRemarks),
+        });
+        notify('E-Way Bill cancelled successfully');
+        await loadPhase2Data();
+        return res;
+      } catch (err) {
+        notify(err.message || 'Failed to cancel e-way bill', 'error');
+        throw err;
+      }
+    },
+    [loadPhase2Data, notify]
+  );
+
+  // Journal Entry Posting (Live with Backend /api/accounting/journal-entries)
+  const postJournalEntry = useCallback(
+    async (entryData) => {
+      const isAuth = Boolean(getToken());
+      if (!isAuth) {
+        notify('You must be signed in to post journal entries', 'error');
+        return null;
+      }
+      try {
+        const res = await accountingService.createJournalEntry(entryData);
+        notify(`Journal entry ${res.entryNumber || ''} posted successfully`);
+        await loadPhase2Data();
+        return res;
+      } catch (err) {
+        notify(err.message || 'Failed to post journal entry', 'error');
+        throw err;
+      }
+    },
+    [loadPhase2Data, notify]
+  );
+
+  const reverseJournalEntry = useCallback(
+    async (id, data = {}) => {
+      const isAuth = Boolean(getToken());
+      if (!isAuth) return null;
+      try {
+        const res = await accountingService.reverseJournalEntry(id, data);
+        notify('Journal entry reversed successfully');
+        await loadPhase2Data();
+        return res;
+      } catch (err) {
+        notify(err.message || 'Failed to reverse journal entry', 'error');
+        throw err;
+      }
+    },
+    [loadPhase2Data, notify]
+  );
+
+  // Legacy simulated aliases pointing directly to live API handlers
+  const generateDemoIRN = generateEInvoice;
+  const generateDemoEWayBill = generateEWayBill;
 
   const updateBusinessAndSettings = useCallback(
     async (businessPatch, settingsPatch) => {
@@ -1951,6 +2141,12 @@ export const AppProvider = ({ children }) => {
     adjustInventoryStock,
     transferCashBank,
     savePosBill,
+    generateEInvoice,
+    cancelEInvoice,
+    generateEWayBill,
+    cancelEWayBill,
+    postJournalEntry,
+    reverseJournalEntry,
     generateDemoIRN,
     generateDemoEWayBill,
     updateBusinessAndSettings,

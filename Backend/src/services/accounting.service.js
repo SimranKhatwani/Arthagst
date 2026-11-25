@@ -632,11 +632,22 @@ export const reverseJournalEntry = async (tenantId, userId, id, { reason = 'Manu
  * 1. General Ledger
  */
 export const getGeneralLedger = async (tenantId, options = {}) => {
-  const { accountId, financialYear, startDate, endDate, partyId } = options;
+  let { accountId, financialYear, startDate, endDate, partyId } = options;
 
   if (!accountId || !mongoose.isValidObjectId(accountId)) {
-    const error = new Error('Valid account ID is required for General Ledger report.');
-    error.statusCode = 400;
+    const firstAcc = await Account.findOne({ tenantId, isDeleted: false }).sort({ accountCode: 1 });
+    if (firstAcc) {
+      accountId = firstAcc._id.toString();
+    } else {
+      await seedDefaultAccounts(tenantId);
+      const seeded = await Account.findOne({ tenantId, isDeleted: false }).sort({ accountCode: 1 });
+      if (seeded) accountId = seeded._id.toString();
+    }
+  }
+
+  if (!accountId) {
+    const error = new Error('No accounts found for General Ledger report.');
+    error.statusCode = 404;
     throw error;
   }
 

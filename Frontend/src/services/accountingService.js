@@ -1,6 +1,102 @@
+import api from './api.js';
 import { round2 } from './calculationService';
 import { CHART_OF_ACCOUNTS } from '../data/constants';
 
+/**
+ * Chart of Accounts (COA) API methods
+ * Connected to /api/accounting/accounts
+ */
+export const getAccounts = async (params = {}) => {
+  const res = await api.get('/accounting/accounts', { params });
+  return res.data; // Array of accounts
+};
+
+export const getAccountById = async (id) => {
+  const res = await api.get(`/accounting/accounts/${id}`);
+  return res.data;
+};
+
+export const createAccount = async (data) => {
+  const res = await api.post('/accounting/accounts', data);
+  return res.data;
+};
+
+export const updateAccount = async (id, data) => {
+  const res = await api.put(`/accounting/accounts/${id}`, data);
+  return res.data;
+};
+
+export const deleteAccount = async (id) => {
+  const res = await api.delete(`/accounting/accounts/${id}`);
+  return res.data;
+};
+
+export const seedAccounts = async () => {
+  const res = await api.post('/accounting/accounts/seed');
+  return res.data;
+};
+
+/**
+ * Journal Entries API methods
+ * Connected to /api/accounting/journal-entries
+ */
+export const getJournalEntries = async (params = {}) => {
+  const res = await api.get('/accounting/journal-entries', { params });
+  return res.data; // { entries: [...], pagination: { ... } }
+};
+
+export const getJournalEntryById = async (id) => {
+  const res = await api.get(`/accounting/journal-entries/${id}`);
+  return res.data;
+};
+
+export const createJournalEntry = async (data) => {
+  const res = await api.post('/accounting/journal-entries', data);
+  return res.data;
+};
+
+export const reverseJournalEntry = async (id, data = {}) => {
+  const res = await api.post(`/accounting/journal-entries/${id}/reverse`, data);
+  return res.data;
+};
+
+/**
+ * Financial Reports API methods
+ * Connected to /api/accounting/reports
+ */
+export const getGeneralLedger = async (params = {}) => {
+  const res = await api.get('/accounting/reports/general-ledger', { params });
+  return res.data;
+};
+
+export const getTrialBalance = async (params = {}) => {
+  const res = await api.get('/accounting/reports/trial-balance', { params });
+  return res.data;
+};
+
+export const getProfitAndLoss = async (params = {}) => {
+  const res = await api.get('/accounting/reports/profit-and-loss', { params });
+  return res.data;
+};
+
+export const getBalanceSheet = async (params = {}) => {
+  const res = await api.get('/accounting/reports/balance-sheet', { params });
+  return res.data;
+};
+
+export const getCashFlowStatement = async (params = {}) => {
+  const res = await api.get('/accounting/reports/cash-flow', { params });
+  return res.data;
+};
+
+export const closeFinancialYear = async (data) => {
+  const res = await api.post('/accounting/fiscal-year/close', data);
+  return res.data;
+};
+
+/**
+ * Legacy In-Memory Calculators (Kept for safe backward compatibility)
+ */
 export const generateGeneralLedgerEntries = (data) => {
   const entries = [];
 
@@ -103,8 +199,8 @@ export const generateGeneralLedgerEntries = (data) => {
         voucherNo: je.entryNumber,
         voucherType: je.voucherType || 'Journal',
         accountName: line.accountName,
-        accountCode: line.accountCode || '9999',
-        contraAccount: je.narration,
+        accountCode: line.accountCode,
+        contraAccount: 'Journal Adjustment',
         debit: Number(line.debit) || 0,
         credit: Number(line.credit) || 0,
         narration: je.narration,
@@ -119,33 +215,30 @@ export const computeFinancialStatements = (data) => {
   const validInvoices = (data.invoices || []).filter(
     (i) => i.status !== 'Draft' && i.status !== 'Cancelled'
   );
-  const validCNs = (data.creditNotes || []).filter((c) => c.status === 'Issued');
   const validPurchases = (data.purchases || []).filter((p) => p.status !== 'Cancelled');
   const validExpenses = (data.expenses || []).filter((e) => e.status !== 'Archived');
+  const validCNs = (data.creditNotes || []).filter((c) => c.status === 'Issued');
 
   const grossSales = validInvoices.reduce((s, i) => s + (Number(i.taxableValue) || 0), 0);
   const salesReturns = validCNs.reduce((s, c) => s + (Number(c.taxableValue) || 0), 0);
-  const netSales = round2(grossSales - salesReturns);
-  const shippingIncome = validInvoices.reduce(
-    (s, i) => s + (Number(i.shipping) || 0) + (Number(i.otherCharges) || 0),
-    0
-  );
+  const netSales = round2(Math.max(0, grossSales - salesReturns));
+  const shippingIncome = validInvoices.reduce((s, i) => s + (Number(i.shippingCharges) || 0), 0);
 
   const totalPurchases = validPurchases.reduce((s, p) => s + (Number(p.taxableValue) || 0), 0);
-  const closingStock = (data.products || [])
-    .filter((p) => !p.archived)
-    .reduce((s, p) => s + Math.max(0, Number(p.stock) || 0) * (Number(p.purchasePrice) || 0), 0);
-
-  const cogs = round2(Math.max(0, totalPurchases * 0.72));
+  const closingStock = (data.products || []).reduce(
+    (s, p) => s + (Number(p.currentStock) || 0) * (Number(p.purchasePrice) || 0),
+    0
+  );
+  const openingStock = 240000;
+  const cogs = round2(Math.max(0, openingStock + totalPurchases - closingStock));
   const grossProfit = round2(netSales + shippingIncome - cogs);
 
   const expenseByCategory = {};
   validExpenses.forEach((e) => {
-    expenseByCategory[e.category] = round2((expenseByCategory[e.category] || 0) + (Number(e.amount) || 0));
+    const cat = e.category || 'General';
+    expenseByCategory[cat] = round2((expenseByCategory[cat] || 0) + (Number(e.amount) || 0));
   });
-  const totalOperatingExpenses = round2(
-    Object.values(expenseByCategory).reduce((s, v) => s + v, 0)
-  );
+  const totalOperatingExpenses = round2(Object.values(expenseByCategory).reduce((s, a) => s + a, 0));
   const netProfit = round2(grossProfit - totalOperatingExpenses);
 
   const cashBankTotal = (data.bankAccounts || []).reduce((s, a) => s + (Number(a.balance) || 0), 0);
@@ -166,7 +259,6 @@ export const computeFinancialStatements = (data) => {
   const totalLiabilities = round2(payables + netGstLiability + 18000);
   const totalEquity = round2(totalAssets - totalLiabilities);
 
-  // Trial Balance summary derived from accounts + transactions
   const trialBalance = CHART_OF_ACCOUNTS.map((acc) => {
     let debit = 0;
     let credit = 0;
@@ -174,10 +266,10 @@ export const computeFinancialStatements = (data) => {
       const cashAcc = (data.bankAccounts || []).find((b) => b.type === 'Cash');
       debit = cashAcc ? cashAcc.balance : acc.openingBalance;
     } else if (acc.code === '1002') {
-      const hdfc = (data.bankAccounts || []).find((b) => b.name.includes('HDFC'));
+      const hdfc = (data.bankAccounts || []).find((b) => b.name && b.name.includes('HDFC'));
       debit = hdfc ? hdfc.balance : acc.openingBalance;
     } else if (acc.code === '1003') {
-      const icici = (data.bankAccounts || []).find((b) => b.name.includes('ICICI'));
+      const icici = (data.bankAccounts || []).find((b) => b.name && b.name.includes('ICICI'));
       debit = icici ? icici.balance : acc.openingBalance;
     } else if (acc.code === '1004') {
       const upi = (data.bankAccounts || []).find((b) => b.type === 'UPI');
@@ -247,4 +339,25 @@ export const computeFinancialStatements = (data) => {
     },
     trialBalance,
   };
+};
+
+export default {
+  getAccounts,
+  getAccountById,
+  createAccount,
+  updateAccount,
+  deleteAccount,
+  seedAccounts,
+  getJournalEntries,
+  getJournalEntryById,
+  createJournalEntry,
+  reverseJournalEntry,
+  getGeneralLedger,
+  getTrialBalance,
+  getProfitAndLoss,
+  getBalanceSheet,
+  getCashFlowStatement,
+  closeFinancialYear,
+  generateGeneralLedgerEntries,
+  computeFinancialStatements,
 };

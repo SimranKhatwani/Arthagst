@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Download, Printer } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { useApp } from '../../context/AppContext';
+import * as reportsService from '../../services/reportsService';
 import {
   formatINR,
   formatDateIN,
@@ -30,6 +31,25 @@ export const ReportsCenterPage = ({ category = 'sales' }) => {
   const [dateFrom, setDateFrom] = useState('2026-04-01');
   const [dateTo, setDateTo] = useState('2027-03-31');
   const [subTab, setSubTab] = useState('primary');
+  const [backendReport, setBackendReport] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchReport = async () => {
+      try {
+        const params = { financialYear: selectedFY, startDate: dateFrom, endDate: dateTo };
+        let res = null;
+        if (category === 'sales') res = await reportsService.getSalesSummary(params);
+        else if (category === 'purchases') res = await reportsService.getPurchaseSummary(params);
+        else if (category === 'inventory') res = await reportsService.getStockValuationReport();
+        if (!cancelled && res) setBackendReport(res);
+      } catch (err) {
+        console.warn('Backend report notice:', err?.message);
+      }
+    };
+    fetchReport();
+    return () => { cancelled = true; };
+  }, [category, selectedFY, dateFrom, dateTo]);
 
   const inRange = (d) => (!d ? true : d >= dateFrom && d <= dateTo);
 
@@ -163,9 +183,9 @@ export const ReportsCenterPage = ({ category = 'sales' }) => {
       {category === 'sales' && (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <StatCard label="Total Sales Value" value={formatINR(validInvoices.reduce((s, i) => s + i.grandTotal, 0), false)} />
-            <StatCard label="Taxable Turnover" value={formatINR(validInvoices.reduce((s, i) => s + i.taxableValue, 0), false)} />
-            <StatCard label="Invoices Count" value={validInvoices.length} />
+            <StatCard label="Total Sales Value" value={formatINR(backendReport?.totalGrossSales ?? validInvoices.reduce((s, i) => s + i.grandTotal, 0), false)} />
+            <StatCard label="Taxable Turnover" value={formatINR(backendReport?.totalTaxableAmount ?? validInvoices.reduce((s, i) => s + i.taxableValue, 0), false)} />
+            <StatCard label="Invoices Count" value={backendReport?.invoiceCount ?? validInvoices.length} />
           </div>
           <SegmentedTabs
             activeTab={subTab}
@@ -228,9 +248,9 @@ export const ReportsCenterPage = ({ category = 'sales' }) => {
       {category === 'purchases' && (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <StatCard label="Total Purchases" value={formatINR(validPurchases.reduce((s, p) => s + p.grandTotal, 0), false)} />
-            <StatCard label="Input GST (ITC)" value={formatINR(validPurchases.reduce((s, p) => s + p.totalTax, 0), false)} tone="success" />
-            <StatCard label="Purchase Bills" value={validPurchases.length} />
+            <StatCard label="Total Purchases" value={formatINR(backendReport?.totalGrossPurchases ?? validPurchases.reduce((s, p) => s + p.grandTotal, 0), false)} />
+            <StatCard label="Input GST (ITC)" value={formatINR(backendReport?.totalTaxAmount ?? validPurchases.reduce((s, p) => s + p.totalTax, 0), false)} tone="success" />
+            <StatCard label="Purchase Bills" value={backendReport?.billCount ?? validPurchases.length} />
           </div>
           <DataTable
             data={validPurchases}

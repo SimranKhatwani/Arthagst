@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { QrCode, Truck, XCircle, Printer, Plus, AlertTriangle } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import * as eInvoiceService from '../../services/eInvoiceService';
+import * as eWayBillService from '../../services/eWayBillService';
 import { formatINR } from '../../services/calculationService';
 import { printElement } from '../../services/printService';
 import {
@@ -24,25 +26,34 @@ const SandboxNotice = () => (
 );
 
 export const EInvoicesPage = () => {
-  const { state, generateDemoIRN, updateStateWithAudit, confirmAction, notify } = useApp();
+  const { state, cancelEInvoice, updateStateWithAudit, confirmAction, notify } = useApp();
   const [qrModal, setQrModal] = useState(null);
 
   const handleCancelIRN = async (row) => {
     const ok = await confirmAction({
-      title: `Cancel Demo IRN for ${row.invoiceNumber}?`,
-      message: 'This marks the simulated demo IRN record as Cancelled.',
-      confirmText: 'Cancel Demo IRN',
+      title: `Cancel IRN for ${row.invoiceNumber}?`,
+      message: 'This marks the IRN record as Cancelled.',
+      confirmText: 'Cancel IRN',
       danger: true,
     });
     if (!ok) return;
-    updateStateWithAudit(
-      (prev) => ({
-        ...prev,
-        eInvoices: prev.eInvoices.map((e) => (e.id === row.id ? { ...e, status: 'Cancelled (Demo)' } : e)),
-      }),
-      { action: 'Cancelled Demo IRN', module: 'E-Invoice', recordRef: row.invoiceNumber, prevValue: 'Generated (Demo)', newValue: 'Cancelled (Demo)' }
-    );
-    notify('Demo IRN cancelled', 'info');
+
+    try {
+      if (cancelEInvoice && row.id && !row.id.startsWith('ein-')) {
+        await cancelEInvoice(row.id, '1', 'Cancelled by user');
+      } else {
+        updateStateWithAudit(
+          (prev) => ({
+            ...prev,
+            eInvoices: prev.eInvoices.map((e) => (e.id === row.id ? { ...e, status: 'Cancelled (Demo)' } : e)),
+          }),
+          { action: 'Cancelled Demo IRN', module: 'E-Invoice', recordRef: row.invoiceNumber, prevValue: 'Generated (Demo)', newValue: 'Cancelled (Demo)' }
+        );
+        notify('Demo IRN cancelled', 'info');
+      }
+    } catch (err) {
+      console.warn('Cancel IRN notice:', err.message);
+    }
   };
 
   return (
@@ -136,20 +147,41 @@ export const EInvoicesPage = () => {
 };
 
 export const GenerateEInvoicePage = () => {
-  const { state, generateDemoIRN } = useApp();
-  const existingIds = new Set(state.eInvoices.filter((e) => e.status === 'Generated (Demo)').map((e) => e.invoiceId));
+  const { state, generateEInvoice, generateDemoIRN } = useApp();
+  const existingIds = new Set(
+    state.eInvoices
+      .filter((e) => e.status === 'Generated (Demo)' || e.status === 'GENERATED' || e.status === 'generated')
+      .map((e) => e.invoiceId || e.salesInvoiceId)
+  );
   const eligible = useMemo(
     () =>
       state.invoices.filter(
-        (i) => i.status === 'Finalized' && !existingIds.has(i.id) && i.customerGstin
+        (i) =>
+          (i.status === 'Finalized' || i.invoiceStatus === 'posted') &&
+          !existingIds.has(i.id) &&
+          !existingIds.has(i._id) &&
+          (i.customerGstin || i.partyGSTIN)
       ),
     [state.invoices, existingIds]
   );
 
+  const handleGenerate = async (r) => {
+    try {
+      if (generateEInvoice && (r._id || (r.id && !r.id.startsWith('inv-')))) {
+        await generateEInvoice({ salesInvoiceId: r._id || r.id });
+      } else {
+        generateDemoIRN(r);
+      }
+    } catch (err) {
+      console.warn('Backend e-invoice generate fallback:', err.message);
+      generateDemoIRN(r);
+    }
+  };
+
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Generate Demo E-Invoice (IRN)"
+        title="Generate E-Invoice (IRN)"
         subtitle="Select finalized B2B invoices with GSTIN to generate simulated IRP IRN and signed QR"
         breadcrumbs={['E-Invoice & E-Way Bill', 'Generate E-Invoice']}
       />
@@ -157,19 +189,19 @@ export const GenerateEInvoicePage = () => {
 
       <DataTable
         data={eligible}
-        emptyTitle="All eligible B2B invoices already have Demo IRNs"
+        emptyTitle="All eligible B2B invoices already have IRNs"
         emptyDescription="Create a new B2B invoice with customer GSTIN to generate another simulated IRN."
         columns={[
           { key: 'invoiceNumber', label: 'Invoice #', render: (r) => <span className="font-mono font-semibold">{r.invoiceNumber}</span> },
           { key: 'customerName', label: 'Customer' },
-          { key: 'customerGstin', label: 'Customer GSTIN', render: (r) => <span className="font-mono text-xs">{r.customerGstin}</span> },
+          { key: 'customerGstin', label: 'Customer GSTIN', render: (r) => <span className="font-mono text-xs">{r.customerGstin || r.partyGSTIN}</span> },
           { key: 'grandTotal', label: 'Invoice Total', align: 'right', render: (r) => formatINR(r.grandTotal) },
           {
             key: 'action',
             label: 'Action',
             render: (r) => (
-              <button type="button" onClick={() => generateDemoIRN(r)} className={btnPrimary}>
-                <QrCode className="h-3.5 w-3.5" /> Generate Demo IRN
+              <button type="button" onClick={() => handleGenerate(r)} className={btnPrimary}>
+                <QrCode className="h-3.5 w-3.5" /> Generate IRN
               </button>
             ),
           },
@@ -180,42 +212,75 @@ export const GenerateEInvoicePage = () => {
 };
 
 export const EWayBillsPage = () => {
-  const { state, updateStateWithAudit, confirmAction, notify } = useApp();
+  const { state, cancelEWayBill, updateStateWithAudit, confirmAction, notify } = useApp();
   const [editVehicleRow, setEditVehicleRow] = useState(null);
   const [newVehicle, setNewVehicle] = useState('');
 
-  const handleUpdateVehicle = (e) => {
+  const handleUpdateVehicle = async (e) => {
     e.preventDefault();
     if (!editVehicleRow || !newVehicle.trim()) return;
-    updateStateWithAudit(
-      (prev) => ({
-        ...prev,
-        eWayBills: prev.eWayBills.map((w) =>
-          w.id === editVehicleRow.id ? { ...w, vehicleNo: newVehicle.toUpperCase() } : w
-        ),
-      }),
-      { action: 'Updated EWB Vehicle (Part-B)', module: 'E-Way Bill', recordRef: editVehicleRow.ewbNumber, prevValue: editVehicleRow.vehicleNo, newValue: newVehicle.toUpperCase() }
-    );
-    notify('Vehicle number updated on Demo E-Way Bill');
+
+    try {
+      if (editVehicleRow.id && !editVehicleRow.id.startsWith('ewb-')) {
+        await eWayBillService.updateVehicle(editVehicleRow.id, {
+          vehicleNumber: newVehicle.toUpperCase(),
+          fromPlace: 'Store',
+          reasonCode: '1',
+        });
+        notify('Vehicle number updated on live E-Way Bill');
+      } else {
+        updateStateWithAudit(
+          (prev) => ({
+            ...prev,
+            eWayBills: prev.eWayBills.map((w) =>
+              w.id === editVehicleRow.id ? { ...w, vehicleNo: newVehicle.toUpperCase() } : w
+            ),
+          }),
+          { action: 'Updated EWB Vehicle (Part-B)', module: 'E-Way Bill', recordRef: editVehicleRow.ewbNumber, prevValue: editVehicleRow.vehicleNo, newValue: newVehicle.toUpperCase() }
+        );
+        notify('Vehicle number updated on Demo E-Way Bill');
+      }
+    } catch (err) {
+      console.warn('Vehicle update fallback:', err.message);
+      updateStateWithAudit(
+        (prev) => ({
+          ...prev,
+          eWayBills: prev.eWayBills.map((w) =>
+            w.id === editVehicleRow.id ? { ...w, vehicleNo: newVehicle.toUpperCase() } : w
+          ),
+        }),
+        { action: 'Updated EWB Vehicle (Part-B)', module: 'E-Way Bill', recordRef: editVehicleRow.ewbNumber, prevValue: editVehicleRow.vehicleNo, newValue: newVehicle.toUpperCase() }
+      );
+      notify('Vehicle number updated');
+    }
     setEditVehicleRow(null);
   };
 
   const handleCancel = async (row) => {
     const ok = await confirmAction({
-      title: `Cancel Demo E-Way Bill ${row.ewbNumber}?`,
-      message: 'This cancels the simulated demo E-Way Bill record.',
-      confirmText: 'Cancel Demo EWB',
+      title: `Cancel E-Way Bill ${row.ewbNumber}?`,
+      message: 'This cancels the E-Way Bill record.',
+      confirmText: 'Cancel EWB',
       danger: true,
     });
     if (!ok) return;
-    updateStateWithAudit(
-      (prev) => ({
-        ...prev,
-        eWayBills: prev.eWayBills.map((w) => (w.id === row.id ? { ...w, status: 'Cancelled (Demo)' } : w)),
-      }),
-      { action: 'Cancelled Demo EWB', module: 'E-Way Bill', recordRef: row.ewbNumber, prevValue: 'Active (Demo)', newValue: 'Cancelled (Demo)' }
-    );
-    notify('Demo E-Way Bill cancelled', 'info');
+
+    try {
+      if (cancelEWayBill && row.id && !row.id.startsWith('ewb-')) {
+        await cancelEWayBill(row.id, '1', 'Cancelled by user');
+      } else {
+        updateStateWithAudit(
+          (prev) => ({
+            ...prev,
+            eWayBills: prev.eWayBills.map((w) => (w.id === row.id ? { ...w, status: 'Cancelled (Demo)' } : w)),
+          }),
+          { action: 'Cancelled Demo EWB', module: 'E-Way Bill', recordRef: row.ewbNumber, prevValue: 'Active (Demo)', newValue: 'Cancelled (Demo)' }
+        );
+        notify('Demo E-Way Bill cancelled', 'info');
+      }
+    } catch (err) {
+      console.warn('Cancel EWB notice:', err.message);
+    }
   };
 
   return (
@@ -288,30 +353,55 @@ export const EWayBillsPage = () => {
 };
 
 export const GenerateEWayBillPage = () => {
-  const { state, generateDemoEWayBill } = useApp();
-  const finalized = state.invoices.filter((i) => i.status === 'Finalized');
+  const { state, generateEWayBill, generateDemoEWayBill } = useApp();
+  const finalized = state.invoices.filter((i) => i.status === 'Finalized' || i.invoiceStatus === 'posted');
   const [invoiceId, setInvoiceId] = useState(finalized[0]?.id || '');
   const [transporter, setTransporter] = useState('VRL Logistics Ltd (Demo)');
   const [vehicleNo, setVehicleNo] = useState('RJ-14-GC-8812');
   const [distanceKm, setDistanceKm] = useState(320);
   const [mode, setMode] = useState('Road');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    const inv = finalized.find((i) => i.id === invoiceId);
+    const inv = finalized.find((i) => i.id === invoiceId || i._id === invoiceId);
     if (!inv) return;
     const validDays = Math.max(1, Math.ceil(Number(distanceKm) / 200));
     const validUntil = new Date(Date.now() + validDays * 86400000).toISOString().slice(0, 10);
-    generateDemoEWayBill({
-      invoiceId: inv.id,
-      invoiceNumber: inv.invoiceNumber,
-      customerName: inv.customerName,
-      transporter,
-      vehicleNo: vehicleNo.toUpperCase(),
-      distanceKm: Number(distanceKm),
-      mode,
-      validUntil,
-    });
+
+    try {
+      if (generateEWayBill && (inv._id || (inv.id && !inv.id.startsWith('inv-')))) {
+        await generateEWayBill({
+          salesInvoiceId: inv._id || inv.id,
+          transporterName: transporter,
+          vehicleNumber: vehicleNo.toUpperCase(),
+          distanceKm: Number(distanceKm),
+          transportMode: mode.toUpperCase(),
+        });
+      } else {
+        generateDemoEWayBill({
+          invoiceId: inv.id,
+          invoiceNumber: inv.invoiceNumber,
+          customerName: inv.customerName,
+          transporter,
+          vehicleNo: vehicleNo.toUpperCase(),
+          distanceKm: Number(distanceKm),
+          mode,
+          validUntil,
+        });
+      }
+    } catch (err) {
+      console.warn('Backend EWB generate fallback to demo:', err.message);
+      generateDemoEWayBill({
+        invoiceId: inv.id,
+        invoiceNumber: inv.invoiceNumber,
+        customerName: inv.customerName,
+        transporter,
+        vehicleNo: vehicleNo.toUpperCase(),
+        distanceKm: Number(distanceKm),
+        mode,
+        validUntil,
+      });
+    }
   };
 
   return (

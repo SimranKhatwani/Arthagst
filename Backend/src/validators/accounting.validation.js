@@ -91,7 +91,7 @@ export const queryJournalEntriesSchema = z.object({
  * Report Query Validations
  */
 export const generalLedgerQuerySchema = z.object({
-  accountId: z.string({ required_error: 'accountId query param is required' }).trim(),
+  accountId: z.string().trim().optional(),
   financialYear: z.string().optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
