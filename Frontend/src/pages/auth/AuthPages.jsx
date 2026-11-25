@@ -32,31 +32,16 @@ export const LoginPage = () => {
   const { login } = useApp();
   const navigate = useNavigate();
 
-  const envOrgCode = import.meta.env.VITE_DEFAULT_ORG_CODE || 'ARTHA';
-  const envAdminEmail = import.meta.env.VITE_ADMIN_EMAIL || 'admin@artha.com';
-  const envAdminPassword = import.meta.env.VITE_ADMIN_PASSWORD || 'Admin@12345';
-
   const [tenantCode, setTenantCode] = useState(
-    () => localStorage.getItem('arthagst_last_tenant_code') || envOrgCode
+    () => localStorage.getItem('arthagst_last_tenant_code') || ''
   );
-  const [email, setEmail] = useState(envAdminEmail);
-  const [password, setPassword] = useState(envAdminPassword);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
-  const [quickFillSuccess, setQuickFillSuccess] = useState(false);
-
-  const handleQuickFill = () => {
-    setTenantCode(envOrgCode);
-    setEmail(envAdminEmail);
-    setPassword(envAdminPassword);
-    setFieldErrors({});
-    setError(null);
-    setQuickFillSuccess(true);
-    setTimeout(() => setQuickFillSuccess(false), 3000);
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -231,23 +216,6 @@ export const LoginPage = () => {
             </div>
           )}
 
-          {/* Org Credentials Auto-Fill Banner */}
-          <div className="mb-5 rounded-xl border border-indigo-100 bg-indigo-50/70 p-3 flex items-center justify-between text-xs">
-            <div>
-              <div className="font-semibold text-indigo-900 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-indigo-600" />
-                Org: <code className="font-mono text-indigo-700 font-bold">{envOrgCode}</code> • <code className="font-mono text-indigo-700">{envAdminEmail}</code>
-              </div>
-              <div className="text-[11px] text-indigo-600/90 mt-0.5">Password: <code className="font-mono">{envAdminPassword}</code></div>
-            </div>
-            <button
-              type="button"
-              onClick={handleQuickFill}
-              className="px-2.5 py-1 rounded-lg bg-indigo-600 text-white font-medium text-xs hover:bg-indigo-700 transition-colors cursor-pointer shrink-0"
-            >
-              {quickFillSuccess ? 'Filled!' : 'Auto Fill'}
-            </button>
-          </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Tenant Code Field */}
@@ -398,25 +366,12 @@ export const SuperAdminLoginPage = () => {
   const { login } = useApp();
   const navigate = useNavigate();
 
-  const envSuperEmail = import.meta.env.VITE_SUPERADMIN_EMAIL || 'superadmin@artha.com';
-  const envSuperPassword = import.meta.env.VITE_SUPERADMIN_PASSWORD || 'Superadmin@12345';
-
-  const [email, setEmail] = useState(envSuperEmail);
-  const [password, setPassword] = useState(envSuperPassword);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
-  const [quickFillSuccess, setQuickFillSuccess] = useState(false);
-
-  const handleQuickFill = () => {
-    setEmail(envSuperEmail);
-    setPassword(envSuperPassword);
-    setFieldErrors({});
-    setError(null);
-    setQuickFillSuccess(true);
-    setTimeout(() => setQuickFillSuccess(false), 3000);
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -587,7 +542,7 @@ export const SuperAdminLoginPage = () => {
                   onChange={(e) => setEmail(e.target.value)}
                   className={`w-full rounded-xl border ${fieldErrors.email ? 'border-rose-400 bg-rose-50/30' : 'border-slate-300'
                     } bg-white py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all`}
-                  placeholder="admin@artha.com"
+                  placeholder="superadmin@artha.com"
                   autoComplete="email"
                 />
               </div>
