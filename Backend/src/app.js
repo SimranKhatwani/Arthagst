@@ -24,8 +24,17 @@ app.use(
 );
 
 // Cross-Origin Resource Sharing
+const parseCorsOrigins = () => {
+  const envOrigin = process.env.CORS_ORIGIN;
+  if (!envOrigin || envOrigin.trim() === '*' || envOrigin.trim() === '') {
+    return true; // Reflect requesting origin to maintain credentials support
+  }
+  const origins = envOrigin.split(',').map((o) => o.trim()).filter(Boolean);
+  return origins.length === 1 ? origins[0] : origins;
+};
+
 const corsOptions = {
-  origin: process.env.CORS_ORIGIN || '*',
+  origin: parseCorsOrigins(),
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   credentials: true,

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import mongoose from 'mongoose';
 import authRoutes from './auth.routes.js';
 import partyRoutes from './party.routes.js';
 import categoryRoutes from './category.routes.js';
@@ -33,9 +34,25 @@ const router = Router();
  * GET /api/health
  */
 router.get('/health', (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: 'ArthaGST API is running'
+  const dbStatusMap = {
+    0: 'disconnected',
+    1: 'connected',
+    2: 'connecting',
+    3: 'disconnecting',
+  };
+  const dbState = mongoose.connection.readyState;
+  const isHealthy = dbState === 1 || process.env.NODE_ENV === 'test';
+
+  res.status(isHealthy ? 200 : 503).json({
+    success: isHealthy,
+    message: isHealthy ? 'ArthaGST API is running' : 'Database service unavailable',
+    environment: process.env.NODE_ENV || 'development',
+    timestamp: new Date().toISOString(),
+    uptime: Math.floor(process.uptime()),
+    database: {
+      status: dbStatusMap[dbState] || 'unknown',
+      host: mongoose.connection.host || null,
+    },
   });
 });
 

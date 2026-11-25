@@ -113,7 +113,7 @@ export const togglePlanStatus = async (id, isActive) => {
     throw error;
   }
 
-  const plan = await Plan.findByIdAndUpdate(id, { isActive }, { new: true });
+  const plan = await Plan.findByIdAndUpdate(id, { isActive }, { returnDocument: 'after' });
   if (!plan) {
     const error = new Error('Plan not found');
     error.statusCode = 404;
