@@ -15,6 +15,8 @@ export const createWarehouseSchema = z.object({
   city: z.string().trim().max(100).optional().default(''),
   state: z.string().trim().max(100).optional().default(''),
   pincode: z.string().trim().max(10).optional().default(''),
+  manager: z.string().trim().max(100).optional().default(''),
+  capacity: z.string().trim().max(100).optional().default(''),
   isDefault: z.boolean().optional().default(false),
   isActive: z.boolean().optional().default(true),
 });
@@ -26,6 +28,8 @@ export const updateWarehouseSchema = z.object({
   city: z.string().trim().max(100).optional(),
   state: z.string().trim().max(100).optional(),
   pincode: z.string().trim().max(10).optional(),
+  manager: z.string().trim().max(100).optional(),
+  capacity: z.string().trim().max(100).optional(),
   isDefault: z.boolean().optional(),
   isActive: z.boolean().optional(),
 });

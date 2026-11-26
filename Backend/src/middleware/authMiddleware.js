@@ -56,6 +56,30 @@ export const authenticate = async (req, res, next) => {
       req.tenant = null;
       req.tenantId = null;
       req.isSuperAdmin = true;
+
+      // Resolve tenant context if provided in header, query, or body
+      const explicitTenantId = req.headers['x-tenant-id'] || req.query?.tenantId || req.body?.tenantId;
+      if (explicitTenantId) {
+        try {
+          const tenant = await Tenant.findById(explicitTenantId);
+          if (tenant) {
+            req.tenant = tenant;
+            req.tenantId = tenant._id;
+          }
+        } catch {
+          // invalid format, will fallback below
+        }
+      }
+
+      // If no explicit tenant context, default to primary/first tenant so Super Admin operations on tenant entities succeed seamlessly
+      if (!req.tenantId) {
+        const defaultTenant = (await Tenant.findOne({ tenantCode: 'ARTHA' })) || (await Tenant.findOne({ isActive: true }));
+        if (defaultTenant) {
+          req.tenant = defaultTenant;
+          req.tenantId = defaultTenant._id;
+        }
+      }
+
       return next();
     }
 

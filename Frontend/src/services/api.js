@@ -136,10 +136,16 @@ export const apiClient = async (endpoint, options = {}) => {
     }
 
     if (!response.ok) {
-      const errorMsg =
-        resData?.message ||
-        (Array.isArray(resData?.errors) && resData.errors.map((e) => e.message || e).join(', ')) ||
-        `Request failed with status ${response.status}`;
+      let errorMsg = resData?.message;
+      if (Array.isArray(resData?.errors) && resData.errors.length > 0) {
+        const details = resData.errors
+          .map((e) => (typeof e === 'string' ? e : e.message || e.field || JSON.stringify(e)))
+          .join(', ');
+        errorMsg = errorMsg ? `${errorMsg}: ${details}` : details;
+      }
+      if (!errorMsg) {
+        errorMsg = `Request failed with status ${response.status}`;
+      }
 
       const error = new Error(errorMsg);
       error.status = response.status;

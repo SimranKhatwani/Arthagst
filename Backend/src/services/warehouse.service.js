@@ -201,7 +201,7 @@ export const updateWarehouse = async (tenantId, warehouseId, data) => {
     }
   }
 
-  const allowedFields = ['warehouseName', 'address', 'city', 'state', 'pincode', 'isActive'];
+  const allowedFields = ['warehouseName', 'address', 'city', 'state', 'pincode', 'manager', 'capacity', 'isActive'];
   allowedFields.forEach((field) => {
     if (data[field] !== undefined) {
       warehouse[field] = data[field];

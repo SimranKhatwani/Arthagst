@@ -1267,6 +1267,8 @@ export const AppProvider = ({ children }) => {
             city: record.city || '',
             state: record.state || '',
             pincode: record.pincode || '',
+            manager: record.manager || '',
+            capacity: record.capacity || '',
             isDefault: Boolean(record.isDefault),
             isActive: record.isActive !== false,
           };
@@ -1279,6 +1281,8 @@ export const AppProvider = ({ children }) => {
             id: saved._id || saved.id || id,
             name: saved.warehouseName || record.name,
             code: saved.warehouseCode || record.code,
+            manager: saved.manager || record.manager,
+            capacity: saved.capacity || record.capacity,
           };
 
           setState((prev) => {

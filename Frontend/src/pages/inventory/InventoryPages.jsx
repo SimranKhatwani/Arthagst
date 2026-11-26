@@ -815,6 +815,8 @@ export const WarehousesPage = () => {
           address: form.address ? form.address.trim() : '',
           city: form.city ? form.city.trim() : '',
           state: form.state ? form.state.trim() : '',
+          manager: form.manager ? form.manager.trim() : '',
+          capacity: form.capacity ? form.capacity.trim() : '',
         },
         'Warehouse',
         'name'

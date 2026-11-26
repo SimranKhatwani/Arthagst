@@ -49,6 +49,18 @@ const warehouseSchema = new mongoose.Schema(
       default: '',
       maxlength: [10, 'Pincode cannot exceed 10 characters'],
     },
+    manager: {
+      type: String,
+      trim: true,
+      default: '',
+      maxlength: [100, 'Manager name cannot exceed 100 characters'],
+    },
+    capacity: {
+      type: String,
+      trim: true,
+      default: '',
+      maxlength: [100, 'Capacity cannot exceed 100 characters'],
+    },
     isDefault: {
       type: Boolean,
       default: false,
