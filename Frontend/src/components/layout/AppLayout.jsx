@@ -454,6 +454,13 @@ export const AppLayout = ({ children }) => {
     if (sub.children) {
       return sub.children.some((leaf) => isSubItemActive(leaf)) || location.pathname === '/gst/returns';
     }
+    // Prevent parent/list items from remaining highlighted when on a dedicated "Create/New" sub-route
+    if (sub.path === '/sales/invoices' && (location.pathname === '/sales/invoices/new' || location.pathname.startsWith('/sales/invoices/new/'))) {
+      return false;
+    }
+    if (sub.path === '/purchases' && (location.pathname === '/purchases/new' || location.pathname.startsWith('/purchases/new/'))) {
+      return false;
+    }
     if (sub.matchPaths) {
       return sub.matchPaths.some((mp) => isPathMatch(mp, mp === '/purchases' || mp === '/payments' || mp === '/gst' || mp === '/expenses'));
     }
