@@ -4,6 +4,7 @@ import {
   Edit3,
   CheckCircle2,
   Eye,
+  EyeOff,
   KeyRound,
   Trash2,
   Shield,
@@ -116,6 +117,10 @@ export const SuperAdminTenantsPage = () => {
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
+  // Password visibility toggles
+  const [showAddPassword, setShowAddPassword] = useState(false);
+  const [showResetPassword, setShowResetPassword] = useState(false);
+
   const [selectedTenant, setSelectedTenant] = useState(null);
   const [tenantToDelete, setTenantToDelete] = useState(null);
   const [selectedTenantDetails, setSelectedTenantDetails] = useState(null);
@@ -217,10 +222,29 @@ export const SuperAdminTenantsPage = () => {
     setEditModalOpen(true);
   };
 
+  // Open Add Tenant Modal (cleans state and disables autofill)
+  const handleOpenAdd = () => {
+    setAddForm({
+      tenantCode: '',
+      businessName: '',
+      ownerName: '',
+      email: '',
+      password: '',
+      phone: '',
+      city: '',
+      state: 'Maharashtra',
+      businessAddress: '',
+      planName: 'Growth',
+    });
+    setShowAddPassword(false);
+    setAddModalOpen(true);
+  };
+
   // Open Password Reset Modal
   const handleOpenPassword = (t) => {
     setSelectedTenant(t);
     setNewPassword('');
+    setShowResetPassword(false);
     setPasswordModalOpen(true);
   };
 
@@ -415,7 +439,7 @@ export const SuperAdminTenantsPage = () => {
             </button>
             <button
               type="button"
-              onClick={() => setAddModalOpen(true)}
+              onClick={handleOpenAdd}
               className={btnPrimary}
             >
               <Plus className="h-3.5 w-3.5" /> Add Tenant
@@ -560,7 +584,11 @@ export const SuperAdminTenantsPage = () => {
           </>
         }
       >
-        <form id="add-tenant-form" onSubmit={handleAddSubmit} className="space-y-4">
+        <form id="add-tenant-form" onSubmit={handleAddSubmit} autoComplete="off" className="space-y-4">
+          {/* Hidden dummy fields to consume browser credential autofill */}
+          <input type="text" name="dummy_username" style={{ display: 'none' }} tabIndex={-1} aria-hidden="true" autoComplete="off" />
+          <input type="password" name="dummy_password" style={{ display: 'none' }} tabIndex={-1} aria-hidden="true" autoComplete="off" />
+
           <div className="rounded-lg bg-indigo-50/70 p-3 text-xs text-indigo-900 border border-indigo-100">
             <strong>Automatic Provisioning:</strong> This creates the organization partition in MongoDB, initializes the initial <strong>Owner User</strong> account with the specified credentials, and activates their subscription.
           </div>
@@ -599,6 +627,9 @@ export const SuperAdminTenantsPage = () => {
             <InputField label="Admin Email (Login ID)" required>
               <input
                 type="email"
+                name="new_tenant_owner_email"
+                id="new_tenant_owner_email"
+                autoComplete="new-password"
                 required
                 placeholder="e.g. admin@ekum.com"
                 value={addForm.email}
@@ -607,14 +638,28 @@ export const SuperAdminTenantsPage = () => {
               />
             </InputField>
             <InputField label="Initial Admin Password" required>
-              <input
-                type="password"
-                required
-                placeholder="Minimum 6 characters"
-                value={addForm.password}
-                onChange={(e) => setAddForm({ ...addForm, password: e.target.value })}
-                className={inputClass}
-              />
+              <div className="relative">
+                <input
+                  type={showAddPassword ? 'text' : 'password'}
+                  name="new_tenant_owner_password"
+                  id="new_tenant_owner_password"
+                  autoComplete="new-password"
+                  required
+                  placeholder="Minimum 6 characters"
+                  value={addForm.password}
+                  onChange={(e) => setAddForm({ ...addForm, password: e.target.value })}
+                  className={`${inputClass} pr-10`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowAddPassword((prev) => !prev)}
+                  tabIndex={-1}
+                  title={showAddPassword ? 'Hide password' : 'Show password'}
+                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  {showAddPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </InputField>
             <InputField label="Phone Number" required>
               <input
@@ -965,15 +1010,29 @@ export const SuperAdminTenantsPage = () => {
             <strong className="text-indigo-600">{selectedTenant?.tenantCode || selectedTenant?.code}</strong>).
           </div>
           <InputField label="New Password" required>
-            <input
-              type="text"
-              required
-              minLength={6}
-              placeholder="Enter at least 6 characters"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              className={inputClass}
-            />
+            <div className="relative">
+              <input
+                type={showResetPassword ? 'text' : 'password'}
+                name="reset_tenant_owner_password"
+                id="reset_tenant_owner_password"
+                autoComplete="new-password"
+                required
+                minLength={6}
+                placeholder="Enter at least 6 characters"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className={`${inputClass} pr-10`}
+              />
+              <button
+                type="button"
+                onClick={() => setShowResetPassword((prev) => !prev)}
+                tabIndex={-1}
+                title={showResetPassword ? 'Hide password' : 'Show password'}
+                className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                {showResetPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
           </InputField>
         </form>
       </Modal>
