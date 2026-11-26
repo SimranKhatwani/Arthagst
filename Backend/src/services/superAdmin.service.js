@@ -7,6 +7,14 @@ import SubscriptionInvoice from '../models/subscriptionInvoice.model.js';
 import Product from '../models/product.model.js';
 import Warehouse from '../models/warehouse.model.js';
 import SalesInvoice from '../models/salesInvoice.model.js';
+import Party from '../models/party.model.js';
+import PurchaseBill from '../models/purchaseBill.model.js';
+import Payment from '../models/payment.model.js';
+import Account from '../models/account.model.js';
+import JournalEntry from '../models/journalEntry.model.js';
+import Expense from '../models/expense.model.js';
+import StockMovement from '../models/stockMovement.model.js';
+import Settings from '../models/settings.model.js';
 import Ticket from '../models/ticket.model.js';
 import Announcement from '../models/announcement.model.js';
 import FeatureFlag from '../models/featureFlag.model.js';
@@ -14,6 +22,22 @@ import PlatformSetting from '../models/platformSetting.model.js';
 import { logAuditAction } from './auditLog.service.js';
 import { calculatePeriodEnd } from './subscription.service.js';
 import { round2 } from './sales.calculator.js';
+
+/**
+ * Universal helper to resolve a tenant by MongoDB ObjectId OR tenantCode (case-insensitive)
+ */
+export const findTenantByIdOrCode = async (identifier) => {
+  if (!identifier) return null;
+  const strId = String(identifier).trim();
+  if (mongoose.isValidObjectId(strId)) {
+    const t = await Tenant.findById(strId);
+    if (t) return t;
+  }
+  const cleanCode = strId.toUpperCase();
+  return Tenant.findOne({
+    $or: [{ tenantCode: cleanCode }, { tenantCode: strId }],
+  });
+};
 
 /**
  * 1. Platform Dashboard Statistics
@@ -181,27 +205,22 @@ export const getTenants = async (query = {}) => {
  * 3. View Full Tenant Details
  */
 export const getTenantDetails = async (tenantId) => {
-  if (!mongoose.isValidObjectId(tenantId)) {
-    const error = new Error('Invalid tenant ID format');
-    error.statusCode = 400;
-    throw error;
-  }
-
-  const tenant = await Tenant.findById(tenantId);
+  const tenant = await findTenantByIdOrCode(tenantId);
   if (!tenant) {
-    const error = new Error('Tenant not found');
+    const error = new Error(`Tenant '${tenantId}' not found`);
     error.statusCode = 404;
     throw error;
   }
 
+  const tid = tenant._id;
   const [subscription, invoices, users, productCount, warehouseCount, salesInvoiceCount] =
     await Promise.all([
-      Subscription.findOne({ tenantId }),
-      SubscriptionInvoice.find({ tenantId }).sort({ invoiceDate: -1 }).limit(10),
-      User.find({ tenantId }).select('-password').sort({ createdAt: -1 }),
-      Product.countDocuments({ tenantId, isDeleted: { $ne: true } }),
-      Warehouse.countDocuments({ tenantId, isDeleted: { $ne: true } }),
-      SalesInvoice.countDocuments({ tenantId, invoiceStatus: { $ne: 'cancelled' } }),
+      Subscription.findOne({ tenantId: tid }),
+      SubscriptionInvoice.find({ tenantId: tid }).sort({ invoiceDate: -1 }).limit(10),
+      User.find({ tenantId: tid }).select('-password').sort({ createdAt: -1 }),
+      Product.countDocuments({ tenantId: tid, isDeleted: { $ne: true } }),
+      Warehouse.countDocuments({ tenantId: tid, isDeleted: { $ne: true } }),
+      SalesInvoice.countDocuments({ tenantId: tid, invoiceStatus: { $ne: 'cancelled' } }),
     ]);
 
   return {
@@ -222,15 +241,9 @@ export const getTenantDetails = async (tenantId) => {
  * 4. Activate a Tenant
  */
 export const activateTenant = async (superAdminUser, tenantId, reason = '') => {
-  if (!mongoose.isValidObjectId(tenantId)) {
-    const error = new Error('Invalid tenant ID format');
-    error.statusCode = 400;
-    throw error;
-  }
-
-  const tenant = await Tenant.findById(tenantId);
+  const tenant = await findTenantByIdOrCode(tenantId);
   if (!tenant) {
-    const error = new Error('Tenant not found');
+    const error = new Error(`Tenant '${tenantId}' not found`);
     error.statusCode = 404;
     throw error;
   }
@@ -239,7 +252,7 @@ export const activateTenant = async (superAdminUser, tenantId, reason = '') => {
   await tenant.save();
 
   // If subscription was suspended, reactivate
-  const subscription = await Subscription.findOne({ tenantId });
+  const subscription = await Subscription.findOne({ tenantId: tenant._id });
   if (subscription && subscription.status === 'suspended') {
     subscription.status = 'active';
     subscription.history.push({
@@ -263,7 +276,7 @@ export const activateTenant = async (superAdminUser, tenantId, reason = '') => {
     targetType: 'tenant',
     targetId: tenant._id,
     targetName: tenant.businessName,
-    details: { reason },
+    details: { reason, tenantCode: tenant.tenantCode },
   });
 
   return {
@@ -277,15 +290,9 @@ export const activateTenant = async (superAdminUser, tenantId, reason = '') => {
  * 5. Suspend a Tenant
  */
 export const suspendTenant = async (superAdminUser, tenantId, reason = '') => {
-  if (!mongoose.isValidObjectId(tenantId)) {
-    const error = new Error('Invalid tenant ID format');
-    error.statusCode = 400;
-    throw error;
-  }
-
-  const tenant = await Tenant.findById(tenantId);
+  const tenant = await findTenantByIdOrCode(tenantId);
   if (!tenant) {
-    const error = new Error('Tenant not found');
+    const error = new Error(`Tenant '${tenantId}' not found`);
     error.statusCode = 404;
     throw error;
   }
@@ -294,7 +301,7 @@ export const suspendTenant = async (superAdminUser, tenantId, reason = '') => {
   tenant.subscriptionStatus = 'suspended';
   await tenant.save();
 
-  const subscription = await Subscription.findOne({ tenantId });
+  const subscription = await Subscription.findOne({ tenantId: tenant._id });
   if (subscription) {
     subscription.status = 'suspended';
     subscription.history.push({
@@ -316,7 +323,7 @@ export const suspendTenant = async (superAdminUser, tenantId, reason = '') => {
     targetType: 'tenant',
     targetId: tenant._id,
     targetName: tenant.businessName,
-    details: { reason },
+    details: { reason, tenantCode: tenant.tenantCode },
   });
 
   return {
@@ -522,15 +529,9 @@ export const createTenant = async (superAdminUser, data) => {
  * 5b. Update Tenant Details by Super Admin
  */
 export const updateTenant = async (superAdminUser, tenantId, data) => {
-  if (!mongoose.isValidObjectId(tenantId)) {
-    const error = new Error('Invalid tenant ID format');
-    error.statusCode = 400;
-    throw error;
-  }
-
-  const tenant = await Tenant.findById(tenantId);
+  const tenant = await findTenantByIdOrCode(tenantId);
   if (!tenant) {
-    const error = new Error('Tenant not found');
+    const error = new Error(`Tenant '${tenantId}' not found`);
     error.statusCode = 404;
     throw error;
   }
@@ -569,59 +570,83 @@ export const updateTenant = async (superAdminUser, tenantId, data) => {
 };
 
 /**
- * 5c. Delete Tenant by Super Admin
+ * 5c. Delete Tenant by Super Admin (with full cascade cleanup)
  */
 export const deleteTenant = async (superAdminUser, tenantId) => {
-  if (!mongoose.isValidObjectId(tenantId)) {
-    const error = new Error('Invalid tenant ID format');
-    error.statusCode = 400;
-    throw error;
-  }
-
-  const tenant = await Tenant.findById(tenantId);
+  const tenant = await findTenantByIdOrCode(tenantId);
   if (!tenant) {
-    const error = new Error('Tenant not found');
+    const error = new Error(`Tenant '${tenantId}' not found`);
     error.statusCode = 404;
     throw error;
   }
 
-  await Promise.all([
-    Tenant.findByIdAndDelete(tenantId),
-    User.deleteMany({ tenantId }),
-    Subscription.deleteMany({ tenantId }),
+  // Prevent accidental deletion of default master tenant
+  if (tenant.tenantCode === 'ARTHA') {
+    const error = new Error("The default master tenant 'ARTHA' is system-protected and cannot be deleted.");
+    error.statusCode = 403;
+    throw error;
+  }
+
+  const tid = tenant._id;
+  await Promise.allSettled([
+    Tenant.findByIdAndDelete(tid),
+    User.deleteMany({ tenantId: tid }),
+    Subscription.deleteMany({ tenantId: tid }),
+    SubscriptionInvoice.deleteMany({ tenantId: tid }),
+    Product.deleteMany({ tenantId: tid }),
+    Warehouse.deleteMany({ tenantId: tid }),
+    SalesInvoice.deleteMany({ tenantId: tid }),
+    Party.deleteMany({ tenantId: tid }),
+    PurchaseBill.deleteMany({ tenantId: tid }),
+    Payment.deleteMany({ tenantId: tid }),
+    Account.deleteMany({ tenantId: tid }),
+    JournalEntry.deleteMany({ tenantId: tid }),
+    Expense.deleteMany({ tenantId: tid }),
+    StockMovement.deleteMany({ tenantId: tid }),
+    Settings.deleteMany({ tenantId: tid }),
   ]);
 
   await logAuditAction({
     actor: superAdminUser,
     action: 'TENANT_DELETED',
     targetType: 'tenant',
-    targetId: tenant._id,
+    targetId: tid,
     targetName: tenant.businessName,
-    details: { tenantCode: tenant.tenantCode },
+    details: { tenantCode: tenant.tenantCode, email: tenant.email },
   });
 
-  return { message: `Tenant '${tenant.businessName}' (${tenant.tenantCode}) deleted successfully.` };
+  return {
+    success: true,
+    message: `Tenant '${tenant.businessName}' (${tenant.tenantCode}) deleted successfully.`,
+    tenantId: tid,
+    tenantCode: tenant.tenantCode,
+  };
 };
 
 /**
  * 5d. Reset Tenant Owner Password by Super Admin
  */
 export const resetTenantOwnerPassword = async (superAdminUser, tenantId, newPassword) => {
-  if (!mongoose.isValidObjectId(tenantId)) {
-    const error = new Error('Invalid tenant ID format');
-    error.statusCode = 400;
-    throw error;
-  }
-
   if (!newPassword || newPassword.length < 6) {
     const error = new Error('Password must be at least 6 characters long');
     error.statusCode = 400;
     throw error;
   }
 
-  let user = await User.findOne({ tenantId, role: 'owner' });
+  const tenant = await findTenantByIdOrCode(tenantId);
+  if (!tenant) {
+    const error = new Error(`Tenant '${tenantId}' not found`);
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const tid = tenant._id;
+  let user = await User.findOne({ tenantId: tid, role: 'owner' });
   if (!user) {
-    user = await User.findOne({ tenantId, role: 'admin' });
+    user = await User.findOne({ tenantId: tid, role: 'admin' });
+  }
+  if (!user) {
+    user = await User.findOne({ tenantId: tid });
   }
 
   if (!user) {
@@ -639,7 +664,7 @@ export const resetTenantOwnerPassword = async (superAdminUser, tenantId, newPass
     targetType: 'user',
     targetId: user._id,
     targetName: user.email,
-    details: { tenantId, userEmail: user.email },
+    details: { tenantId: tid, tenantCode: tenant.tenantCode, userEmail: user.email },
   });
 
   return {
@@ -656,15 +681,9 @@ export const assignSubscription = async (
   tenantId,
   { planId, billingCycle = 'monthly', trialDays = 0, overrideAmount = null, autoRenew = true, notes = '' }
 ) => {
-  if (!mongoose.isValidObjectId(tenantId)) {
-    const error = new Error('Invalid tenant ID format');
-    error.statusCode = 400;
-    throw error;
-  }
-
-  const tenant = await Tenant.findById(tenantId);
+  const tenant = await findTenantByIdOrCode(tenantId);
   if (!tenant) {
-    const error = new Error('Tenant not found');
+    const error = new Error(`Tenant '${tenantId}' not found`);
     error.statusCode = 404;
     throw error;
   }

@@ -14,6 +14,7 @@ import {
   MapPin,
   RefreshCw,
   ExternalLink,
+  AlertCircle,
 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { useApp } from '../../context/AppContext';
@@ -104,7 +105,7 @@ export const SuperAdminDashboardPage = () => {
 };
 
 export const SuperAdminTenantsPage = () => {
-  const { state, notify, confirmAction } = useApp();
+  const { state, notify } = useApp();
   const [tenantsList, setTenantsList] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -113,11 +114,14 @@ export const SuperAdminTenantsPage = () => {
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
   const [selectedTenant, setSelectedTenant] = useState(null);
+  const [tenantToDelete, setTenantToDelete] = useState(null);
   const [selectedTenantDetails, setSelectedTenantDetails] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Add Form
   const [addForm, setAddForm] = useState({
@@ -180,7 +184,7 @@ export const SuperAdminTenantsPage = () => {
     setSelectedTenant(t);
     setSelectedTenantDetails(null);
     setViewModalOpen(true);
-    const tenantId = t._id || t.id;
+    const tenantId = t._id || t.id || t.tenantCode;
     if (tenantId && !String(tenantId).startsWith('ten-')) {
       try {
         setDetailsLoading(true);
@@ -220,6 +224,12 @@ export const SuperAdminTenantsPage = () => {
     setPasswordModalOpen(true);
   };
 
+  // Open Delete Confirmation Modal
+  const handleOpenDelete = (t) => {
+    setTenantToDelete(t);
+    setDeleteModalOpen(true);
+  };
+
   // Add Tenant Submit
   const handleAddSubmit = async (e) => {
     e.preventDefault();
@@ -243,8 +253,19 @@ export const SuperAdminTenantsPage = () => {
         planName: addForm.planName,
       };
 
-      await superAdminService.createTenant(payload);
-      notify?.(`Tenant '${payload.tenantCode}' & owner user created successfully in MongoDB!`, 'success');
+      const res = await superAdminService.createTenant(payload);
+      
+      // Optimistic instant table update
+      const createdTenant = res?.tenant || res?.data?.tenant || {
+        ...payload,
+        _id: res?.data?.tenant?._id || `t-${Date.now()}`,
+        isActive: true,
+        subscriptionStatus: 'active',
+        subscription: { planName: payload.planName, status: 'active' },
+      };
+      setTenantsList((prev) => [createdTenant, ...prev.filter((item) => (item.tenantCode || item.code) !== payload.tenantCode)]);
+
+      notify?.(`Tenant '${payload.tenantCode}' and owner account created successfully in MongoDB!`, 'success');
       setAddModalOpen(false);
       setAddForm({
         tenantCode: '',
@@ -258,7 +279,7 @@ export const SuperAdminTenantsPage = () => {
         businessAddress: '',
         planName: 'Growth',
       });
-      await fetchTenants();
+      fetchTenants();
     } catch (err) {
       notify?.(err.message || 'Failed to create tenant', 'error');
     } finally {
@@ -269,15 +290,25 @@ export const SuperAdminTenantsPage = () => {
   // Edit Tenant Submit
   const handleEditSubmit = async (e) => {
     e.preventDefault();
-    const tenantId = selectedTenant?._id || selectedTenant?.id;
+    const tenantId = selectedTenant?._id || selectedTenant?.id || selectedTenant?.tenantCode;
     if (!tenantId) return;
 
     try {
       setSubmitting(true);
       await superAdminService.updateTenant(tenantId, editForm);
+      
+      // Optimistic instant table update
+      setTenantsList((prev) =>
+        prev.map((item) =>
+          (item._id || item.id) === tenantId || (item.tenantCode || item.code) === (selectedTenant.tenantCode || selectedTenant.code)
+            ? { ...item, ...editForm }
+            : item
+        )
+      );
+
       notify?.(`Tenant '${editForm.businessName}' updated successfully!`, 'success');
       setEditModalOpen(false);
-      await fetchTenants();
+      fetchTenants();
     } catch (err) {
       notify?.(err.message || 'Failed to update tenant', 'error');
     } finally {
@@ -288,7 +319,7 @@ export const SuperAdminTenantsPage = () => {
   // Password Reset Submit
   const handlePasswordSubmit = async (e) => {
     e.preventDefault();
-    const tenantId = selectedTenant?._id || selectedTenant?.id;
+    const tenantId = selectedTenant?._id || selectedTenant?.id || selectedTenant?.tenantCode;
     if (!tenantId || !newPassword) return;
 
     try {
@@ -307,7 +338,21 @@ export const SuperAdminTenantsPage = () => {
   // Toggle Suspend / Activate
   const toggleTenantStatus = async (t) => {
     const isActivating = t.isActive === false || t.subscriptionStatus === 'suspended' || t.status === 'Expired';
-    const tenantId = t._id || t.id;
+    const tenantId = t._id || t.id || t.tenantCode;
+
+    // Immediate optimistic update
+    setTenantsList((prev) =>
+      prev.map((item) =>
+        (item._id || item.id) === tenantId || (item.tenantCode || item.code) === (t.tenantCode || t.code)
+          ? {
+              ...item,
+              isActive: isActivating,
+              subscriptionStatus: isActivating ? 'active' : 'suspended',
+            }
+          : item
+      )
+    );
+
     try {
       if (isActivating) {
         await superAdminService.activateTenant(tenantId, 'Console activation');
@@ -316,30 +361,40 @@ export const SuperAdminTenantsPage = () => {
         await superAdminService.suspendTenant(tenantId, 'Console suspension');
         notify?.(`Tenant ${t.businessName} suspended.`, 'warning');
       }
-      await fetchTenants();
+      fetchTenants();
     } catch (err) {
+      fetchTenants();
       notify?.(err.message || 'Failed to toggle tenant status', 'error');
     }
   };
 
-  // Delete Tenant
-  const handleDeleteTenant = (t) => {
-    const tenantId = t._id || t.id;
-    confirmAction?.({
-      title: 'Delete Tenant Organization?',
-      message: `Are you sure you want to permanently delete '${t.businessName}' (${t.tenantCode || t.code}) and all its associated users from MongoDB? This cannot be undone.`,
-      confirmLabel: 'Delete Tenant',
-      tone: 'danger',
-      onConfirm: async () => {
-        try {
-          await superAdminService.deleteTenant(tenantId);
-          notify?.(`Tenant ${t.businessName} deleted successfully.`, 'success');
-          await fetchTenants();
-        } catch (err) {
-          notify?.(err.message || 'Failed to delete tenant', 'error');
-        }
-      },
-    });
+  // Delete Tenant Confirmation Handler
+  const handleDeleteConfirm = async () => {
+    if (!tenantToDelete) return;
+    const tenantId = tenantToDelete._id || tenantToDelete.id || tenantToDelete.tenantCode;
+    try {
+      setDeleting(true);
+      await superAdminService.deleteTenant(tenantId);
+
+      // Immediate optimistic update: remove row instantaneously from table
+      setTenantsList((prev) =>
+        prev.filter(
+          (t) =>
+            (t._id || t.id) !== tenantId &&
+            (t.tenantCode || t.code) !== (tenantToDelete.tenantCode || tenantToDelete.code)
+        )
+      );
+
+      notify?.(`Tenant '${tenantToDelete.businessName}' deleted permanently from MongoDB.`, 'success');
+      setDeleteModalOpen(false);
+      setTenantToDelete(null);
+
+      fetchTenants();
+    } catch (err) {
+      notify?.(err.message || 'Failed to delete tenant', 'error');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -477,7 +532,7 @@ export const SuperAdminTenantsPage = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleDeleteTenant(r)}
+                  onClick={() => handleOpenDelete(r)}
                   title="Delete Tenant"
                   className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-colors"
                 >
@@ -615,17 +670,39 @@ export const SuperAdminTenantsPage = () => {
         onClose={() => setViewModalOpen(false)}
         title={selectedTenant ? `${selectedTenant.businessName} (${selectedTenant.tenantCode || selectedTenant.code})` : 'Tenant Details'}
         footer={
-          <div className="flex items-center justify-between w-full">
-            <button
-              type="button"
-              onClick={() => {
-                setViewModalOpen(false);
-                handleOpenPassword(selectedTenant);
-              }}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-purple-600 hover:underline"
-            >
-              <KeyRound className="h-3.5 w-3.5" /> Reset Admin Password
-            </button>
+          <div className="flex flex-wrap items-center justify-between gap-2 w-full">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setViewModalOpen(false);
+                  handleOpenPassword(selectedTenant);
+                }}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-purple-600 hover:underline"
+              >
+                <KeyRound className="h-3.5 w-3.5" /> Reset Password
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setViewModalOpen(false);
+                  handleOpenEdit(selectedTenant);
+                }}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-600 hover:underline"
+              >
+                <Edit3 className="h-3.5 w-3.5" /> Edit Details
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setViewModalOpen(false);
+                  handleOpenDelete(selectedTenant);
+                }}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-600 hover:underline"
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Delete Tenant
+              </button>
+            </div>
             <button type="button" onClick={() => setViewModalOpen(false)} className={btnSecondary}>
               Close
             </button>
@@ -899,6 +976,80 @@ export const SuperAdminTenantsPage = () => {
             />
           </InputField>
         </form>
+      </Modal>
+
+      {/* 5. Delete Tenant Confirmation Modal */}
+      <Modal
+        open={deleteModalOpen}
+        onClose={() => !deleting && setDeleteModalOpen(false)}
+        title="Delete Tenant Organization"
+        footer={
+          <div className="flex items-center justify-end gap-2 w-full">
+            <button
+              type="button"
+              disabled={deleting}
+              onClick={() => setDeleteModalOpen(false)}
+              className={btnSecondary}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={deleting}
+              onClick={handleDeleteConfirm}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-rose-700 disabled:opacity-50 transition-colors"
+            >
+              {deleting ? (
+                <>
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin" /> Deleting from MongoDB...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-3.5 w-3.5" /> Permanently Delete Tenant
+                </>
+              )}
+            </button>
+          </div>
+        }
+      >
+        {tenantToDelete && (
+          <div className="space-y-4">
+            <div className="rounded-lg bg-rose-50 border border-rose-200 p-3.5 text-xs text-rose-900">
+              <div className="font-semibold text-rose-800 flex items-center gap-1.5 mb-1 text-sm">
+                <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
+                <span>Permanent Deletion Warning</span>
+              </div>
+              <p>
+                You are about to permanently delete <strong>{tenantToDelete.businessName}</strong>. This action will immediately remove the tenant organization partition, owner login credentials, staff users, subscriptions, products, and invoices from MongoDB Atlas.
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3.5 space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 font-medium">Tenant Code:</span>
+                <span className="font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                  {tenantToDelete.tenantCode || tenantToDelete.code}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 font-medium">Business Name:</span>
+                <span className="font-semibold text-slate-900">{tenantToDelete.businessName}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 font-medium">Owner Email:</span>
+                <span className="text-slate-700 font-mono">{tenantToDelete.email || '—'}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 font-medium">Plan:</span>
+                <span className="text-slate-700 font-medium">{tenantToDelete.subscription?.planName || tenantToDelete.plan || 'Growth'}</span>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-500">
+              Click <strong>Permanently Delete Tenant</strong> below to confirm and remove this organization completely.
+            </p>
+          </div>
+        )}
       </Modal>
     </div>
   );
