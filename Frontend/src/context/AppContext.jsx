@@ -908,21 +908,37 @@ export const AppProvider = ({ children }) => {
   const refreshProfile = useCallback(async () => {
     try {
       const data = await authService.getMe();
-      if (data?.user && data?.tenant) {
+      if (data?.user) {
+        const isSuper = data.user.isSuperAdmin || data.user.role === 'super_admin';
+        const tenant = data.tenant || (isSuper ? {
+          tenantCode: 'PLATFORM',
+          businessName: 'Platform Administration',
+          subscriptionStatus: 'active',
+          isActive: true,
+        } : null);
         setState((prev) => ({
           ...prev,
           isAuthenticated: true,
           currentUser: data.user,
-          currentTenant: data.tenant,
-          business: {
+          currentTenant: tenant,
+          business: tenant ? {
             ...prev.business,
-            ...data.tenant,
-            businessName: data.tenant.businessName || prev.business?.businessName,
-            tenantCode: data.tenant.tenantCode,
-          },
+            ...tenant,
+            businessName: tenant.businessName || prev.business?.businessName,
+            tenantCode: tenant.tenantCode || prev.business?.tenantCode,
+            email: tenant.email || data.user.email || prev.business?.email,
+            phone: tenant.phone || prev.business?.phone,
+            state: tenant.state || prev.business?.state,
+            city: tenant.city || prev.business?.city,
+            subscriptionStatus: tenant.subscriptionStatus || prev.business?.subscriptionStatus,
+          } : prev.business,
         }));
-        loadPhase1Data();
-        loadPhase2Data();
+        if (isSuper) {
+          loadSuperAdminData();
+        } else {
+          loadPhase1Data();
+          loadPhase2Data();
+        }
       }
       return data;
     } catch (err) {
@@ -955,7 +971,7 @@ export const AppProvider = ({ children }) => {
       }));
       throw err;
     }
-  }, [loadPhase1Data, loadPhase2Data]);
+  }, [loadPhase1Data, loadPhase2Data, loadSuperAdminData]);
 
   const completeOnboarding = useCallback((bizPayload) => {
     setState((prev) => ({

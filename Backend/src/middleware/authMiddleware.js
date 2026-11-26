@@ -28,7 +28,7 @@ export const authenticate = async (req, res, next) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    if (!decoded.userId || !decoded.tenantId) {
+    if (!decoded.userId) {
       return res.status(401).json({
         success: false,
         message: 'Invalid authentication token payload.',
@@ -44,15 +44,38 @@ export const authenticate = async (req, res, next) => {
       });
     }
 
-    // 2. Confirm user belongs to token's tenant
-    if (!user.tenantId.equals(decoded.tenantId)) {
+    // 2. Check if this is a Platform Super Administrator
+    if (user.isSuperAdmin || user.role === 'super_admin' || decoded.isSuperAdmin || decoded.role === 'super_admin') {
+      if (!user.isActive) {
+        return res.status(403).json({
+          success: false,
+          message: 'Super administrator account is inactive.',
+        });
+      }
+      req.user = user;
+      req.tenant = null;
+      req.tenantId = null;
+      req.isSuperAdmin = true;
+      return next();
+    }
+
+    // 3. For standard tenant users, validate tenant context
+    if (!decoded.tenantId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid authentication token payload. Tenant context required.',
+      });
+    }
+
+    // 4. Confirm user belongs to token's tenant
+    if (!user.tenantId || !user.tenantId.equals(decoded.tenantId)) {
       return res.status(403).json({
         success: false,
         message: 'Forbidden. User does not belong to the specified tenant.',
       });
     }
 
-    // 3. Confirm user is active
+    // 5. Confirm user is active
     if (!user.isActive) {
       return res.status(403).json({
         success: false,
