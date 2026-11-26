@@ -76,8 +76,8 @@ export const createStaff = async (tenantId, actorUser, data) => {
   }
 
   // 3. Prevent assigning forbidden roles
-  if (data.role === 'owner' || data.role === 'super_admin') {
-    const error = new Error("Cannot assign 'owner' or 'super_admin' role to staff accounts.");
+  if (data.role === 'super_admin') {
+    const error = new Error("Cannot assign 'super_admin' role to staff accounts.");
     error.statusCode = 403;
     throw error;
   }
@@ -174,9 +174,9 @@ export const updateStaff = async (tenantId, actorUser, userId, data) => {
     throw error;
   }
 
-  // Protection: Cannot promote to owner or super_admin
-  if (data.role && (data.role === 'owner' || data.role === 'super_admin')) {
-    const error = new Error("Assigning 'owner' or 'super_admin' roles is not permitted.");
+  // Protection: Cannot promote to super_admin
+  if (data.role && data.role === 'super_admin') {
+    const error = new Error("Assigning 'super_admin' role is not permitted.");
     error.statusCode = 403;
     throw error;
   }

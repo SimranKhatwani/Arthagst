@@ -33,6 +33,12 @@ export const loadAppState = () => {
       parsed.currentUser = null;
       parsed.currentTenant = null;
     }
+    // Strip any legacy fake demo users
+    if (Array.isArray(parsed.users)) {
+      parsed.users = parsed.users.filter(
+        (u) => !u.email?.endsWith('.demo') && !String(u.id).startsWith('usr-')
+      );
+    }
     return parsed;
   } catch {
     const initial = createInitialDemoState();

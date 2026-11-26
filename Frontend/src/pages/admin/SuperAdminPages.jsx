@@ -1412,18 +1412,124 @@ export const SuperAdminSubSectionPage = ({ section }) => {
     updateSuperAdmin((s) => s, 'Platform settings saved');
   };
 
+  const handleTogglePlatformUserStatus = async (user) => {
+    const nextActive = !user.isActive;
+    try {
+      if (user.id && !String(user.id).startsWith('usr-')) {
+        await superAdminService.toggleUserStatus(user.id, nextActive);
+      }
+      updateSuperAdmin(
+        (prev) => ({
+          ...prev,
+          users: (prev.users || []).map((u) =>
+            u.id === user.id
+              ? { ...u, isActive: nextActive, status: nextActive ? 'Active' : 'Inactive' }
+              : u
+          ),
+        }),
+        `User account '${user.name}' ${nextActive ? 'activated' : 'deactivated'}`
+      );
+    } catch (err) {
+      console.warn('Toggle user status error:', err.message);
+    }
+  };
+
   if (section === 'users') {
+    const platformUsersList =
+      sa.users && sa.users.length > 0
+        ? sa.users
+        : (sa.tenants || []).map((t) => ({
+            id: t.id,
+            name: t.owner,
+            email: t.email || '—',
+            phone: t.phone || '—',
+            role: 'owner',
+            tenantName: t.businessName,
+            tenantCode: t.tenantCode || t.id,
+            status: t.status,
+            isActive: t.status === 'Active',
+            joinedDate: t.joinedDate,
+            lastLogin: 'Active session',
+          }));
+
     return (
       <div className="space-y-5">
-        <PageHeader title="Platform Tenant Owners & Users" subtitle="Directory of primary business owners across all tenants" breadcrumbs={['Super Admin', 'Users']} />
+        <PageHeader
+          title="Platform Tenant Users Directory"
+          subtitle="All registered staff and owner accounts across every tenant organization"
+          breadcrumbs={['Super Admin', 'Users']}
+        />
         <DataTable
-          data={sa.tenants}
+          data={platformUsersList}
+          searchFields={['name', 'email', 'tenantName', 'role']}
           columns={[
-            { key: 'owner', label: 'Owner Name', render: (r) => <span className="font-semibold">{r.owner}</span> },
-            { key: 'businessName', label: 'Tenant Organization' },
-            { key: 'plan', label: 'Plan' },
-            { key: 'joinedDate', label: 'Joined', render: (r) => <span className="font-mono text-xs">{r.joinedDate}</span> },
-            { key: 'status', label: 'Account Status', render: (r) => <StatusLabel status={r.status} /> },
+            {
+              key: 'name',
+              label: 'User Name',
+              render: (r) => (
+                <div className="flex items-center gap-2">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700">
+                    {r.name?.charAt(0)?.toUpperCase() || 'U'}
+                  </div>
+                  <span className="font-semibold text-slate-900">{r.name}</span>
+                </div>
+              ),
+            },
+            { key: 'email', label: 'Email' },
+            {
+              key: 'phone',
+              label: 'Phone / Mobile',
+              render: (r) => <span className="font-mono text-xs">{r.phone || r.mobile || '—'}</span>,
+            },
+            {
+              key: 'role',
+              label: 'Role',
+              render: (r) => (
+                <span className="inline-flex items-center rounded-md bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 capitalize">
+                  {r.role}
+                </span>
+              ),
+            },
+            {
+              key: 'tenantName',
+              label: 'Tenant Organization',
+              render: (r) => (
+                <div className="flex flex-col">
+                  <span className="font-medium text-slate-900">{r.tenantName || 'Platform'}</span>
+                  {r.tenantCode && (
+                    <span className="font-mono text-[10px] text-indigo-600 font-semibold">{r.tenantCode}</span>
+                  )}
+                </div>
+              ),
+            },
+            {
+              key: 'joinedDate',
+              label: 'Joined',
+              render: (r) => <span className="font-mono text-xs text-slate-600">{r.joinedDate || '—'}</span>,
+            },
+            {
+              key: 'status',
+              label: 'Status',
+              render: (r) => <StatusLabel status={r.status} />,
+            },
+            {
+              key: 'actions',
+              label: 'Action',
+              align: 'center',
+              render: (r) => (
+                <button
+                  type="button"
+                  onClick={() => handleTogglePlatformUserStatus(r)}
+                  className={`rounded px-2.5 py-1 text-xs font-semibold border transition-colors ${
+                    r.isActive
+                      ? 'border-amber-200 text-amber-700 hover:bg-amber-50'
+                      : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
+                  }`}
+                >
+                  {r.isActive ? 'Deactivate' : 'Activate'}
+                </button>
+              ),
+            },
           ]}
         />
       </div>

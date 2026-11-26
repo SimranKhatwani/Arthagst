@@ -572,13 +572,7 @@ const notifications = [
   { id: 'notif-12', category: 'Subscription', title: 'Growth Plan Active — Next Renewal 31 Mar 2027', message: 'Sharma Traders is on the Growth Annual SaaS plan (Demo).', date: '2026-11-10', read: true },
 ];
 
-const users = [
-  { id: 'usr-1', name: 'Anil Sharma', email: 'anil@sharmatraders.demo', mobile: '9829011223', role: 'Owner', status: 'Active', lastLogin: '2026-11-21 09:15 AM' },
-  { id: 'usr-2', name: 'Priya Maheshwari', email: 'priya.ca@sharmatraders.demo', mobile: '9829144500', role: 'Accountant', status: 'Active', lastLogin: '2026-11-21 08:42 AM' },
-  { id: 'usr-3', name: 'Rohit Jangid', email: 'rohit.pos@sharmatraders.demo', mobile: '9784022110', role: 'Billing Clerk', status: 'Active', lastLogin: '2026-11-20 06:30 PM' },
-  { id: 'usr-4', name: 'Rakesh Verma', email: 'rakesh.wh@sharmatraders.demo', mobile: '9414255601', role: 'Warehouse Manager', status: 'Active', lastLogin: '2026-11-20 04:10 PM' },
-  { id: 'usr-5', name: 'M.K. Jain (Auditor)', email: 'audit@mkjain.demo', mobile: '9829099881', role: 'Viewer', status: 'Inactive', lastLogin: '2026-10-31 05:00 PM' },
-];
+const users = [];
 
 const auditLogs = [
   { id: 'aud-1', user: 'Anil Sharma', action: 'Created Invoice', module: 'Sales', recordRef: 'ST/26-27/026', timestamp: '2026-11-21 09:20:11', prevValue: '—', newValue: 'Finalized · UPI Paid' },
@@ -685,6 +679,7 @@ const superAdminData = {
     { id: 'ff-3', key: 'einvoice_qr_preview', name: 'E-Invoice Simulated IRN & QR', description: 'Enable simulated IRP QR preview on tax invoices', enabled: true },
     { id: 'ff-4', key: 'multi_currency_export', name: 'Multi-Currency Export Invoices', description: 'Beta support for USD/EUR export invoices', enabled: false },
   ],
+  users: [],
   platformAuditLogs: [
     { id: 'pa-1', actor: 'Platform SuperAdmin', action: 'Updated Feature Flag', target: 'pos_split_payment', timestamp: '2026-11-20 14:10', detail: 'Enabled globally' },
     { id: 'pa-2', actor: 'Platform SuperAdmin', action: 'Suspended Expired Tenant', target: 'Kashi Textile Emporium', timestamp: '2026-11-16 09:00', detail: 'Payment retry failed 3x' },

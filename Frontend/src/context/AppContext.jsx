@@ -38,6 +38,7 @@ import * as eInvoiceService from '../services/eInvoiceService';
 import * as eWayBillService from '../services/eWayBillService';
 import * as reportsService from '../services/reportsService';
 import * as superAdminService from '../services/superAdminService';
+import * as userService from '../services/userService';
 
 const AppContext = createContext(null);
 
@@ -66,7 +67,7 @@ export const AppProvider = ({ children }) => {
 
     setPhase1Loading(true);
     try {
-      const [partiesRes, categoriesRes, unitsRes, productsRes, warehousesRes, profileRes] =
+      const [partiesRes, categoriesRes, unitsRes, productsRes, warehousesRes, profileRes, usersRes] =
         await Promise.allSettled([
           partyService.getParties({ limit: 100 }),
           categoryService.getCategories({ limit: 100 }),
@@ -74,6 +75,7 @@ export const AppProvider = ({ children }) => {
           productService.getProducts({ limit: 100 }),
           warehouseService.getWarehouses({ limit: 100 }),
           tenantService.getTenantProfile(),
+          userService.getUsers({ limit: 100 }),
         ]);
 
       setState((prev) => {
@@ -149,6 +151,43 @@ export const AppProvider = ({ children }) => {
               pan: t.PAN || t.pan || next.business?.pan,
             };
           }
+        }
+
+        if (usersRes.status === 'fulfilled' && usersRes.value) {
+          const rawUsers = usersRes.value.users || usersRes.value.data?.users || [];
+          next.users = rawUsers.map((u) => ({
+            id: String(u._id || u.id),
+            name: u.name,
+            email: u.email,
+            mobile: u.phone || u.mobile || '',
+            phone: u.phone || u.mobile || '',
+            role: u.role,
+            status: u.isActive ? 'Active' : 'Inactive',
+            isActive: u.isActive,
+            lastLogin: u.lastLogin ? new Date(u.lastLogin).toLocaleString() : 'Never',
+            permissions: u.permissions || [],
+            createdAt: u.createdAt,
+          }));
+        } else if (!next.users || next.users.length === 0) {
+          next.users = [];
+        }
+
+        // Ensure currently logged-in account (Owner) is represented in team users list
+        if (next.users.length === 0 && next.currentUser) {
+          next.users = [
+            {
+              id: String(next.currentUser._id || next.currentUser.id || 'owner-1'),
+              name: next.currentUser.name || 'Organization Owner',
+              email: next.currentUser.email || '',
+              mobile: next.currentUser.phone || '',
+              phone: next.currentUser.phone || '',
+              role: next.currentUser.role || 'Owner',
+              status: 'Active',
+              isActive: true,
+              lastLogin: 'Active session',
+              permissions: next.currentUser.permissions || ['all'],
+            },
+          ];
         }
 
         return next;
@@ -528,7 +567,7 @@ export const AppProvider = ({ children }) => {
     const token = getToken();
     if (!token) return;
     try {
-      const [tenantsRes, plansRes, invoicesRes, ticketsRes, annRes, flagsRes, settingsRes, auditRes] =
+      const [tenantsRes, plansRes, invoicesRes, ticketsRes, annRes, flagsRes, settingsRes, auditRes, usersRes] =
         await Promise.allSettled([
           superAdminService.getTenants({ limit: 100 }),
           superAdminService.getPlans(),
@@ -538,6 +577,7 @@ export const AppProvider = ({ children }) => {
           superAdminService.getFeatureFlags(),
           superAdminService.getPlatformSettings(),
           superAdminService.getAuditLogs({ limit: 50 }),
+          superAdminService.getUsers({ limit: 100 }),
         ]);
 
       setState((prev) => {
@@ -627,6 +667,23 @@ export const AppProvider = ({ children }) => {
             target: l.targetName || l.entityType || 'Platform',
             timestamp: l.timestamp ? new Date(l.timestamp).toISOString().replace('T', ' ').slice(0, 16) : new Date().toISOString().slice(0, 16),
             detail: l.description || (l.details ? JSON.stringify(l.details) : ''),
+          }));
+        }
+        if (usersRes.status === 'fulfilled' && usersRes.value?.users) {
+          sa.users = usersRes.value.users.map((u) => ({
+            id: u._id || u.id,
+            name: u.name,
+            email: u.email,
+            phone: u.phone || '—',
+            mobile: u.phone || '—',
+            role: u.role || 'user',
+            tenantId: u.tenantId?._id || u.tenantId,
+            tenantName: u.tenantId?.businessName || (u.tenantId?.tenantCode ? `Tenant (${u.tenantId.tenantCode})` : 'Platform Admin'),
+            tenantCode: u.tenantId?.tenantCode || 'PLATFORM',
+            status: u.isActive ? 'Active' : 'Inactive',
+            isActive: u.isActive,
+            joinedDate: u.createdAt ? new Date(u.createdAt).toISOString().slice(0, 10) : '—',
+            lastLogin: u.lastLogin ? new Date(u.lastLogin).toLocaleString() : 'Never',
           }));
         }
         return { ...prev, superAdmin: sa };
