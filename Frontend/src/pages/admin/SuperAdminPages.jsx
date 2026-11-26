@@ -1268,6 +1268,69 @@ export const SuperAdminSubSectionPage = ({ section }) => {
   const [trialDays, setTrialDays] = useState(14);
   const [supportEmail, setSupportEmail] = useState('support@arthagst.demo');
 
+  // Subscription Payment Edit Modal State
+  const [editingPayment, setEditingPayment] = useState(null);
+  const [paymentForm, setPaymentForm] = useState({
+    plan: '',
+    cycle: 'Monthly',
+    amount: '',
+    status: 'Pending',
+  });
+  const [paymentSaving, setPaymentSaving] = useState(false);
+
+  const handleOpenEditPayment = (p) => {
+    setEditingPayment(p);
+    setPaymentForm({
+      plan: p.plan || 'Growth',
+      cycle: p.cycle || 'Monthly',
+      amount: p.amount !== undefined ? p.amount : 1999,
+      status: p.status || 'Pending',
+    });
+  };
+
+  const handleSavePayment = async (e) => {
+    e.preventDefault();
+    if (!editingPayment) return;
+    setPaymentSaving(true);
+    try {
+      if (editingPayment.id && !String(editingPayment.id).startsWith('pay-')) {
+        await superAdminService.updateInvoice(editingPayment.id, {
+          planName: paymentForm.plan,
+          cycle: paymentForm.cycle,
+          totalAmount: Number(paymentForm.amount),
+          paymentStatus: paymentForm.status.toLowerCase() === 'settled' ? 'paid' : paymentForm.status.toLowerCase(),
+        });
+      }
+      updateSuperAdmin(
+        (prev) => ({
+          ...prev,
+          platformPayments: prev.platformPayments.map((p) =>
+            p.id === editingPayment.id
+              ? {
+                  ...p,
+                  plan: paymentForm.plan,
+                  cycle: paymentForm.cycle,
+                  amount: Number(paymentForm.amount),
+                  status: paymentForm.status,
+                }
+              : p
+          ),
+          tenants: prev.tenants.map((t) =>
+            t.businessName === editingPayment.tenant || t.id === editingPayment.tenantId
+              ? { ...t, plan: paymentForm.plan }
+              : t
+          ),
+        }),
+        `Subscription payment for ${editingPayment.tenant} updated`
+      );
+      setEditingPayment(null);
+    } catch (err) {
+      console.warn('Update payment error:', err.message);
+    } finally {
+      setPaymentSaving(false);
+    }
+  };
+
   useEffect(() => {
     let isMounted = true;
     if (section === 'settings') {
@@ -1388,20 +1451,184 @@ export const SuperAdminSubSectionPage = ({ section }) => {
   if (section === 'payments') {
     return (
       <div className="space-y-5">
-        <PageHeader title="Platform Subscription Payments" subtitle="SaaS billing collections and gateway settlement logs" breadcrumbs={['Super Admin', 'Payments']} />
+        <PageHeader
+          title="Platform Subscription Payments"
+          subtitle="SaaS billing collections and gateway settlement logs"
+          breadcrumbs={['Super Admin', 'Payments']}
+        />
         <DataTable
           data={sa.platformPayments}
           columns={[
-            { key: 'txnId', label: 'Txn ID', render: (r) => <span className="font-mono font-semibold">{r.txnId}</span> },
-            { key: 'tenant', label: 'Tenant' },
-            { key: 'plan', label: 'Plan' },
+            {
+              key: 'txnId',
+              label: 'Txn ID',
+              render: (r) => <span className="font-mono font-semibold text-slate-800">{r.txnId}</span>,
+            },
+            {
+              key: 'tenant',
+              label: 'Tenant',
+              render: (r) => <span className="font-medium text-slate-900">{r.tenant}</span>,
+            },
+            {
+              key: 'plan',
+              label: 'Plan',
+              render: (r) => (
+                <span className="inline-flex items-center rounded-md bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
+                  {r.plan}
+                </span>
+              ),
+            },
             { key: 'cycle', label: 'Cycle' },
-            { key: 'date', label: 'Date', render: (r) => <span className="font-mono text-xs">{r.date}</span> },
-            { key: 'method', label: 'Method' },
-            { key: 'amount', label: 'Amount', align: 'right', render: (r) => formatINR(r.amount, false) },
-            { key: 'status', label: 'Status', render: (r) => <StatusLabel status={r.status} /> },
+            {
+              key: 'date',
+              label: 'Date',
+              render: (r) => <span className="font-mono text-xs text-slate-600">{r.date}</span>,
+            },
+            {
+              key: 'amount',
+              label: 'Amount',
+              align: 'right',
+              render: (r) => <span className="font-semibold text-slate-900">{formatINR(r.amount, false)}</span>,
+            },
+            {
+              key: 'status',
+              label: 'Status',
+              render: (r) => <StatusLabel status={r.status} />,
+            },
+            {
+              key: 'action',
+              label: 'Action',
+              align: 'center',
+              render: (r) => (
+                <button
+                  type="button"
+                  onClick={() => handleOpenEditPayment(r)}
+                  className="inline-flex items-center gap-1 rounded border border-indigo-200 bg-white px-2.5 py-1 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 transition-colors shadow-xs"
+                >
+                  <Edit3 className="h-3.5 w-3.5" />
+                  Edit
+                </button>
+              ),
+            },
           ]}
         />
+
+        {/* Edit Subscription Payment Modal */}
+        <Modal
+          open={Boolean(editingPayment)}
+          onClose={() => setEditingPayment(null)}
+          title={`Edit Subscription Payment — ${editingPayment?.tenant || ''}`}
+          footer={
+            <>
+              <button
+                type="button"
+                onClick={() => setEditingPayment(null)}
+                className={btnSecondary}
+                disabled={paymentSaving}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="payment-edit-form"
+                className={btnPrimary}
+                disabled={paymentSaving}
+              >
+                {paymentSaving ? 'Saving...' : 'Save Changes'}
+              </button>
+            </>
+          }
+        >
+          {editingPayment && (
+            <form id="payment-edit-form" onSubmit={handleSavePayment} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <InputField
+                  label="Tenant Business Name"
+                  value={editingPayment.tenant}
+                  disabled
+                  className="bg-slate-50 cursor-not-allowed font-medium text-slate-700"
+                />
+                <InputField
+                  label="Transaction / Invoice #"
+                  value={editingPayment.txnId}
+                  disabled
+                  className="bg-slate-50 cursor-not-allowed font-mono text-xs text-slate-700"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-700">
+                    Subscription Plan <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={paymentForm.plan}
+                    onChange={(e) => setPaymentForm({ ...paymentForm, plan: e.target.value })}
+                    className={inputClass}
+                    required
+                  >
+                    {sa.plans && sa.plans.length > 0 ? (
+                      sa.plans.map((p) => (
+                        <option key={p.id || p.name} value={p.name}>
+                          {p.name}
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="Starter Plan">Starter Plan</option>
+                        <option value="Growth Plan">Growth Plan</option>
+                        <option value="Enterprise Plan">Enterprise Plan</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-700">
+                    Billing Cycle
+                  </label>
+                  <select
+                    value={paymentForm.cycle}
+                    onChange={(e) => setPaymentForm({ ...paymentForm, cycle: e.target.value })}
+                    className={inputClass}
+                  >
+                    <option value="Monthly">Monthly</option>
+                    <option value="Yearly">Yearly</option>
+                    <option value="Quarterly">Quarterly</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <InputField
+                  label="Billing Amount (₹)"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={paymentForm.amount}
+                  onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
+                  required
+                />
+
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-700">
+                    Payment Status <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={paymentForm.status}
+                    onChange={(e) => setPaymentForm({ ...paymentForm, status: e.target.value })}
+                    className={inputClass}
+                    required
+                  >
+                    <option value="Pending">Pending</option>
+                    <option value="Settled">Settled (Paid)</option>
+                    <option value="Failed">Failed</option>
+                  </select>
+                </div>
+              </div>
+            </form>
+          )}
+        </Modal>
       </div>
     );
   }

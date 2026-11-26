@@ -95,6 +95,11 @@ export const getInvoices = async (params = {}) => {
   return res.data;
 };
 
+export const updateInvoice = async (id, data) => {
+  const res = await api.put(`/super-admin/invoices/${id}`, data);
+  return res.data;
+};
+
 export const getRevenueReport = async (params = {}) => {
   const res = await api.get('/super-admin/reports/revenue', { params });
   return res.data;
@@ -180,6 +185,7 @@ export default {
   toggleUserStatus,
   getSubscriptions,
   getInvoices,
+  updateInvoice,
   getRevenueReport,
   getUsageStatistics,
   getAuditLogs,

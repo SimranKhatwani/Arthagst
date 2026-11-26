@@ -578,11 +578,14 @@ export const AppProvider = ({ children }) => {
           sa.platformPayments = invoicesRes.value.invoices.map((inv) => ({
             id: inv._id || inv.id,
             txnId: inv.paymentReference?.transactionId || inv.invoiceNumber,
-            tenant: inv.tenantId?.businessName || 'Tenant',
+            tenant: inv.tenantId?.businessName || (inv.tenantId ? String(inv.tenantId) : 'Tenant'),
+            tenantId: inv.tenantId?._id || inv.tenantId || null,
             plan: inv.planName,
-            cycle: 'Monthly',
+            planCode: inv.planCode,
+            cycle: inv.billingPeriod?.startDate && inv.billingPeriod?.endDate
+              ? (Math.round((new Date(inv.billingPeriod.endDate) - new Date(inv.billingPeriod.startDate)) / (1000 * 60 * 60 * 24)) > 60 ? 'Yearly' : 'Monthly')
+              : 'Monthly',
             date: inv.invoiceDate ? new Date(inv.invoiceDate).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
-            method: inv.paymentReference?.paymentMethod || 'UPI',
             amount: inv.totalAmount,
             status: inv.paymentStatus === 'paid' ? 'Settled' : inv.paymentStatus === 'failed' ? 'Failed' : 'Pending',
           }));

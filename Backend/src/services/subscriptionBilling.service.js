@@ -368,6 +368,35 @@ export const getTenantInvoices = async (tenantId, query = {}) => {
  * Get all subscription invoices across platform (Super Admin)
  */
 export const getAllInvoices = async (query = {}) => {
+  // Sync/auto-provision initial subscription invoices for any tenant subscriptions missing one
+  try {
+    const existingSubIds = await SubscriptionInvoice.distinct('subscriptionId');
+    const missingSubs = await Subscription.find({
+      _id: { $nin: existingSubIds },
+    }).populate('tenantId');
+
+    for (const sub of missingSubs) {
+      if (sub.tenantId) {
+        await createSubscriptionInvoice({
+          tenantId: sub.tenantId._id || sub.tenantId,
+          subscriptionId: sub._id,
+          plan: {
+            code: sub.planSnapshot?.code || 'GROWTH',
+            name: sub.planSnapshot?.name || 'Growth Plan',
+            price: sub.amount || (sub.planSnapshot?.price ? sub.planSnapshot.price * 12 : 1999),
+          },
+          billingPeriod: {
+            startDate: sub.currentPeriodStart || sub.startDate || new Date(),
+            endDate: sub.currentPeriodEnd || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+          },
+          dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        });
+      }
+    }
+  } catch (syncErr) {
+    console.warn('Subscription invoice auto-sync notice:', syncErr.message);
+  }
+
   const filter = {};
 
   if (query.tenantId && mongoose.isValidObjectId(query.tenantId)) {
@@ -386,7 +415,7 @@ export const getAllInvoices = async (query = {}) => {
   }
 
   const page = parseInt(query.page, 10) || 1;
-  const limit = parseInt(query.limit, 10) || 20;
+  const limit = parseInt(query.limit, 10) || 50;
   const skip = (page - 1) * limit;
 
   const [invoices, total] = await Promise.all([
@@ -409,6 +438,56 @@ export const getAllInvoices = async (query = {}) => {
   };
 };
 
+/**
+ * Update an existing subscription invoice (Super Admin)
+ */
+export const updateSubscriptionInvoice = async (invoiceId, updateData) => {
+  const invoice = await SubscriptionInvoice.findById(invoiceId);
+  if (!invoice) {
+    const error = new Error('Subscription invoice not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  if (updateData.planName) invoice.planName = updateData.planName;
+  if (updateData.planCode) invoice.planCode = updateData.planCode.toUpperCase();
+  if (updateData.totalAmount !== undefined && !isNaN(Number(updateData.totalAmount))) {
+    invoice.totalAmount = round2(Number(updateData.totalAmount));
+    invoice.taxableAmount = round2(invoice.totalAmount / 1.18);
+    invoice.taxAmount = round2(invoice.totalAmount - invoice.taxableAmount);
+  }
+  if (updateData.paymentStatus) {
+    const normStatus = updateData.paymentStatus.toLowerCase();
+    invoice.paymentStatus = normStatus === 'settled' ? 'paid' : normStatus;
+    if (invoice.paymentStatus === 'paid') {
+      invoice.paymentReference = {
+        ...(invoice.paymentReference || {}),
+        paidAt: invoice.paymentReference?.paidAt || new Date(),
+        transactionId: invoice.paymentReference?.transactionId || `PAY-${Date.now()}`,
+      };
+    }
+  }
+  if (updateData.dueDate) invoice.dueDate = new Date(updateData.dueDate);
+
+  await invoice.save();
+
+  // If associated with a Subscription, keep the Subscription record synchronized
+  if (invoice.subscriptionId) {
+    const subUpdate = {};
+    if (updateData.planName) subUpdate['planSnapshot.name'] = updateData.planName;
+    if (updateData.planCode) subUpdate['planSnapshot.code'] = updateData.planCode.toUpperCase();
+    if (updateData.cycle) subUpdate.billingCycle = updateData.cycle.toLowerCase();
+    if (updateData.totalAmount !== undefined && !isNaN(Number(updateData.totalAmount))) {
+      subUpdate.amount = round2(Number(updateData.totalAmount));
+    }
+    if (Object.keys(subUpdate).length > 0) {
+      await Subscription.findByIdAndUpdate(invoice.subscriptionId, { $set: subUpdate });
+    }
+  }
+
+  return invoice;
+};
+
 export default {
   generateSubscriptionInvoiceNumber,
   createSubscriptionInvoice,
@@ -417,4 +496,5 @@ export default {
   recordPaymentFailure,
   getTenantInvoices,
   getAllInvoices,
+  updateSubscriptionInvoice,
 };

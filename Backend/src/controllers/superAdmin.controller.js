@@ -322,6 +322,15 @@ export const getInvoices = async (req, res, next) => {
   }
 };
 
+export const updateInvoice = async (req, res, next) => {
+  try {
+    const result = await billingService.updateSubscriptionInvoice(req.params.id, req.body);
+    return sendResponse(res, 200, true, 'Platform subscription payment updated successfully', result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const getRevenueReport = async (req, res, next) => {
   try {
     const report = await superAdminService.getSubscriptionRevenueReport(req.query);

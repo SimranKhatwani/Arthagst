@@ -57,6 +57,7 @@ router.get('/subscriptions', superAdminController.getSubscriptions);
  * Billing & Invoices
  */
 router.get('/invoices', superAdminController.getInvoices);
+router.put('/invoices/:id', superAdminController.updateInvoice);
 
 /**
  * Support Tickets

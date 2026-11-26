@@ -22,6 +22,7 @@ import PlatformSetting from '../models/platformSetting.model.js';
 import { logAuditAction } from './auditLog.service.js';
 import { calculatePeriodEnd } from './subscription.service.js';
 import { round2 } from './sales.calculator.js';
+import { createSubscriptionInvoice } from './subscriptionBilling.service.js';
 
 /**
  * Universal helper to resolve a tenant by MongoDB ObjectId OR tenantCode (case-insensitive)
@@ -417,7 +418,7 @@ export const createTenant = async (superAdminUser, data) => {
       const periodEnd = new Date(now);
       periodEnd.setDate(periodEnd.getDate() + 365);
 
-      await Subscription.create(
+      const [sub] = await Subscription.create(
         [
           {
             tenantId: tenant._id,
@@ -441,6 +442,19 @@ export const createTenant = async (superAdminUser, data) => {
         ],
         { session }
       );
+
+      await createSubscriptionInvoice({
+        tenantId: tenant._id,
+        subscriptionId: sub._id,
+        plan: {
+          code: plan.code,
+          name: plan.name,
+          price: (plan.pricePerMonth || 1999) * 12,
+        },
+        billingPeriod: { startDate: now, endDate: periodEnd },
+        dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        session,
+      });
 
       await session.commitTransaction();
     } else {
@@ -470,7 +484,7 @@ export const createTenant = async (superAdminUser, data) => {
         const periodEnd = new Date(now);
         periodEnd.setDate(periodEnd.getDate() + 365);
 
-        await Subscription.create({
+        const sub = await Subscription.create({
           tenantId: tenant._id,
           planId: plan._id,
           planSnapshot: {
@@ -488,6 +502,18 @@ export const createTenant = async (superAdminUser, data) => {
           currentPeriodEnd: periodEnd,
           amount: (plan.pricePerMonth || 1999) * 12,
           autoRenew: true,
+        });
+
+        await createSubscriptionInvoice({
+          tenantId: tenant._id,
+          subscriptionId: sub._id,
+          plan: {
+            code: plan.code,
+            name: plan.name,
+            price: (plan.pricePerMonth || 1999) * 12,
+          },
+          billingPeriod: { startDate: now, endDate: periodEnd },
+          dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         });
       } catch (userErr) {
         await Tenant.findByIdAndDelete(tenant._id);
