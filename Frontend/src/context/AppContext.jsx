@@ -1269,9 +1269,13 @@ export const AppProvider = ({ children }) => {
             pincode: record.pincode || '',
             manager: record.manager || '',
             capacity: record.capacity || '',
-            isDefault: Boolean(record.isDefault),
             isActive: record.isActive !== false,
           };
+          if (record.isDefault !== undefined) {
+            payload.isDefault = Boolean(record.isDefault);
+          } else if (!isEdit) {
+            payload.isDefault = false;
+          }
           const saved = isEdit
             ? await warehouseService.updateWarehouse(id, payload)
             : await warehouseService.createWarehouse(payload);
@@ -1283,6 +1287,7 @@ export const AppProvider = ({ children }) => {
             code: saved.warehouseCode || record.code,
             manager: saved.manager || record.manager,
             capacity: saved.capacity || record.capacity,
+            isDefault: saved.isDefault !== undefined ? saved.isDefault : record.isDefault,
           };
 
           setState((prev) => {

@@ -795,7 +795,7 @@ export const StockTransfersPage = () => {
 export const WarehousesPage = () => {
   const { state, upsertRecord, deleteRecord, confirmAction, notify } = useApp();
   const [modalOpen, setModalOpen] = useState(false);
-  const [form, setForm] = useState({ id: '', _id: '', name: '', code: '', city: '', state: '', address: '', manager: '', capacity: '' });
+  const [form, setForm] = useState({ id: '', _id: '', name: '', code: '', city: '', state: '', address: '', manager: '', capacity: '', isDefault: false });
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -817,6 +817,7 @@ export const WarehousesPage = () => {
           state: form.state ? form.state.trim() : '',
           manager: form.manager ? form.manager.trim() : '',
           capacity: form.capacity ? form.capacity.trim() : '',
+          isDefault: form.isDefault,
         },
         'Warehouse',
         'name'
@@ -828,7 +829,7 @@ export const WarehousesPage = () => {
   };
 
   const openAddModal = () => {
-    setForm({ id: '', _id: '', name: '', code: '', city: '', state: '', address: '', manager: '', capacity: '' });
+    setForm({ id: '', _id: '', name: '', code: '', city: '', state: '', address: '', manager: '', capacity: '', isDefault: false });
     setModalOpen(true);
   };
 
@@ -874,7 +875,14 @@ export const WarehousesPage = () => {
               <div key={wId || w.code} className="rounded-lg border border-slate-200 bg-white p-5 space-y-3 shadow-2xs hover:border-slate-300 transition-colors">
                 <div className="flex items-start justify-between">
                   <div>
-                    <div className="font-mono text-xs font-semibold text-indigo-600">{w.code || w.warehouseCode}</div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono text-xs font-semibold text-indigo-600">{w.code || w.warehouseCode}</span>
+                      {(w.isDefault || warehouses.length === 1) && (
+                        <span className="inline-flex items-center rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-200">
+                          Default
+                        </span>
+                      )}
+                    </div>
                     <h3 className="font-display text-base font-semibold text-slate-900">{w.name || w.warehouseName}</h3>
                     {(w.city || w.state) && (
                       <p className="text-xs text-slate-500">
@@ -897,6 +905,7 @@ export const WarehousesPage = () => {
                           address: w.address || '',
                           manager: w.manager || '',
                           capacity: w.capacity || '',
+                          isDefault: Boolean(w.isDefault),
                         });
                         setModalOpen(true);
                       }}
@@ -1035,6 +1044,18 @@ export const WarehousesPage = () => {
               placeholder="e.g. 5,000 sq ft"
             />
           </InputField>
+          <div className="col-span-2 flex items-center gap-2 pt-1">
+            <input
+              type="checkbox"
+              id="wh-is-default"
+              checked={Boolean(form.isDefault)}
+              onChange={(e) => setForm({ ...form, isDefault: e.target.checked })}
+              className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <label htmlFor="wh-is-default" className="text-sm font-medium text-slate-700 cursor-pointer">
+              Set as primary / default facility
+            </label>
+          </div>
         </form>
       </Modal>
     </div>

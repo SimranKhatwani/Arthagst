@@ -195,9 +195,8 @@ export const updateWarehouse = async (tenantId, warehouseId, data) => {
       await otherWarehouse.save();
       warehouse.isDefault = false;
     } else {
-      const error = new Error('Cannot unset the only active warehouse as non-default.');
-      error.statusCode = 400;
-      throw error;
+      // If this is the only active warehouse, keep it as default rather than failing the edit
+      warehouse.isDefault = true;
     }
   }
 
