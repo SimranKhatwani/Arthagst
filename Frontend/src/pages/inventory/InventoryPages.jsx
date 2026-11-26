@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Edit3, Trash2, Eye, ArrowLeftRight, AlertTriangle } from 'lucide-react';
+import { Plus, Edit3, Trash2, Eye, ArrowLeftRight, AlertTriangle, Warehouse } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { GST_RATES } from '../../data/constants';
 import { formatINR, formatDateIN } from '../../services/calculationService';
@@ -795,7 +795,7 @@ export const StockTransfersPage = () => {
 export const WarehousesPage = () => {
   const { state, upsertRecord, deleteRecord, confirmAction, notify } = useApp();
   const [modalOpen, setModalOpen] = useState(false);
-  const [form, setForm] = useState({ id: '', name: '', code: '', city: 'Jaipur', state: 'Rajasthan', manager: '', capacity: '' });
+  const [form, setForm] = useState({ id: '', _id: '', name: '', code: '', city: '', state: '', address: '', manager: '', capacity: '' });
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -810,8 +810,11 @@ export const WarehousesPage = () => {
           ...form,
           id: form.id || form._id || undefined,
           _id: form._id || form.id || undefined,
-          warehouseName: form.name,
-          warehouseCode: form.code,
+          warehouseName: form.name.trim(),
+          warehouseCode: form.code.trim().toUpperCase(),
+          address: form.address ? form.address.trim() : '',
+          city: form.city ? form.city.trim() : '',
+          state: form.state ? form.state.trim() : '',
         },
         'Warehouse',
         'name'
@@ -822,6 +825,13 @@ export const WarehousesPage = () => {
     }
   };
 
+  const openAddModal = () => {
+    setForm({ id: '', _id: '', name: '', code: '', city: '', state: '', address: '', manager: '', capacity: '' });
+    setModalOpen(true);
+  };
+
+  const warehouses = state.warehouses || [];
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -829,73 +839,123 @@ export const WarehousesPage = () => {
         subtitle="Manage multi-location storage facilities and warehouse-wise inventory valuation"
         breadcrumbs={['Inventory', 'Warehouses']}
         actions={
-          <button type="button" onClick={() => { setForm({ id: '', name: '', code: '', city: 'Jaipur', state: 'Rajasthan', manager: '', capacity: '' }); setModalOpen(true); }} className={btnPrimary}>
+          <button type="button" onClick={openAddModal} className={btnPrimary}>
             <Plus className="h-3.5 w-3.5" /> Add Warehouse
           </button>
         }
       />
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        {state.warehouses.map((w) => {
-          const prods = state.products.filter((p) => !p.archived && p.warehouseId === w.id);
-          const val = prods.reduce((s, p) => s + p.stock * p.purchasePrice, 0);
-          return (
-            <div key={w.id} className="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="font-mono text-xs text-indigo-600">{w.code}</div>
-                  <h3 className="font-display text-base font-semibold text-slate-900">{w.name}</h3>
-                  <p className="text-xs text-slate-500">{w.city}, {w.state}</p>
-                </div>
-                <div className="flex items-center gap-1">
-                  <button type="button" onClick={() => { setForm(w); setModalOpen(true); }} className="rounded p-1 text-slate-400 hover:bg-slate-100" title="Edit Warehouse">
-                    <Edit3 className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (await confirmAction({ title: `Delete ${w.name || w.warehouseName}?`, message: 'Remove this warehouse from your organization?', confirmText: 'Delete', danger: true })) {
-                        try {
-                          await deleteRecord('warehouses', w.id || w._id, 'Warehouse', w.name || w.warehouseName);
-                        } catch (err) {
-                          notify(err.message || 'Failed to delete warehouse', 'error');
+      {warehouses.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center shadow-2xs">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 mb-3">
+            <Warehouse className="h-6 w-6" />
+          </div>
+          <h3 className="font-display text-base font-semibold text-slate-900">No warehouses yet</h3>
+          <p className="mt-1 max-w-sm text-sm text-slate-500">
+            No warehouses or godowns have been registered yet. Add your primary warehouse or storage location to track inventory across facilities.
+          </p>
+          <button
+            type="button"
+            onClick={openAddModal}
+            className={`mt-4 ${btnPrimary}`}
+          >
+            <Plus className="h-3.5 w-3.5" /> Add Warehouse
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          {warehouses.map((w) => {
+            const wId = w._id || w.id;
+            const prods = (state.products || []).filter((p) => !p.archived && (p.warehouseId === wId || p.warehouseId === w.id));
+            const val = prods.reduce((s, p) => s + (Number(p.stock) || 0) * (Number(p.purchasePrice) || 0), 0);
+            return (
+              <div key={wId || w.code} className="rounded-lg border border-slate-200 bg-white p-5 space-y-3 shadow-2xs hover:border-slate-300 transition-colors">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="font-mono text-xs font-semibold text-indigo-600">{w.code || w.warehouseCode}</div>
+                    <h3 className="font-display text-base font-semibold text-slate-900">{w.name || w.warehouseName}</h3>
+                    {(w.city || w.state) && (
+                      <p className="text-xs text-slate-500">
+                        {w.city}{w.city && w.state ? ', ' : ''}{w.state}
+                      </p>
+                    )}
+                    {w.address && <p className="text-xs text-slate-400 truncate max-w-xs">{w.address}</p>}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForm({
+                          id: wId,
+                          _id: wId,
+                          name: w.name || w.warehouseName || '',
+                          code: w.code || w.warehouseCode || '',
+                          city: w.city || '',
+                          state: w.state || '',
+                          address: w.address || '',
+                          manager: w.manager || '',
+                          capacity: w.capacity || '',
+                        });
+                        setModalOpen(true);
+                      }}
+                      className="rounded p-1 text-slate-400 hover:bg-slate-100"
+                      title="Edit Warehouse"
+                    >
+                      <Edit3 className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (
+                          await confirmAction({
+                            title: `Delete ${w.name || w.warehouseName}?`,
+                            message: 'Remove this warehouse from your organization?',
+                            confirmText: 'Delete',
+                            danger: true,
+                          })
+                        ) {
+                          try {
+                            await deleteRecord('warehouses', wId, 'Warehouse', w.name || w.warehouseName);
+                          } catch (err) {
+                            notify(err.message || 'Failed to delete warehouse', 'error');
+                          }
                         }
-                      }
-                    }}
-                    className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
-                    title="Delete Warehouse"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                      }}
+                      className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                      title="Delete Warehouse"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-3 text-xs">
+                  <div>
+                    <div className="text-slate-500">SKUs Stored</div>
+                    <div className="font-mono font-semibold text-slate-900">{prods.length}</div>
+                  </div>
+                  <div>
+                    <div className="text-slate-500">Stock Value</div>
+                    <div className="font-mono font-semibold text-slate-900">{formatINR(val, false)}</div>
+                  </div>
+                  <div>
+                    <div className="text-slate-500">Manager</div>
+                    <div className="font-medium text-slate-800">{w.manager || '—'}</div>
+                  </div>
+                  <div>
+                    <div className="text-slate-500">Capacity</div>
+                    <div className="font-mono text-slate-800">{w.capacity || '—'}</div>
+                  </div>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-3 text-xs">
-                <div>
-                  <div className="text-slate-500">SKUs Stored</div>
-                  <div className="font-mono font-semibold text-slate-900">{prods.length}</div>
-                </div>
-                <div>
-                  <div className="text-slate-500">Stock Value</div>
-                  <div className="font-mono font-semibold text-slate-900">{formatINR(val, false)}</div>
-                </div>
-                <div>
-                  <div className="text-slate-500">Manager</div>
-                  <div className="font-medium text-slate-800">{w.manager}</div>
-                </div>
-                <div>
-                  <div className="text-slate-500">Capacity</div>
-                  <div className="font-mono text-slate-800">{w.capacity}</div>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
 
       <Modal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={form.id ? 'Edit Warehouse' : 'Add Warehouse'}
+        title={form.id || form._id ? 'Edit Warehouse' : 'Add Warehouse'}
         footer={
           <>
             <button type="button" onClick={() => setModalOpen(false)} className={btnSecondary}>Cancel</button>
@@ -904,11 +964,75 @@ export const WarehousesPage = () => {
         }
       >
         <form id="wh-form" onSubmit={handleSave} className="grid grid-cols-2 gap-3">
-          <div className="col-span-2"><InputField label="Warehouse Name" required><input type="text" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputClass} /></InputField></div>
-          <InputField label="Code" required><input type="text" required value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} className={inputClass} /></InputField>
-          <InputField label="Manager"><input type="text" value={form.manager} onChange={(e) => setForm({ ...form, manager: e.target.value })} className={inputClass} /></InputField>
-          <InputField label="City"><input type="text" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} className={inputClass} /></InputField>
-          <InputField label="Capacity"><input type="text" value={form.capacity} onChange={(e) => setForm({ ...form, capacity: e.target.value })} className={inputClass} /></InputField>
+          <div className="col-span-2">
+            <InputField label="Warehouse Name" required>
+              <input
+                type="text"
+                required
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                className={inputClass}
+                placeholder="e.g. Central Distribution Depot"
+              />
+            </InputField>
+          </div>
+          <InputField label="Code" required>
+            <input
+              type="text"
+              required
+              value={form.code}
+              onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
+              className={inputClass}
+              placeholder="e.g. WH-01"
+            />
+          </InputField>
+          <InputField label="Manager">
+            <input
+              type="text"
+              value={form.manager || ''}
+              onChange={(e) => setForm({ ...form, manager: e.target.value })}
+              className={inputClass}
+              placeholder="e.g. Warehouse In-charge"
+            />
+          </InputField>
+          <InputField label="City">
+            <input
+              type="text"
+              value={form.city || ''}
+              onChange={(e) => setForm({ ...form, city: e.target.value })}
+              className={inputClass}
+              placeholder="e.g. Mumbai"
+            />
+          </InputField>
+          <InputField label="State">
+            <input
+              type="text"
+              value={form.state || ''}
+              onChange={(e) => setForm({ ...form, state: e.target.value })}
+              className={inputClass}
+              placeholder="e.g. Maharashtra"
+            />
+          </InputField>
+          <div className="col-span-2">
+            <InputField label="Address">
+              <input
+                type="text"
+                value={form.address || ''}
+                onChange={(e) => setForm({ ...form, address: e.target.value })}
+                className={inputClass}
+                placeholder="Facility street address, area or plot number"
+              />
+            </InputField>
+          </div>
+          <InputField label="Capacity">
+            <input
+              type="text"
+              value={form.capacity || ''}
+              onChange={(e) => setForm({ ...form, capacity: e.target.value })}
+              className={inputClass}
+              placeholder="e.g. 5,000 sq ft"
+            />
+          </InputField>
         </form>
       </Modal>
     </div>

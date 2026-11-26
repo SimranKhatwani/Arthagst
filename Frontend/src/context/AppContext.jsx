@@ -96,6 +96,7 @@ export const AppProvider = ({ children }) => {
           const rawWh = warehousesRes.value.warehouses || warehousesRes.value.data?.warehouses || [];
           fetchedWarehouses = rawWh.map((w) => ({
             ...w,
+            id: w._id || w.id,
             name: w.warehouseName || w.name,
             code: w.warehouseCode || w.code,
           }));
@@ -1199,6 +1200,7 @@ export const AppProvider = ({ children }) => {
 
           const enriched = {
             ...saved,
+            id: saved._id || saved.id || id,
             name: saved.warehouseName || record.name,
             code: saved.warehouseCode || record.code,
           };
