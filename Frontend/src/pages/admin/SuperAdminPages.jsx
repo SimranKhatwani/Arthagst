@@ -1,8 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Edit3, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  Plus,
+  Edit3,
+  CheckCircle2,
+  Eye,
+  KeyRound,
+  Trash2,
+  Shield,
+  User,
+  Building2,
+  Phone,
+  Mail,
+  MapPin,
+  RefreshCw,
+  ExternalLink,
+} from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { useApp } from '../../context/AppContext';
 import { formatINR } from '../../services/calculationService';
+import { INDIAN_STATES } from '../../data/constants';
 import * as superAdminService from '../../services/superAdminService';
 import {
   PageHeader,
@@ -88,101 +104,799 @@ export const SuperAdminDashboardPage = () => {
 };
 
 export const SuperAdminTenantsPage = () => {
-  const { state, updateSuperAdmin } = useApp();
-  const [modalOpen, setModalOpen] = useState(false);
-  const [form, setForm] = useState({ businessName: '', owner: '', city: '', state: 'Rajasthan', plan: 'Growth', status: 'Active' });
+  const { state, notify, confirmAction } = useApp();
+  const [tenantsList, setTenantsList] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const handleAdd = (e) => {
-    e.preventDefault();
-    const mrrMap = { Starter: 799, Growth: 1999, Enterprise: 4999 };
-    const newTen = {
-      id: `ten-${Date.now()}`,
-      ...form,
-      users: 1,
-      invoicesCount: 0,
-      mrr: form.status === 'Active' ? mrrMap[form.plan] || 1999 : 0,
-      joinedDate: new Date().toISOString().slice(0, 10),
-      renewalDate: '2027-11-20',
-    };
-    updateSuperAdmin((sa) => ({ ...sa, tenants: [newTen, ...sa.tenants] }), 'Tenant created');
-    setModalOpen(false);
-  };
+  // Modals state
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [viewModalOpen, setViewModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
 
-  const toggleTenantStatus = async (t) => {
-    const isActivating = t.status !== 'Active';
+  const [selectedTenant, setSelectedTenant] = useState(null);
+  const [selectedTenantDetails, setSelectedTenantDetails] = useState(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Add Form
+  const [addForm, setAddForm] = useState({
+    tenantCode: '',
+    businessName: '',
+    ownerName: '',
+    email: '',
+    password: '',
+    phone: '',
+    city: '',
+    state: 'Maharashtra',
+    businessAddress: '',
+    planName: 'Growth',
+  });
+
+  // Edit Form
+  const [editForm, setEditForm] = useState({
+    businessName: '',
+    ownerName: '',
+    email: '',
+    phone: '',
+    city: '',
+    state: '',
+    businessAddress: '',
+    GSTIN: '',
+    PAN: '',
+    isActive: true,
+    subscriptionStatus: 'active',
+  });
+
+  // Password Reset Form
+  const [newPassword, setNewPassword] = useState('');
+
+  const fetchTenants = useCallback(async () => {
     try {
-      if (isActivating) {
-        await superAdminService.activateTenant(t.id, 'SuperAdmin console activation');
-      } else {
-        await superAdminService.suspendTenant(t.id, 'SuperAdmin console suspension');
+      setLoading(true);
+      const res = await superAdminService.getTenants({ limit: 100 });
+      const list = res?.tenants || res?.data?.tenants || [];
+      if (Array.isArray(list) && list.length > 0) {
+        setTenantsList(list);
+      } else if (state.superAdmin?.tenants) {
+        setTenantsList(state.superAdmin.tenants);
       }
     } catch (err) {
-      console.warn('Tenant status update API error:', err.message);
+      console.warn('Failed to load tenants from server:', err.message);
+      if (state.superAdmin?.tenants) {
+        setTenantsList(state.superAdmin.tenants);
+      }
+    } finally {
+      setLoading(false);
     }
-    const nextStatus = isActivating ? 'Active' : 'Expired';
-    updateSuperAdmin(
-      (sa) => ({
-        ...sa,
-        tenants: sa.tenants.map((item) => (item.id === t.id ? { ...item, status: nextStatus } : item)),
-      }),
-      `Tenant ${t.businessName} set to ${nextStatus}`
-    );
+  }, [state.superAdmin?.tenants]);
+
+  useEffect(() => {
+    fetchTenants();
+  }, [fetchTenants]);
+
+  // Open View Modal and load live users / usage details
+  const handleOpenView = async (t) => {
+    setSelectedTenant(t);
+    setSelectedTenantDetails(null);
+    setViewModalOpen(true);
+    const tenantId = t._id || t.id;
+    if (tenantId && !String(tenantId).startsWith('ten-')) {
+      try {
+        setDetailsLoading(true);
+        const details = await superAdminService.getTenantDetails(tenantId);
+        setSelectedTenantDetails(details);
+      } catch (err) {
+        console.warn('Failed to fetch tenant details:', err.message);
+      } finally {
+        setDetailsLoading(false);
+      }
+    }
+  };
+
+  // Open Edit Modal
+  const handleOpenEdit = (t) => {
+    setSelectedTenant(t);
+    setEditForm({
+      businessName: t.businessName || '',
+      ownerName: t.ownerName || t.owner || '',
+      email: t.email || '',
+      phone: t.phone || '',
+      city: t.city || '',
+      state: t.state || 'Maharashtra',
+      businessAddress: t.businessAddress || '',
+      GSTIN: t.GSTIN || '',
+      PAN: t.PAN || '',
+      isActive: t.isActive !== false,
+      subscriptionStatus: t.subscriptionStatus || (t.status === 'Expired' ? 'suspended' : 'active'),
+    });
+    setEditModalOpen(true);
+  };
+
+  // Open Password Reset Modal
+  const handleOpenPassword = (t) => {
+    setSelectedTenant(t);
+    setNewPassword('');
+    setPasswordModalOpen(true);
+  };
+
+  // Add Tenant Submit
+  const handleAddSubmit = async (e) => {
+    e.preventDefault();
+    if (!addForm.tenantCode.trim() || !addForm.businessName.trim() || !addForm.email.trim() || !addForm.password.trim()) {
+      notify?.('Please fill all required fields.', 'error');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const payload = {
+        tenantCode: addForm.tenantCode.toUpperCase().trim(),
+        businessName: addForm.businessName.trim(),
+        ownerName: addForm.ownerName.trim(),
+        email: addForm.email.toLowerCase().trim(),
+        password: addForm.password,
+        phone: addForm.phone.trim() || '9876543210',
+        city: addForm.city.trim(),
+        state: addForm.state.trim(),
+        businessAddress: addForm.businessAddress.trim(),
+        planName: addForm.planName,
+      };
+
+      await superAdminService.createTenant(payload);
+      notify?.(`Tenant '${payload.tenantCode}' & owner user created successfully in MongoDB!`, 'success');
+      setAddModalOpen(false);
+      setAddForm({
+        tenantCode: '',
+        businessName: '',
+        ownerName: '',
+        email: '',
+        password: '',
+        phone: '',
+        city: '',
+        state: 'Maharashtra',
+        businessAddress: '',
+        planName: 'Growth',
+      });
+      await fetchTenants();
+    } catch (err) {
+      notify?.(err.message || 'Failed to create tenant', 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Edit Tenant Submit
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    const tenantId = selectedTenant?._id || selectedTenant?.id;
+    if (!tenantId) return;
+
+    try {
+      setSubmitting(true);
+      await superAdminService.updateTenant(tenantId, editForm);
+      notify?.(`Tenant '${editForm.businessName}' updated successfully!`, 'success');
+      setEditModalOpen(false);
+      await fetchTenants();
+    } catch (err) {
+      notify?.(err.message || 'Failed to update tenant', 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Password Reset Submit
+  const handlePasswordSubmit = async (e) => {
+    e.preventDefault();
+    const tenantId = selectedTenant?._id || selectedTenant?.id;
+    if (!tenantId || !newPassword) return;
+
+    try {
+      setSubmitting(true);
+      const res = await superAdminService.resetTenantPassword(tenantId, newPassword);
+      notify?.(res?.message || 'Password reset successfully!', 'success');
+      setPasswordModalOpen(false);
+      setNewPassword('');
+    } catch (err) {
+      notify?.(err.message || 'Failed to reset password', 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Toggle Suspend / Activate
+  const toggleTenantStatus = async (t) => {
+    const isActivating = t.isActive === false || t.subscriptionStatus === 'suspended' || t.status === 'Expired';
+    const tenantId = t._id || t.id;
+    try {
+      if (isActivating) {
+        await superAdminService.activateTenant(tenantId, 'Console activation');
+        notify?.(`Tenant ${t.businessName} activated successfully.`, 'success');
+      } else {
+        await superAdminService.suspendTenant(tenantId, 'Console suspension');
+        notify?.(`Tenant ${t.businessName} suspended.`, 'warning');
+      }
+      await fetchTenants();
+    } catch (err) {
+      notify?.(err.message || 'Failed to toggle tenant status', 'error');
+    }
+  };
+
+  // Delete Tenant
+  const handleDeleteTenant = (t) => {
+    const tenantId = t._id || t.id;
+    confirmAction?.({
+      title: 'Delete Tenant Organization?',
+      message: `Are you sure you want to permanently delete '${t.businessName}' (${t.tenantCode || t.code}) and all its associated users from MongoDB? This cannot be undone.`,
+      confirmLabel: 'Delete Tenant',
+      tone: 'danger',
+      onConfirm: async () => {
+        try {
+          await superAdminService.deleteTenant(tenantId);
+          notify?.(`Tenant ${t.businessName} deleted successfully.`, 'success');
+          await fetchTenants();
+        } catch (err) {
+          notify?.(err.message || 'Failed to delete tenant', 'error');
+        }
+      },
+    });
   };
 
   return (
     <div className="space-y-5">
       <PageHeader
         title="Business / Tenant Management"
-        subtitle="Onboard, suspend, or inspect tenant organizations on the SaaS platform"
+        subtitle="Provision live tenants, manage user credentials, inspect data, and control platform access"
         breadcrumbs={['Super Admin', 'Tenants']}
         actions={
-          <button type="button" onClick={() => setModalOpen(true)} className={btnPrimary}>
-            <Plus className="h-3.5 w-3.5" /> Add Tenant
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={fetchTenants}
+              title="Refresh Tenants"
+              className={btnSecondary}
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
+            </button>
+            <button
+              type="button"
+              onClick={() => setAddModalOpen(true)}
+              className={btnPrimary}
+            >
+              <Plus className="h-3.5 w-3.5" /> Add Tenant
+            </button>
+          </div>
         }
       />
+
       <DataTable
-        data={state.superAdmin.tenants}
-        searchFields={['businessName', 'owner', 'city', 'plan']}
+        data={tenantsList}
+        searchFields={['tenantCode', 'businessName', 'ownerName', 'owner', 'email', 'city']}
         columns={[
-          { key: 'businessName', label: 'Business Name', render: (r) => <span className="font-semibold text-slate-900">{r.businessName}</span> },
-          { key: 'owner', label: 'Owner' },
-          { key: 'city', label: 'Location', render: (r) => `${r.city}, ${r.state}` },
-          { key: 'plan', label: 'Plan' },
-          { key: 'users', label: 'Users', align: 'right' },
-          { key: 'invoicesCount', label: 'Invoices', align: 'right' },
-          { key: 'mrr', label: 'MRR', align: 'right', render: (r) => formatINR(r.mrr, false) },
-          { key: 'status', label: 'Status', render: (r) => <StatusLabel status={r.status} /> },
           {
-            key: 'action',
-            label: 'Action',
+            key: 'tenantCode',
+            label: 'Tenant Code',
             render: (r) => (
-              <button type="button" onClick={() => toggleTenantStatus(r)} className="text-xs font-medium text-indigo-600 hover:underline">
-                {r.status === 'Active' ? 'Suspend' : 'Activate'}
-              </button>
+              <span className="font-mono text-xs font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                {r.tenantCode || r.code || (r._id ? String(r._id).slice(-6).toUpperCase() : 'AGST')}
+              </span>
+            ),
+          },
+          {
+            key: 'businessName',
+            label: 'Business & Contact',
+            render: (r) => (
+              <div>
+                <div className="font-semibold text-slate-900">{r.businessName}</div>
+                <div className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
+                  <Mail className="h-3 w-3 text-slate-400" />
+                  <span>{r.email || '—'}</span>
+                  {r.phone && <span>· {r.phone}</span>}
+                </div>
+              </div>
+            ),
+          },
+          {
+            key: 'ownerName',
+            label: 'Owner',
+            render: (r) => (
+              <div className="text-xs text-slate-700 flex items-center gap-1">
+                <User className="h-3 w-3 text-slate-400" />
+                <span>{r.ownerName || r.owner || '—'}</span>
+              </div>
+            ),
+          },
+          {
+            key: 'location',
+            label: 'Location',
+            render: (r) => (
+              <span className="text-xs text-slate-600">
+                {r.city || r.state ? `${r.city || ''}${r.city && r.state ? ', ' : ''}${r.state || ''}` : 'India'}
+              </span>
+            ),
+          },
+          {
+            key: 'plan',
+            label: 'Plan',
+            render: (r) => (
+              <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+                {r.subscription?.planName || r.plan || 'Growth'}
+              </span>
+            ),
+          },
+          {
+            key: 'status',
+            label: 'Status',
+            render: (r) => {
+              const raw = r.subscriptionStatus || (r.isActive !== false ? 'active' : 'suspended');
+              const display = raw === 'active' ? 'Active' : (raw === 'suspended' ? 'Suspended' : (raw === 'trial' ? 'Trial' : raw));
+              return <StatusLabel status={display} />;
+            },
+          },
+          {
+            key: 'actions',
+            label: 'Actions',
+            align: 'right',
+            render: (r) => (
+              <div className="flex items-center justify-end gap-1">
+                <button
+                  type="button"
+                  onClick={() => handleOpenView(r)}
+                  title="View Tenant & Users"
+                  className="rounded p-1 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 transition-colors"
+                >
+                  <Eye className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleOpenEdit(r)}
+                  title="Edit Tenant Details"
+                  className="rounded p-1 text-slate-500 hover:bg-amber-50 hover:text-amber-600 transition-colors"
+                >
+                  <Edit3 className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleOpenPassword(r)}
+                  title="Reset Admin Password"
+                  className="rounded p-1 text-slate-500 hover:bg-purple-50 hover:text-purple-600 transition-colors"
+                >
+                  <KeyRound className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => toggleTenantStatus(r)}
+                  title={r.isActive !== false ? 'Suspend Tenant' : 'Activate Tenant'}
+                  className={`rounded px-1.5 py-0.5 text-xs font-semibold ${
+                    r.isActive !== false && r.subscriptionStatus !== 'suspended'
+                      ? 'text-rose-600 hover:bg-rose-50'
+                      : 'text-emerald-600 hover:bg-emerald-50'
+                  }`}
+                >
+                  {r.isActive !== false && r.subscriptionStatus !== 'suspended' ? 'Suspend' : 'Activate'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteTenant(r)}
+                  title="Delete Tenant"
+                  className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-colors"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
             ),
           },
         ]}
       />
+
+      {/* 1. Provision New Tenant Modal */}
       <Modal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title="Provision New SaaS Tenant"
+        open={addModalOpen}
+        onClose={() => setAddModalOpen(false)}
+        title="Provision New SaaS Tenant & Owner User"
         footer={
           <>
-            <button type="button" onClick={() => setModalOpen(false)} className={btnSecondary}>Cancel</button>
-            <button type="submit" form="ten-form" className={btnPrimary}>Create Tenant</button>
+            <button type="button" onClick={() => setAddModalOpen(false)} className={btnSecondary}>
+              Cancel
+            </button>
+            <button type="submit" form="add-tenant-form" disabled={submitting} className={btnPrimary}>
+              {submitting ? 'Creating in Database...' : 'Create Tenant & User'}
+            </button>
           </>
         }
       >
-        <form id="ten-form" onSubmit={handleAdd} className="grid grid-cols-2 gap-3">
-          <InputField label="Business Name" required><input type="text" required value={form.businessName} onChange={(e) => setForm({ ...form, businessName: e.target.value })} className={inputClass} /></InputField>
-          <InputField label="Owner Name" required><input type="text" required value={form.owner} onChange={(e) => setForm({ ...form, owner: e.target.value })} className={inputClass} /></InputField>
-          <InputField label="City"><input type="text" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} className={inputClass} /></InputField>
-          <InputField label="Plan">
-            <select value={form.plan} onChange={(e) => setForm({ ...form, plan: e.target.value })} className={inputClass}>
-              {state.superAdmin.plans.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
+        <form id="add-tenant-form" onSubmit={handleAddSubmit} className="space-y-4">
+          <div className="rounded-lg bg-indigo-50/70 p-3 text-xs text-indigo-900 border border-indigo-100">
+            <strong>Automatic Provisioning:</strong> This creates the organization partition in MongoDB, initializes the initial <strong>Owner User</strong> account with the specified credentials, and activates their subscription.
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <InputField label="Tenant Code (Unique Login Code)" required>
+              <input
+                type="text"
+                required
+                placeholder="e.g. EKUM"
+                value={addForm.tenantCode}
+                onChange={(e) => setAddForm({ ...addForm, tenantCode: e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, '') })}
+                className={`${inputClass} font-mono uppercase font-bold`}
+              />
+            </InputField>
+            <InputField label="Business / Company Name" required>
+              <input
+                type="text"
+                required
+                placeholder="e.g. EKUM Retail Enterprises"
+                value={addForm.businessName}
+                onChange={(e) => setAddForm({ ...addForm, businessName: e.target.value })}
+                className={inputClass}
+              />
+            </InputField>
+            <InputField label="Owner / Admin Full Name" required>
+              <input
+                type="text"
+                required
+                placeholder="e.g. Ekum Admin"
+                value={addForm.ownerName}
+                onChange={(e) => setAddForm({ ...addForm, ownerName: e.target.value })}
+                className={inputClass}
+              />
+            </InputField>
+            <InputField label="Admin Email (Login ID)" required>
+              <input
+                type="email"
+                required
+                placeholder="e.g. admin@ekum.com"
+                value={addForm.email}
+                onChange={(e) => setAddForm({ ...addForm, email: e.target.value })}
+                className={inputClass}
+              />
+            </InputField>
+            <InputField label="Initial Admin Password" required>
+              <input
+                type="password"
+                required
+                placeholder="Minimum 6 characters"
+                value={addForm.password}
+                onChange={(e) => setAddForm({ ...addForm, password: e.target.value })}
+                className={inputClass}
+              />
+            </InputField>
+            <InputField label="Phone Number" required>
+              <input
+                type="text"
+                required
+                placeholder="e.g. 9876543210"
+                value={addForm.phone}
+                onChange={(e) => setAddForm({ ...addForm, phone: e.target.value })}
+                className={inputClass}
+              />
+            </InputField>
+            <InputField label="City">
+              <input
+                type="text"
+                placeholder="e.g. Mumbai"
+                value={addForm.city}
+                onChange={(e) => setAddForm({ ...addForm, city: e.target.value })}
+                className={inputClass}
+              />
+            </InputField>
+            <InputField label="State">
+              <select
+                value={addForm.state}
+                onChange={(e) => setAddForm({ ...addForm, state: e.target.value })}
+                className={inputClass}
+              >
+                {INDIAN_STATES.map((s) => (
+                  <option key={s.code} value={s.name}>
+                    {s.name} ({s.code})
+                  </option>
+                ))}
+              </select>
+            </InputField>
+          </div>
+
+          <InputField label="Subscription Plan Tier">
+            <select
+              value={addForm.planName}
+              onChange={(e) => setAddForm({ ...addForm, planName: e.target.value })}
+              className={inputClass}
+            >
+              <option value="Starter">Starter (₹799/mo · 5 Users · 500 Invoices)</option>
+              <option value="Growth">Growth (₹1,999/mo · 15 Users · Unlimited)</option>
+              <option value="Enterprise">Enterprise (₹4,999/mo · Unlimited · Full E-Invoice)</option>
             </select>
+          </InputField>
+        </form>
+      </Modal>
+
+      {/* 2. View Tenant & Users Modal */}
+      <Modal
+        open={viewModalOpen}
+        onClose={() => setViewModalOpen(false)}
+        title={selectedTenant ? `${selectedTenant.businessName} (${selectedTenant.tenantCode || selectedTenant.code})` : 'Tenant Details'}
+        footer={
+          <div className="flex items-center justify-between w-full">
+            <button
+              type="button"
+              onClick={() => {
+                setViewModalOpen(false);
+                handleOpenPassword(selectedTenant);
+              }}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-purple-600 hover:underline"
+            >
+              <KeyRound className="h-3.5 w-3.5" /> Reset Admin Password
+            </button>
+            <button type="button" onClick={() => setViewModalOpen(false)} className={btnSecondary}>
+              Close
+            </button>
+          </div>
+        }
+      >
+        {selectedTenant && (
+          <div className="space-y-4">
+            {/* Overview Card */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 rounded-lg border border-slate-200 bg-slate-50/70 p-3 text-xs">
+              <div>
+                <span className="text-slate-500 font-medium block">Tenant Code</span>
+                <span className="font-mono font-bold text-indigo-700">{selectedTenant.tenantCode || selectedTenant.code}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 font-medium block">Owner</span>
+                <span className="font-semibold text-slate-800">{selectedTenant.ownerName || selectedTenant.owner || '—'}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 font-medium block">Email</span>
+                <span className="text-slate-800 truncate block">{selectedTenant.email || '—'}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 font-medium block">Phone</span>
+                <span className="text-slate-800">{selectedTenant.phone || '—'}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 font-medium block">City / State</span>
+                <span className="text-slate-800">{selectedTenant.city || '—'}, {selectedTenant.state || '—'}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 font-medium block">GSTIN</span>
+                <span className="font-mono text-slate-800">{selectedTenant.GSTIN || 'Not registered'}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 font-medium block">Subscription</span>
+                <span className="font-semibold text-indigo-600">{selectedTenant.subscription?.planName || selectedTenant.plan || 'Growth'}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 font-medium block">Account Status</span>
+                <span className={`font-semibold ${selectedTenant.isActive !== false ? 'text-emerald-600' : 'text-rose-600'}`}>
+                  {selectedTenant.isActive !== false ? 'Active' : 'Suspended'}
+                </span>
+              </div>
+            </div>
+
+            {/* Usage Telemetry */}
+            {selectedTenantDetails?.usage && (
+              <div className="grid grid-cols-4 gap-2 text-center">
+                <div className="rounded-lg border border-slate-200 p-2.5">
+                  <div className="text-lg font-bold text-slate-900">{selectedTenantDetails.usage.users}</div>
+                  <div className="text-[11px] text-slate-500 font-medium">Staff Users</div>
+                </div>
+                <div className="rounded-lg border border-slate-200 p-2.5">
+                  <div className="text-lg font-bold text-slate-900">{selectedTenantDetails.usage.invoices}</div>
+                  <div className="text-[11px] text-slate-500 font-medium">Invoices Issued</div>
+                </div>
+                <div className="rounded-lg border border-slate-200 p-2.5">
+                  <div className="text-lg font-bold text-slate-900">{selectedTenantDetails.usage.products}</div>
+                  <div className="text-[11px] text-slate-500 font-medium">Catalog SKUs</div>
+                </div>
+                <div className="rounded-lg border border-slate-200 p-2.5">
+                  <div className="text-lg font-bold text-slate-900">{selectedTenantDetails.usage.warehouses}</div>
+                  <div className="text-[11px] text-slate-500 font-medium">Warehouses</div>
+                </div>
+              </div>
+            )}
+
+            {/* Tenant Users List */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-xs font-semibold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                  <User className="h-3.5 w-3.5 text-indigo-600" /> Organization Users & Credentials
+                </h4>
+                {detailsLoading && <span className="text-[11px] text-slate-400 animate-pulse">Loading live users...</span>}
+              </div>
+
+              {selectedTenantDetails?.users && selectedTenantDetails.users.length > 0 ? (
+                <div className="rounded-lg border border-slate-200 overflow-hidden">
+                  <table className="min-w-full divide-y divide-slate-200 text-xs text-left">
+                    <thead className="bg-slate-50 text-slate-600 font-semibold">
+                      <tr>
+                        <th className="px-3 py-2">Name</th>
+                        <th className="px-3 py-2">Email (Login ID)</th>
+                        <th className="px-3 py-2">Role</th>
+                        <th className="px-3 py-2">Status</th>
+                        <th className="px-3 py-2">Last Login</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 bg-white">
+                      {selectedTenantDetails.users.map((u) => (
+                        <tr key={u._id} className="hover:bg-slate-50/50">
+                          <td className="px-3 py-2 font-medium text-slate-900">{u.name}</td>
+                          <td className="px-3 py-2 font-mono text-indigo-700">{u.email}</td>
+                          <td className="px-3 py-2 capitalize">
+                            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">
+                              {u.role}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2">
+                            <span className={`text-[11px] font-medium ${u.isActive !== false ? 'text-emerald-600' : 'text-rose-600'}`}>
+                              {u.isActive !== false ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-slate-500 text-[11px]">
+                            {u.lastLogin ? new Date(u.lastLogin).toLocaleDateString() : 'Never'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-slate-200 p-4 text-center text-xs text-slate-500">
+                  {detailsLoading ? 'Fetching users from MongoDB...' : `Primary Owner Account: ${selectedTenant.email}`}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* 3. Edit Tenant Modal */}
+      <Modal
+        open={editModalOpen}
+        onClose={() => setEditModalOpen(false)}
+        title={`Edit Tenant: ${selectedTenant?.businessName}`}
+        footer={
+          <>
+            <button type="button" onClick={() => setEditModalOpen(false)} className={btnSecondary}>
+              Cancel
+            </button>
+            <button type="submit" form="edit-tenant-form" disabled={submitting} className={btnPrimary}>
+              {submitting ? 'Saving Changes...' : 'Save Changes'}
+            </button>
+          </>
+        }
+      >
+        <form id="edit-tenant-form" onSubmit={handleEditSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <InputField label="Business Name" required>
+            <input
+              type="text"
+              required
+              value={editForm.businessName}
+              onChange={(e) => setEditForm({ ...editForm, businessName: e.target.value })}
+              className={inputClass}
+            />
+          </InputField>
+          <InputField label="Owner Name" required>
+            <input
+              type="text"
+              required
+              value={editForm.ownerName}
+              onChange={(e) => setEditForm({ ...editForm, ownerName: e.target.value })}
+              className={inputClass}
+            />
+          </InputField>
+          <InputField label="Business Email" required>
+            <input
+              type="email"
+              required
+              value={editForm.email}
+              onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+              className={inputClass}
+            />
+          </InputField>
+          <InputField label="Phone Number" required>
+            <input
+              type="text"
+              required
+              value={editForm.phone}
+              onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+              className={inputClass}
+            />
+          </InputField>
+          <InputField label="City">
+            <input
+              type="text"
+              value={editForm.city}
+              onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
+              className={inputClass}
+            />
+          </InputField>
+          <InputField label="State">
+            <select
+              value={editForm.state}
+              onChange={(e) => setEditForm({ ...editForm, state: e.target.value })}
+              className={inputClass}
+            >
+              {INDIAN_STATES.map((s) => (
+                <option key={s.code} value={s.name}>
+                  {s.name} ({s.code})
+                </option>
+              ))}
+            </select>
+          </InputField>
+          <InputField label="GSTIN">
+            <input
+              type="text"
+              placeholder="e.g. 27AAPFU0939F1ZV"
+              value={editForm.GSTIN}
+              onChange={(e) => setEditForm({ ...editForm, GSTIN: e.target.value.toUpperCase() })}
+              className={`${inputClass} uppercase`}
+            />
+          </InputField>
+          <InputField label="PAN">
+            <input
+              type="text"
+              placeholder="e.g. AAPFU0939F"
+              value={editForm.PAN}
+              onChange={(e) => setEditForm({ ...editForm, PAN: e.target.value.toUpperCase() })}
+              className={`${inputClass} uppercase`}
+            />
+          </InputField>
+          <div className="sm:col-span-2">
+            <InputField label="Business Address">
+              <input
+                type="text"
+                value={editForm.businessAddress}
+                onChange={(e) => setEditForm({ ...editForm, businessAddress: e.target.value })}
+                className={inputClass}
+              />
+            </InputField>
+          </div>
+          <div className="flex items-center gap-2 pt-2">
+            <input
+              type="checkbox"
+              id="isActiveCheck"
+              checked={editForm.isActive}
+              onChange={(e) => setEditForm({ ...editForm, isActive: e.target.checked })}
+              className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+            />
+            <label htmlFor="isActiveCheck" className="text-xs font-semibold text-slate-800">
+              Account Active & Enabled
+            </label>
+          </div>
+        </form>
+      </Modal>
+
+      {/* 4. Reset Admin Password Modal */}
+      <Modal
+        open={passwordModalOpen}
+        onClose={() => setPasswordModalOpen(false)}
+        title={`Reset Password for ${selectedTenant?.businessName}`}
+        footer={
+          <>
+            <button type="button" onClick={() => setPasswordModalOpen(false)} className={btnSecondary}>
+              Cancel
+            </button>
+            <button type="submit" form="reset-pwd-form" disabled={submitting} className={btnPrimary}>
+              {submitting ? 'Updating Password...' : 'Set New Password'}
+            </button>
+          </>
+        }
+      >
+        <form id="reset-pwd-form" onSubmit={handlePasswordSubmit} className="space-y-3">
+          <div className="text-xs text-slate-600">
+            This will immediately change the login password for the primary administrator account under{' '}
+            <strong className="text-slate-900">{selectedTenant?.businessName}</strong> (Tenant Code:{' '}
+            <strong className="text-indigo-600">{selectedTenant?.tenantCode || selectedTenant?.code}</strong>).
+          </div>
+          <InputField label="New Password" required>
+            <input
+              type="text"
+              required
+              minLength={6}
+              placeholder="Enter at least 6 characters"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              className={inputClass}
+            />
           </InputField>
         </form>
       </Modal>

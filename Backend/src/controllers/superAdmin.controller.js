@@ -11,6 +11,9 @@ import {
   tenantActionSchema,
   assignSubscriptionSchema,
   queryTenantsSchema,
+  createTenantSchema,
+  updateTenantSchema,
+  resetTenantPasswordSchema,
 } from '../validators/superAdmin.validation.js';
 import {
   createPlanSchema,
@@ -148,6 +151,54 @@ export const getTenantDetails = async (req, res, next) => {
     const data = await superAdminService.getTenantDetails(req.params.id);
     return sendResponse(res, 200, true, 'Tenant details retrieved successfully', data);
   } catch (error) {
+    next(error);
+  }
+};
+
+export const createTenant = async (req, res, next) => {
+  try {
+    const validatedData = createTenantSchema.parse(req.body);
+    const result = await superAdminService.createTenant(req.user, validatedData);
+    return sendResponse(res, 201, true, `Tenant '${result.tenant.businessName}' provisioned successfully`, result);
+  } catch (error) {
+    if (error instanceof ZodError) {
+      return res.status(400).json({ success: false, errors: formatZodErrors(error) });
+    }
+    next(error);
+  }
+};
+
+export const updateTenant = async (req, res, next) => {
+  try {
+    const validatedData = updateTenantSchema.parse(req.body);
+    const result = await superAdminService.updateTenant(req.user, req.params.id, validatedData);
+    return sendResponse(res, 200, true, `Tenant '${result.businessName}' updated successfully`, result);
+  } catch (error) {
+    if (error instanceof ZodError) {
+      return res.status(400).json({ success: false, errors: formatZodErrors(error) });
+    }
+    next(error);
+  }
+};
+
+export const deleteTenant = async (req, res, next) => {
+  try {
+    const result = await superAdminService.deleteTenant(req.user, req.params.id);
+    return sendResponse(res, 200, true, result.message, result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const resetTenantPassword = async (req, res, next) => {
+  try {
+    const validatedData = resetTenantPasswordSchema.parse(req.body);
+    const result = await superAdminService.resetTenantOwnerPassword(req.user, req.params.id, validatedData.newPassword);
+    return sendResponse(res, 200, true, result.message, result);
+  } catch (error) {
+    if (error instanceof ZodError) {
+      return res.status(400).json({ success: false, errors: formatZodErrors(error) });
+    }
     next(error);
   }
 };

@@ -15,8 +15,28 @@ export const getTenants = async (params = {}) => {
   return res.data;
 };
 
+export const createTenant = async (data) => {
+  const res = await api.post('/super-admin/tenants', data);
+  return res.data;
+};
+
 export const getTenantDetails = async (id) => {
   const res = await api.get(`/super-admin/tenants/${id}`);
+  return res.data;
+};
+
+export const updateTenant = async (id, data) => {
+  const res = await api.put(`/super-admin/tenants/${id}`, data);
+  return res.data;
+};
+
+export const deleteTenant = async (id) => {
+  const res = await api.delete(`/super-admin/tenants/${id}`);
+  return res.data;
+};
+
+export const resetTenantPassword = async (id, newPassword) => {
+  const res = await api.post(`/super-admin/tenants/${id}/reset-password`, { newPassword });
   return res.data;
 };
 

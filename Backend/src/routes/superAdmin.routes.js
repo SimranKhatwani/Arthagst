@@ -25,10 +25,14 @@ router.get('/dashboard', superAdminController.getDashboard);
  * Tenant Management
  */
 router.get('/tenants', superAdminController.getTenants);
+router.post('/tenants', superAdminController.createTenant);
 router.get('/tenants/:id', superAdminController.getTenantDetails);
+router.put('/tenants/:id', superAdminController.updateTenant);
+router.delete('/tenants/:id', superAdminController.deleteTenant);
 router.post('/tenants/:id/activate', superAdminController.activateTenant);
 router.post('/tenants/:id/suspend', superAdminController.suspendTenant);
 router.post('/tenants/:id/subscription', superAdminController.assignSubscription);
+router.post('/tenants/:id/reset-password', superAdminController.resetTenantPassword);
 
 /**
  * Plan Management

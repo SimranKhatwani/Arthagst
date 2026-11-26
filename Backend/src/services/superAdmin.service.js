@@ -327,6 +327,328 @@ export const suspendTenant = async (superAdminUser, tenantId, reason = '') => {
 };
 
 /**
+ * 5a. Create/Provision New Tenant by Super Admin (with Owner User and Subscription)
+ */
+export const createTenant = async (superAdminUser, data) => {
+  const normalizedCode = (data.tenantCode || '').toUpperCase().trim();
+  const normalizedEmail = (data.email || '').toLowerCase().trim();
+
+  const existingTenant = await Tenant.findOne({ tenantCode: normalizedCode });
+  if (existingTenant) {
+    const error = new Error(`Tenant code '${normalizedCode}' is already registered.`);
+    error.statusCode = 409;
+    throw error;
+  }
+
+  const existingSuper = await User.findOne({ email: normalizedEmail, isSuperAdmin: true });
+  if (existingSuper) {
+    const error = new Error(`Email '${normalizedEmail}' is reserved for Platform SuperAdmin.`);
+    error.statusCode = 409;
+    throw error;
+  }
+
+  let session = null;
+  let useTx = true;
+  try {
+    session = await mongoose.startSession();
+    session.startTransaction();
+  } catch (err) {
+    useTx = false;
+    session = null;
+  }
+
+  try {
+    const tenantPayload = {
+      tenantCode: normalizedCode,
+      businessName: data.businessName,
+      ownerName: data.ownerName,
+      email: normalizedEmail,
+      phone: data.phone,
+      city: data.city || '',
+      state: data.state || '',
+      businessAddress: data.businessAddress || '',
+      GSTIN: data.GSTIN || null,
+      PAN: data.PAN || null,
+      subscriptionStatus: 'active',
+      isActive: true,
+    };
+
+    let tenant;
+    let user;
+
+    if (useTx && session) {
+      const [t] = await Tenant.create([tenantPayload], { session });
+      tenant = t;
+
+      const [u] = await User.create(
+        [
+          {
+            tenantId: tenant._id,
+            name: data.ownerName,
+            email: normalizedEmail,
+            phone: data.phone,
+            password: data.password,
+            role: 'owner',
+            permissions: ['all'],
+            isActive: true,
+          },
+        ],
+        { session }
+      );
+      user = u;
+
+      const planCode = data.planCode || (data.planName || 'Growth').toUpperCase().replace(/\s+/g, '_');
+      let plan = await Plan.findOne({ $or: [{ code: planCode }, { name: data.planName }] }).session(session);
+      if (!plan) {
+        plan = await Plan.findOne({ code: 'GROWTH' }).session(session);
+      }
+      if (!plan) {
+        plan = await Plan.findOne({}).session(session);
+      }
+
+      const now = new Date();
+      const periodEnd = new Date(now);
+      periodEnd.setDate(periodEnd.getDate() + 365);
+
+      await Subscription.create(
+        [
+          {
+            tenantId: tenant._id,
+            planId: plan._id,
+            planSnapshot: {
+              code: plan.code,
+              name: plan.name,
+              price: plan.pricePerMonth || 1999,
+              billingCycle: 'yearly',
+              limits: plan.limits || { maxUsers: 10, maxInvoices: 2000, maxProducts: 500, maxWarehouses: 2 },
+              features: plan.features || ['GST Invoicing', 'Inventory & Ledgers'],
+            },
+            status: 'active',
+            billingCycle: 'yearly',
+            startDate: now,
+            currentPeriodStart: now,
+            currentPeriodEnd: periodEnd,
+            amount: (plan.pricePerMonth || 1999) * 12,
+            autoRenew: true,
+          },
+        ],
+        { session }
+      );
+
+      await session.commitTransaction();
+    } else {
+      tenant = await Tenant.create(tenantPayload);
+      try {
+        user = await User.create({
+          tenantId: tenant._id,
+          name: data.ownerName,
+          email: normalizedEmail,
+          phone: data.phone,
+          password: data.password,
+          role: 'owner',
+          permissions: ['all'],
+          isActive: true,
+        });
+
+        const planCode = data.planCode || (data.planName || 'Growth').toUpperCase().replace(/\s+/g, '_');
+        let plan = await Plan.findOne({ $or: [{ code: planCode }, { name: data.planName }] });
+        if (!plan) {
+          plan = await Plan.findOne({ code: 'GROWTH' });
+        }
+        if (!plan) {
+          plan = await Plan.findOne({});
+        }
+
+        const now = new Date();
+        const periodEnd = new Date(now);
+        periodEnd.setDate(periodEnd.getDate() + 365);
+
+        await Subscription.create({
+          tenantId: tenant._id,
+          planId: plan._id,
+          planSnapshot: {
+            code: plan.code,
+            name: plan.name,
+            price: plan.pricePerMonth || 1999,
+            billingCycle: 'yearly',
+            limits: plan.limits || { maxUsers: 10, maxInvoices: 2000, maxProducts: 500, maxWarehouses: 2 },
+            features: plan.features || ['GST Invoicing', 'Inventory & Ledgers'],
+          },
+          status: 'active',
+          billingCycle: 'yearly',
+          startDate: now,
+          currentPeriodStart: now,
+          currentPeriodEnd: periodEnd,
+          amount: (plan.pricePerMonth || 1999) * 12,
+          autoRenew: true,
+        });
+      } catch (userErr) {
+        await Tenant.findByIdAndDelete(tenant._id);
+        throw userErr;
+      }
+    }
+
+    await logAuditAction({
+      actor: superAdminUser,
+      action: 'TENANT_PROVISIONED',
+      targetType: 'tenant',
+      targetId: tenant._id,
+      targetName: tenant.businessName,
+      details: { tenantCode: tenant.tenantCode, ownerEmail: user.email },
+    });
+
+    return {
+      tenant,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+    };
+  } catch (err) {
+    if (useTx && session && session.inTransaction()) {
+      await session.abortTransaction();
+    }
+    throw err;
+  } finally {
+    if (session) {
+      session.endSession();
+    }
+  }
+};
+
+/**
+ * 5b. Update Tenant Details by Super Admin
+ */
+export const updateTenant = async (superAdminUser, tenantId, data) => {
+  if (!mongoose.isValidObjectId(tenantId)) {
+    const error = new Error('Invalid tenant ID format');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const tenant = await Tenant.findById(tenantId);
+  if (!tenant) {
+    const error = new Error('Tenant not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  if (data.businessName !== undefined) tenant.businessName = data.businessName;
+  if (data.ownerName !== undefined) tenant.ownerName = data.ownerName;
+  if (data.email !== undefined) tenant.email = data.email.toLowerCase().trim();
+  if (data.phone !== undefined) tenant.phone = data.phone;
+  if (data.city !== undefined) tenant.city = data.city;
+  if (data.state !== undefined) tenant.state = data.state;
+  if (data.businessAddress !== undefined) tenant.businessAddress = data.businessAddress;
+  if (data.GSTIN !== undefined) tenant.GSTIN = data.GSTIN || null;
+  if (data.PAN !== undefined) tenant.PAN = data.PAN || null;
+  if (data.isActive !== undefined) tenant.isActive = data.isActive;
+  if (data.subscriptionStatus !== undefined) tenant.subscriptionStatus = data.subscriptionStatus;
+
+  await tenant.save();
+
+  if (data.ownerName || data.email) {
+    const updateFields = {};
+    if (data.ownerName) updateFields.name = data.ownerName;
+    if (data.email) updateFields.email = data.email.toLowerCase().trim();
+    await User.updateMany({ tenantId: tenant._id, role: 'owner' }, { $set: updateFields });
+  }
+
+  await logAuditAction({
+    actor: superAdminUser,
+    action: 'TENANT_UPDATED',
+    targetType: 'tenant',
+    targetId: tenant._id,
+    targetName: tenant.businessName,
+    details: data,
+  });
+
+  return tenant;
+};
+
+/**
+ * 5c. Delete Tenant by Super Admin
+ */
+export const deleteTenant = async (superAdminUser, tenantId) => {
+  if (!mongoose.isValidObjectId(tenantId)) {
+    const error = new Error('Invalid tenant ID format');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const tenant = await Tenant.findById(tenantId);
+  if (!tenant) {
+    const error = new Error('Tenant not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  await Promise.all([
+    Tenant.findByIdAndDelete(tenantId),
+    User.deleteMany({ tenantId }),
+    Subscription.deleteMany({ tenantId }),
+  ]);
+
+  await logAuditAction({
+    actor: superAdminUser,
+    action: 'TENANT_DELETED',
+    targetType: 'tenant',
+    targetId: tenant._id,
+    targetName: tenant.businessName,
+    details: { tenantCode: tenant.tenantCode },
+  });
+
+  return { message: `Tenant '${tenant.businessName}' (${tenant.tenantCode}) deleted successfully.` };
+};
+
+/**
+ * 5d. Reset Tenant Owner Password by Super Admin
+ */
+export const resetTenantOwnerPassword = async (superAdminUser, tenantId, newPassword) => {
+  if (!mongoose.isValidObjectId(tenantId)) {
+    const error = new Error('Invalid tenant ID format');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (!newPassword || newPassword.length < 6) {
+    const error = new Error('Password must be at least 6 characters long');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  let user = await User.findOne({ tenantId, role: 'owner' });
+  if (!user) {
+    user = await User.findOne({ tenantId, role: 'admin' });
+  }
+
+  if (!user) {
+    const error = new Error('No owner or admin user found for this tenant');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  user.password = newPassword; // Pre-save hook will hash with bcrypt!
+  await user.save();
+
+  await logAuditAction({
+    actor: superAdminUser,
+    action: 'TENANT_PASSWORD_RESET',
+    targetType: 'user',
+    targetId: user._id,
+    targetName: user.email,
+    details: { tenantId, userEmail: user.email },
+  });
+
+  return {
+    message: `Password reset successfully for ${user.email}`,
+    email: user.email,
+  };
+};
+
+/**
  * 6. Assign or Change Subscription by Super Admin
  */
 export const assignSubscription = async (
