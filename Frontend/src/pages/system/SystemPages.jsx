@@ -8,6 +8,7 @@ import {
   Download,
   RotateCcw,
   Save,
+  Building2,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { ROLES_CONFIG, INDIAN_STATES, FINANCIAL_YEARS } from '../../data/constants';
@@ -329,9 +330,19 @@ export const SettingsPage = ({ defaultTab = 'business-tax' }) => {
         {tab === 'business-tax' && (
           <div className="space-y-6">
             <div>
-              <h3 className="mb-3 font-display text-sm font-semibold text-slate-900 border-b border-slate-100 pb-2">
-                Business Profile
-              </h3>
+              <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-2">
+                <h3 className="font-display text-sm font-semibold text-slate-900">
+                  Business Profile
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => navigate('/onboarding')}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-700 hover:underline"
+                  title="Open Step-by-Step Business Onboarding & Setup Wizard"
+                >
+                  <Building2 className="h-3.5 w-3.5" /> Launch Setup Wizard
+                </button>
+              </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <InputField label="Business Name"><input type="text" value={biz.businessName} onChange={(e) => setBiz({ ...biz, businessName: e.target.value })} className={inputClass} /></InputField>
                 <InputField label="Legal Name"><input type="text" value={biz.legalName} onChange={(e) => setBiz({ ...biz, legalName: e.target.value })} className={inputClass} /></InputField>

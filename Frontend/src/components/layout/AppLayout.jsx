@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useLayoutEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useLayoutEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -196,7 +196,7 @@ export const NAV_GROUPS = [
       { id: 'notifications', label: 'Notifications', icon: Bell, path: '/notifications' },
       { id: 'audit', label: 'Audit Logs', icon: History, path: '/audit-logs' },
       { id: 'users', label: 'User Management', icon: ShieldCheck, path: '/users' },
-      { id: 'settings', label: 'Settings', icon: Settings, path: '/settings' },
+      { id: 'settings', label: 'Settings', icon: Settings, path: '/settings', matchPaths: ['/settings', '/onboarding'] },
       { id: 'subscription', label: 'Subscription & Billing', icon: CreditCard, path: '/subscription' },
     ],
   },
@@ -293,7 +293,7 @@ const SidebarContent = ({
                     title={collapsed && !isMobile ? item.label : undefined}
                     className={({ isActive }) =>
                       `flex items-center justify-between rounded-lg px-3 py-2.5 text-[14px] font-medium transition-all duration-150 ${
-                        isActive
+                        isActive || active
                           ? 'bg-indigo-600 text-white font-semibold shadow-sm shadow-indigo-900/50'
                           : 'text-slate-200 hover:bg-slate-800 hover:text-white'
                       }`
@@ -435,12 +435,43 @@ export const AppLayout = ({ children }) => {
   const [helpOpen, setHelpOpen] = useState(false);
   const navScrollRef = useRef(null);
   const savedScrollTopRef = useRef(0);
+  const profileRef = useRef(null);
+  const searchRef = useRef(null);
 
-  useLayoutEffect(() => {
-    if (navScrollRef.current && navScrollRef.current.scrollTop !== savedScrollTopRef.current) {
-      navScrollRef.current.scrollTop = savedScrollTopRef.current;
-    }
-  }, [location.pathname, expandedGroups, collapsed]);
+  // Close profile and search dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (profileRef.current && !profileRef.current.contains(e.target)) {
+        setProfileOpen(false);
+      }
+      if (searchRef.current && !searchRef.current.contains(e.target)) {
+        setSearchOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, []);
+
+  // Auto-scroll sidebar so active menu item is visible on navigation
+  useEffect(() => {
+    if (!navScrollRef.current) return;
+    const timer = setTimeout(() => {
+      if (!navScrollRef.current) return;
+      const targetPath = location.pathname === '/onboarding' ? '/settings' : location.pathname;
+      const activeLink = navScrollRef.current.querySelector(
+        `a[href="${targetPath}"], a.bg-indigo-600`
+      );
+      if (activeLink) {
+        activeLink.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        savedScrollTopRef.current = navScrollRef.current.scrollTop;
+      }
+    }, 60);
+    return () => clearTimeout(timer);
+  }, [location.pathname]);
 
   const unreadCount = (state.notifications || []).filter((n) => !n.read).length;
 
@@ -468,7 +499,12 @@ export const AppLayout = ({ children }) => {
   };
 
   const isGroupActive = (item) => {
-    if (item.path) return location.pathname === item.path;
+    if (item.path) {
+      if (item.matchPaths) {
+        return item.matchPaths.some((p) => location.pathname === p || location.pathname.startsWith(p + '/'));
+      }
+      return location.pathname === item.path;
+    }
     return item.children?.some((c) => isSubItemActive(c));
   };
 
@@ -574,14 +610,12 @@ export const AppLayout = ({ children }) => {
             <div className="hidden sm:flex items-center gap-2.5 rounded-lg border border-slate-200/90 bg-slate-50/80 px-3 py-1.5 text-xs shadow-2xs">
               <Building2 className="h-4 w-4 text-indigo-600 shrink-0" />
               <span className="font-semibold text-slate-900 whitespace-nowrap">
-                {state.business?.businessName}
+                {state.business?.businessName || state.currentTenant?.businessName || 'Organization'}
               </span>
-              <span className="text-slate-300">|</span>
-              <span className="text-slate-500 whitespace-nowrap font-medium">{state.business?.city}</span>
             </div>
 
             {/* Global Search */}
-            <div className="relative w-48 sm:w-72 md:w-80">
+            <div ref={searchRef} className="relative w-48 sm:w-72 md:w-80">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
@@ -657,18 +691,9 @@ export const AppLayout = ({ children }) => {
               )}
             </button>
 
-            {/* Help */}
-            <button
-              type="button"
-              onClick={() => setHelpOpen(true)}
-              title="GST Guide & Prototype Help"
-              className="hidden sm:inline-flex rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50 shadow-2xs transition-colors"
-            >
-              <HelpCircle className="h-4 w-4" />
-            </button>
 
             {/* User Profile */}
-            <div className="relative">
+            <div ref={profileRef} className="relative">
               <button
                 type="button"
                 onClick={() => setProfileOpen((p) => !p)}
