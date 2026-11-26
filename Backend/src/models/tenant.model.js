@@ -48,6 +48,13 @@ const tenantSchema = new mongoose.Schema(
       type: String,
       required: [true, 'Phone number is required'],
       trim: true,
+      validate: {
+        validator: function (v) {
+          if (!v) return false;
+          return /^[6-9]\d{9}$/.test(v);
+        },
+        message: 'Phone number must be a valid 10-digit mobile number',
+      },
     },
     GSTIN: {
       type: String,

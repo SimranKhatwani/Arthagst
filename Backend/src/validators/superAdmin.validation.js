@@ -50,7 +50,7 @@ export const createTenantSchema = z.object({
   phone: z
     .string({ required_error: 'Phone number is required' })
     .trim()
-    .min(5, 'Phone number must be at least 5 digits'),
+    .regex(/^[6-9]\d{9}$/, 'Phone number must be a valid 10-digit mobile number'),
   city: z.string().trim().optional().default(''),
   state: z.string().trim().optional().default(''),
   businessAddress: z.string().trim().optional().default(''),
@@ -63,7 +63,11 @@ export const updateTenantSchema = z.object({
   businessName: z.string().trim().min(2).optional(),
   ownerName: z.string().trim().min(2).optional(),
   email: z.string().email().trim().toLowerCase().optional(),
-  phone: z.string().trim().min(5).optional(),
+  phone: z
+    .string()
+    .trim()
+    .regex(/^[6-9]\d{9}$/, 'Phone number must be a valid 10-digit mobile number')
+    .optional(),
   city: z.string().trim().optional(),
   state: z.string().trim().optional(),
   businessAddress: z.string().trim().optional(),

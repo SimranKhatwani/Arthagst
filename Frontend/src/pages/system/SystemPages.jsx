@@ -168,6 +168,10 @@ export const UsersRolesPage = () => {
       notify('Name and email are required', 'error');
       return;
     }
+    if (form.mobile && !/^[6-9]\d{9}$/.test(form.mobile.trim())) {
+      notify('Please enter a valid 10-digit mobile number', 'error');
+      return;
+    }
     upsertRecord(
       'users',
       {
@@ -258,7 +262,7 @@ export const UsersRolesPage = () => {
         <form id="usr-form" onSubmit={handleSave} className="space-y-3">
           <InputField label="Full Name" required><input type="text" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputClass} /></InputField>
           <InputField label="Email" required><input type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={inputClass} /></InputField>
-          <InputField label="Mobile"><input type="tel" value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value })} className={inputClass} /></InputField>
+          <InputField label="Mobile"><input type="tel" inputMode="numeric" pattern="[6-9][0-9]{9}" maxLength={10} placeholder="10-digit mobile number" value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value.replace(/\D/g, '').slice(0, 10) })} className={inputClass} /></InputField>
           <InputField label="Role">
             <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} className={inputClass}>
               {Object.keys(ROLES_CONFIG).map((r) => <option key={r} value={r}>{r}</option>)}
@@ -305,6 +309,10 @@ export const SettingsPage = ({ defaultTab = 'business-tax' }) => {
 
   const handleSaveAll = async (e) => {
     e.preventDefault();
+    if (biz.phone && !/^[6-9]\d{9}$/.test(biz.phone.trim())) {
+      notify('Please enter a valid 10-digit phone number', 'error');
+      return;
+    }
     try {
       await updateBusinessAndSettings(biz, cfg);
     } catch (err) {
@@ -347,7 +355,7 @@ export const SettingsPage = ({ defaultTab = 'business-tax' }) => {
                 <InputField label="Business Name"><input type="text" value={biz.businessName} onChange={(e) => setBiz({ ...biz, businessName: e.target.value })} className={inputClass} /></InputField>
                 <InputField label="Legal Name"><input type="text" value={biz.legalName} onChange={(e) => setBiz({ ...biz, legalName: e.target.value })} className={inputClass} /></InputField>
                 <InputField label="Email"><input type="email" value={biz.email} onChange={(e) => setBiz({ ...biz, email: e.target.value })} className={inputClass} /></InputField>
-                <InputField label="Phone"><input type="text" value={biz.phone} onChange={(e) => setBiz({ ...biz, phone: e.target.value })} className={inputClass} /></InputField>
+                <InputField label="Phone"><input type="tel" inputMode="numeric" pattern="[6-9][0-9]{9}" maxLength={10} placeholder="10-digit phone number" value={biz.phone} onChange={(e) => setBiz({ ...biz, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })} className={inputClass} /></InputField>
                 <InputField label="Address"><input type="text" value={biz.address} onChange={(e) => setBiz({ ...biz, address: e.target.value })} className={inputClass} /></InputField>
                 <InputField label="City"><input type="text" value={biz.city} onChange={(e) => setBiz({ ...biz, city: e.target.value })} className={inputClass} /></InputField>
                 <InputField label="State">

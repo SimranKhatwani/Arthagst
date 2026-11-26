@@ -8,7 +8,13 @@ export const updateTenantProfileSchema = z.object({
   businessType: z.string().max(100).trim().optional(),
   ownerName: z.string().min(2, 'Owner name must be at least 2 characters').max(100, 'Owner name cannot exceed 100 characters').trim().optional(),
   email: z.string().email('Please provide a valid email address').trim().toLowerCase().optional(),
-  phone: z.string().min(8, 'Phone number must be at least 8 digits').max(15, 'Phone number cannot exceed 15 digits').trim().optional(),
+  phone: z
+    .string()
+    .trim()
+    .refine((val) => !val || /^[6-9]\d{9}$/.test(val), {
+      message: 'Phone number must be a valid 10-digit mobile number',
+    })
+    .optional(),
   GSTIN: z.string().trim().toUpperCase().refine(val => !val || GSTIN_REGEX.test(val), {
     message: 'Invalid Indian GSTIN format (e.g. 27AAPFU0939F1ZV)',
   }).nullable().optional(),

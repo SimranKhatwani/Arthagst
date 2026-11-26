@@ -257,8 +257,13 @@ export const SuperAdminTenantsPage = () => {
   // Add Tenant Submit
   const handleAddSubmit = async (e) => {
     e.preventDefault();
-    if (!addForm.tenantCode.trim() || !addForm.businessName.trim() || !addForm.email.trim() || !addForm.password.trim()) {
+    if (!addForm.tenantCode.trim() || !addForm.businessName.trim() || !addForm.email.trim() || !addForm.password.trim() || !addForm.phone.trim()) {
       notify?.('Please fill all required fields.', 'error');
+      return;
+    }
+
+    if (!/^[6-9]\d{9}$/.test(addForm.phone.trim())) {
+      notify?.('Please enter a valid 10-digit mobile number.', 'error');
       return;
     }
 
@@ -270,7 +275,7 @@ export const SuperAdminTenantsPage = () => {
         ownerName: addForm.ownerName.trim(),
         email: addForm.email.toLowerCase().trim(),
         password: addForm.password,
-        phone: addForm.phone.trim() || '9876543210',
+        phone: addForm.phone.trim(),
         city: addForm.city.trim(),
         state: addForm.state.trim(),
         businessAddress: addForm.businessAddress.trim(),
@@ -316,6 +321,11 @@ export const SuperAdminTenantsPage = () => {
     e.preventDefault();
     const tenantId = selectedTenant?._id || selectedTenant?.id || selectedTenant?.tenantCode;
     if (!tenantId) return;
+
+    if (editForm.phone && !/^[6-9]\d{9}$/.test(editForm.phone.trim())) {
+      notify?.('Please enter a valid 10-digit mobile number.', 'error');
+      return;
+    }
 
     try {
       setSubmitting(true);
@@ -663,11 +673,14 @@ export const SuperAdminTenantsPage = () => {
             </InputField>
             <InputField label="Phone Number" required>
               <input
-                type="text"
+                type="tel"
+                inputMode="numeric"
+                pattern="[6-9][0-9]{9}"
+                maxLength={10}
                 required
-                placeholder="e.g. 9876543210"
+                placeholder="10-digit mobile number"
                 value={addForm.phone}
-                onChange={(e) => setAddForm({ ...addForm, phone: e.target.value })}
+                onChange={(e) => setAddForm({ ...addForm, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
                 className={inputClass}
               />
             </InputField>
@@ -916,10 +929,14 @@ export const SuperAdminTenantsPage = () => {
           </InputField>
           <InputField label="Phone Number" required>
             <input
-              type="text"
+              type="tel"
+              inputMode="numeric"
+              pattern="[6-9][0-9]{9}"
+              maxLength={10}
               required
+              placeholder="10-digit mobile number"
               value={editForm.phone}
-              onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+              onChange={(e) => setEditForm({ ...editForm, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
               className={inputClass}
             />
           </InputField>

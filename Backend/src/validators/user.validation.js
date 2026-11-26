@@ -4,7 +4,14 @@ export const createStaffSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters').max(100, 'Name cannot exceed 100 characters').trim(),
   email: z.string().email('Please provide a valid email address').trim().toLowerCase(),
   password: z.string().min(6, 'Password must be at least 6 characters long'),
-  phone: z.string().trim().optional().default(''),
+  phone: z
+    .string()
+    .trim()
+    .refine((val) => !val || /^[6-9]\d{9}$/.test(val), {
+      message: 'Phone number must be a valid 10-digit mobile number',
+    })
+    .optional()
+    .default(''),
   role: z.enum(['admin', 'accountant', 'sales', 'inventory'], {
     errorMap: () => ({ message: "Role must be one of: 'admin', 'accountant', 'sales', 'inventory'" })
   }).default('sales'),
@@ -13,7 +20,13 @@ export const createStaffSchema = z.object({
 
 export const updateStaffSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters').max(100, 'Name cannot exceed 100 characters').trim().optional(),
-  phone: z.string().trim().optional(),
+  phone: z
+    .string()
+    .trim()
+    .refine((val) => !val || /^[6-9]\d{9}$/.test(val), {
+      message: 'Phone number must be a valid 10-digit mobile number',
+    })
+    .optional(),
   role: z.enum(['admin', 'accountant', 'sales', 'inventory'], {
     errorMap: () => ({ message: "Role must be one of: 'admin', 'accountant', 'sales', 'inventory'" })
   }).optional(),

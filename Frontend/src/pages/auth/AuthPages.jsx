@@ -603,7 +603,11 @@ export const RegisterPage = () => {
     if (!form.businessName.trim()) errors.businessName = 'Business name is required';
     if (!form.ownerName.trim()) errors.ownerName = 'Owner name is required';
     if (!form.email.trim()) errors.email = 'Email address is required';
-    if (!form.mobile.trim()) errors.mobile = 'Mobile number is required';
+    if (!form.mobile.trim()) {
+      errors.mobile = 'Mobile number is required';
+    } else if (!/^[6-9]\d{9}$/.test(form.mobile.trim())) {
+      errors.mobile = 'Please enter a valid 10-digit mobile number';
+    }
     if (!form.password) errors.password = 'Password is required';
     else if (form.password.length < 6) errors.password = 'Password must be at least 6 characters';
     if (form.password !== form.confirmPassword) errors.confirmPassword = 'Passwords do not match';
@@ -733,10 +737,13 @@ export const RegisterPage = () => {
                 </div>
                 <input
                   type="tel"
+                  inputMode="numeric"
+                  pattern="[6-9][0-9]{9}"
+                  maxLength={10}
                   value={form.mobile}
-                  onChange={(e) => setForm({ ...form, mobile: e.target.value })}
+                  onChange={(e) => setForm({ ...form, mobile: e.target.value.replace(/\D/g, '').slice(0, 10) })}
                   className="w-full rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all"
-                  placeholder="9829011223"
+                  placeholder="10-digit mobile number"
                 />
               </div>
             </InputField>

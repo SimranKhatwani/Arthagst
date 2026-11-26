@@ -16,8 +16,22 @@ export const createPartySchema = z
       .min(2, 'Name must be at least 2 characters')
       .max(200, 'Name cannot exceed 200 characters'),
     businessName: z.string().trim().max(200).optional().default(''),
-    phone: z.string().trim().max(20).optional().default(''),
-    alternatePhone: z.string().trim().max(20).optional().default(''),
+    phone: z
+      .string()
+      .trim()
+      .refine((val) => !val || /^[6-9]\d{9}$/.test(val), {
+        message: 'Phone number must be a valid 10-digit mobile number',
+      })
+      .optional()
+      .default(''),
+    alternatePhone: z
+      .string()
+      .trim()
+      .refine((val) => !val || /^[6-9]\d{9}$/.test(val), {
+        message: 'Alternate phone must be a valid 10-digit mobile number',
+      })
+      .optional()
+      .default(''),
     email: z
       .string()
       .trim()
@@ -77,8 +91,20 @@ export const updatePartySchema = z.object({
   partyType: z.enum(['customer', 'supplier', 'both']).optional(),
   name: z.string().trim().min(2).max(200).optional(),
   businessName: z.string().trim().max(200).optional(),
-  phone: z.string().trim().max(20).optional(),
-  alternatePhone: z.string().trim().max(20).optional(),
+  phone: z
+    .string()
+    .trim()
+    .refine((val) => !val || /^[6-9]\d{9}$/.test(val), {
+      message: 'Phone number must be a valid 10-digit mobile number',
+    })
+    .optional(),
+  alternatePhone: z
+    .string()
+    .trim()
+    .refine((val) => !val || /^[6-9]\d{9}$/.test(val), {
+      message: 'Alternate phone must be a valid 10-digit mobile number',
+    })
+    .optional(),
   email: z.string().trim().email('Invalid email').optional().nullable().or(z.literal('')),
   GSTIN: z
     .string()

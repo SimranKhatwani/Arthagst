@@ -86,8 +86,13 @@ export const CustomersPage = () => {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!form.name.trim() || !(form.mobile || form.phone)?.trim()) {
+    const phoneVal = (form.mobile || form.phone || '').trim();
+    if (!form.name.trim() || !phoneVal) {
       notify('Customer name and mobile number are required', 'error');
+      return;
+    }
+    if (!/^[6-9]\d{9}$/.test(phoneVal)) {
+      notify('Please enter a valid 10-digit mobile number', 'error');
       return;
     }
     try {
@@ -225,7 +230,7 @@ export const CustomersPage = () => {
         <form id="cust-form" onSubmit={handleSave} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <InputField label="Customer Name" required><input type="text" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputClass} /></InputField>
           <InputField label="Business / Trade Name"><input type="text" value={form.businessName} onChange={(e) => setForm({ ...form, businessName: e.target.value })} className={inputClass} /></InputField>
-          <InputField label="Mobile Number" required><input type="tel" required value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value })} className={inputClass} /></InputField>
+          <InputField label="Mobile Number" required><input type="tel" inputMode="numeric" pattern="[6-9][0-9]{9}" maxLength={10} placeholder="10-digit mobile number" required value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value.replace(/\D/g, '').slice(0, 10) })} className={inputClass} /></InputField>
           <InputField label="Email"><input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={inputClass} /></InputField>
           <InputField label="Registration Type">
             <select value={form.registrationType} onChange={(e) => setForm({ ...form, registrationType: e.target.value })} className={inputClass}>
@@ -431,8 +436,13 @@ export const SuppliersPage = () => {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!form.name.trim() || !(form.mobile || form.phone)?.trim()) {
+    const supPhoneVal = (form.mobile || form.phone || '').trim();
+    if (!form.name.trim() || !supPhoneVal) {
       notify('Supplier name and mobile are required', 'error');
+      return;
+    }
+    if (!/^[6-9]\d{9}$/.test(supPhoneVal)) {
+      notify('Please enter a valid 10-digit mobile number', 'error');
       return;
     }
     try {
@@ -541,7 +551,7 @@ export const SuppliersPage = () => {
         <form id="sup-form" onSubmit={handleSave} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <InputField label="Supplier Name" required><input type="text" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputClass} /></InputField>
           <InputField label="Contact Person"><input type="text" value={form.contactPerson} onChange={(e) => setForm({ ...form, contactPerson: e.target.value })} className={inputClass} /></InputField>
-          <InputField label="Mobile" required><input type="tel" required value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value })} className={inputClass} /></InputField>
+          <InputField label="Mobile" required><input type="tel" inputMode="numeric" pattern="[6-9][0-9]{9}" maxLength={10} placeholder="10-digit mobile number" required value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value.replace(/\D/g, '').slice(0, 10) })} className={inputClass} /></InputField>
           <InputField label="Email"><input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={inputClass} /></InputField>
           <InputField label="GSTIN"><input type="text" value={form.gstin} onChange={(e) => setForm({ ...form, gstin: e.target.value })} className={`${inputClass} font-mono`} /></InputField>
           <InputField label="PAN"><input type="text" value={form.pan} onChange={(e) => setForm({ ...form, pan: e.target.value })} className={`${inputClass} font-mono`} /></InputField>

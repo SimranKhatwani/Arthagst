@@ -39,7 +39,14 @@ export const createPosBillSchema = z.object({
   partyId: z.string().trim().optional().nullable(),
   isWalkIn: z.boolean().optional().default(false),
   customerName: z.string().trim().max(200).optional().default(''),
-  customerPhone: z.string().trim().max(20).optional().default(''),
+  customerPhone: z
+    .string()
+    .trim()
+    .refine((val) => !val || /^[6-9]\d{9}$/.test(val), {
+      message: 'Customer phone must be a valid 10-digit mobile number',
+    })
+    .optional()
+    .default(''),
   customerGSTIN: z.string().trim().max(15).optional().default(''),
   placeOfSupply: z.string().trim().optional(),
   billDate: z.string().optional(),
@@ -61,7 +68,13 @@ export const updatePosBillSchema = z.object({
   partyId: z.string().trim().optional().nullable(),
   isWalkIn: z.boolean().optional(),
   customerName: z.string().trim().max(200).optional(),
-  customerPhone: z.string().trim().max(20).optional(),
+  customerPhone: z
+    .string()
+    .trim()
+    .refine((val) => !val || /^[6-9]\d{9}$/.test(val), {
+      message: 'Customer phone must be a valid 10-digit mobile number',
+    })
+    .optional(),
   placeOfSupply: z.string().trim().optional(),
   items: z.array(posItemInputSchema).min(1, 'At least one line item is required').optional(),
   billDiscount: z.coerce.number().min(0).optional(),
