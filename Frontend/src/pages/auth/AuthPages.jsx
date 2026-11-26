@@ -105,17 +105,14 @@ export const LoginPage = () => {
               <div className="text-[11px] text-slate-400 font-medium">Enterprise GST &amp; ERP Suite</div>
             </div>
           </div>
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            Backend Connected
-          </div>
+
         </div>
 
         {/* Pitch & Value Props */}
         <div className="relative z-10 max-w-lg space-y-6 my-auto py-8">
           <div className="space-y-3">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
-              <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+
               Built for Modern Indian Commerce
             </div>
             <h1 className="font-display text-3xl xl:text-4xl font-extrabold tracking-tight text-white leading-tight">
@@ -224,7 +221,7 @@ export const LoginPage = () => {
                 <label className="text-xs font-semibold text-slate-700 flex items-center gap-1">
                   Organization / Tenant Code <span className="text-rose-500">*</span>
                 </label>
-                <span className="text-[11px] text-slate-400">e.g. ARTHA</span>
+
               </div>
               <div className="relative">
                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
@@ -337,21 +334,7 @@ export const LoginPage = () => {
             </button>
           </form>
 
-          {/* Footer Navigation */}
-          <div className="mt-6 border-t border-slate-200 pt-5 text-center text-xs text-slate-600 space-y-2.5">
-            <div>
-              New to ArthaGST?{' '}
-              <Link to="/register" className="font-semibold text-indigo-600 hover:text-indigo-700 hover:underline">
-                Register New Organization &rarr;
-              </Link>
-            </div>
-            <div className="pt-2 border-t border-slate-100">
-              <Link to="/sd" className="inline-flex items-center gap-1.5 text-slate-500 hover:text-indigo-600 transition-colors">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                Platform Super Admin Portal (/sd) &rarr;
-              </Link>
-            </div>
-          </div>
+
         </div>
       </div>
     </div>
