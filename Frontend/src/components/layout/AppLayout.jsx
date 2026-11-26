@@ -41,6 +41,7 @@ export const NAV_GROUPS = [
     section: 'Dashboard',
     items: [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+      { id: 'pos', label: 'POS Billing', icon: MonitorSmartphone, path: '/pos' },
     ],
   },
   {
@@ -192,7 +193,6 @@ export const NAV_GROUPS = [
   {
     section: 'Retail & System',
     items: [
-      { id: 'pos', label: 'POS Billing', icon: MonitorSmartphone, path: '/pos' },
       { id: 'notifications', label: 'Notifications', icon: Bell, path: '/notifications' },
       { id: 'audit', label: 'Audit Logs', icon: History, path: '/audit-logs' },
       { id: 'users', label: 'User Management', icon: ShieldCheck, path: '/users' },
