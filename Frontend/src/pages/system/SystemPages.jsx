@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   CheckCheck,
@@ -16,6 +16,21 @@ import {
   KeyRound,
   AlertCircle,
   Check,
+  FileText,
+  ShoppingBag,
+  Package,
+  IndianRupee,
+  Receipt,
+  MonitorSmartphone,
+  Percent,
+  BookOpen,
+  BarChart3,
+  ShieldCheck,
+  Settings,
+  LayoutGrid,
+  List,
+  Search,
+  X,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { ROLES_CONFIG, INDIAN_STATES, FINANCIAL_YEARS } from '../../data/constants';
@@ -173,34 +188,135 @@ export const UsersRolesPage = () => {
     role: 'Billing Clerk',
     password: '',
     status: 'Active',
+    permissions: [],
   });
   const [isCustomRole, setIsCustomRole] = useState(false);
   const [savingUser, setSavingUser] = useState(false);
+  const [showModuleSelectorInUserModal, setShowModuleSelectorInUserModal] = useState(false);
 
-  // Role Permissions State
-  const [rolesConfig, setRolesConfig] = useState(() => ({ ...ROLES_CONFIG }));
-  const [editingRole, setEditingRole] = useState(null);
-  const [roleForm, setRoleForm] = useState({ label: '', description: '', permissions: [] });
+  // User Permissions Matrix State
+  const [editingUserPerms, setEditingUserPerms] = useState(null);
+  const [userPermsForm, setUserPermsForm] = useState({
+    userId: '',
+    userName: '',
+    userRole: '',
+    userEmail: '',
+    permissions: [],
+  });
+  const [savingUserPerms, setSavingUserPerms] = useState(false);
+  const [permSearch, setPermSearch] = useState('');
+  const [permViewMode, setPermViewMode] = useState('cards'); // 'cards' | 'table'
 
   const ALL_MODULES = [
-    { id: 'sales', label: 'Sales & Invoicing', desc: 'Invoices, Quotations, Orders, Challans, Credit Notes' },
-    { id: 'purchases', label: 'Purchases & Bills', desc: 'Purchase Bills, Orders, GRNs, Debit Notes' },
-    { id: 'inventory', label: 'Inventory & Godowns', desc: 'Stock movements, Items, Warehouses' },
-    { id: 'parties', label: 'Parties & CRM', desc: 'Customer & Supplier directory and ledgers' },
-    { id: 'payments', label: 'Banking & Payments', desc: 'Bank accounts, payment in/out, settlements' },
-    { id: 'expenses', label: 'Expenses & Overheads', desc: 'Vouchers, recurring expenses, ITC claims' },
-    { id: 'pos', label: 'POS Billing', desc: 'Retail counter checkout and thermal receipts' },
-    { id: 'gst', label: 'GST Returns', desc: 'GSTR-1, GSTR-3B, GSTR-2B reconciliation' },
-    { id: 'accounting', label: 'Accounting & Ledgers', desc: 'Chart of accounts, journals, P&L, balance sheet' },
-    { id: 'reports', label: 'Reports & Analytics', desc: 'Business dashboards and financial registers' },
-    { id: 'users', label: 'User Management', desc: 'Manage team staff and permissions' },
-    { id: 'settings', label: 'Business Settings', desc: 'Company profile, tax rates, invoice templates' },
+    { id: 'sales', label: 'Sales & Invoicing', desc: 'Invoices, Quotations, Orders, Challans, Credit Notes', icon: FileText },
+    { id: 'purchases', label: 'Purchases & Bills', desc: 'Purchase Bills, Orders, GRNs, Debit Notes', icon: ShoppingBag },
+    { id: 'inventory', label: 'Inventory & Godowns', desc: 'Stock movements, Items, Warehouses, Batches', icon: Package },
+    { id: 'parties', label: 'Parties & CRM', desc: 'Customer & Supplier directory and ledgers', icon: Users },
+    { id: 'payments', label: 'Banking & Payments', desc: 'Bank accounts, payment in/out, settlements', icon: IndianRupee },
+    { id: 'expenses', label: 'Expenses & Overheads', desc: 'Vouchers, recurring expenses, ITC claims', icon: Receipt },
+    { id: 'pos', label: 'POS Billing', desc: 'Retail counter checkout and thermal receipts', icon: MonitorSmartphone },
+    { id: 'gst', label: 'GST Returns', desc: 'GSTR-1, GSTR-3B, GSTR-2B reconciliation', icon: Percent },
+    { id: 'accounting', label: 'Accounting & Ledgers', desc: 'Chart of accounts, journals, P&L, balance sheet', icon: BookOpen },
+    { id: 'reports', label: 'Reports & Analytics', desc: 'Business dashboards and financial registers', icon: BarChart3 },
+    { id: 'users', label: 'User Management', desc: 'Manage team staff and permissions', icon: ShieldCheck },
+    { id: 'settings', label: 'Business Settings', desc: 'Company profile, tax rates, invoice templates', icon: Settings },
   ];
+
+  const hasModulePermission = (perms, modId, level = 'read') => {
+    if (!Array.isArray(perms)) return false;
+    if (perms.includes('all') || perms.includes('*')) return true;
+    if (perms.includes(modId)) return true;
+    if (level === 'read') {
+      return perms.includes(`${modId}:read`) || perms.includes(`${modId}:edit`) || perms.includes(`${modId}:write`);
+    }
+    if (level === 'edit') {
+      return perms.includes(`${modId}:edit`) || perms.includes(`${modId}:write`);
+    }
+    return false;
+  };
+
+  const getDefaultPermissionsForRole = (role) => {
+    const r = (role || '').toLowerCase();
+    if (r === 'owner' || r === 'admin') {
+      return ALL_MODULES.flatMap((m) => [`${m.id}:read`, `${m.id}:edit`]);
+    }
+    if (r.includes('bill') || r.includes('pos')) {
+      return [
+        'sales:read', 'sales:edit',
+        'parties:read', 'parties:edit',
+        'payments:read', 'payments:edit',
+        'pos:read', 'pos:edit',
+        'inventory:read',
+      ];
+    }
+    if (r.includes('account') || r.includes('ca')) {
+      return [
+        'sales:read', 'sales:edit',
+        'purchases:read', 'purchases:edit',
+        'parties:read', 'parties:edit',
+        'payments:read', 'payments:edit',
+        'expenses:read', 'expenses:edit',
+        'gst:read', 'gst:edit',
+        'accounting:read', 'accounting:edit',
+        'reports:read', 'reports:edit',
+        'inventory:read',
+      ];
+    }
+    if (r.includes('ware') || r.includes('stock') || r.includes('inven')) {
+      return [
+        'inventory:read', 'inventory:edit',
+        'purchases:read', 'purchases:edit',
+        'sales:read',
+        'parties:read',
+      ];
+    }
+    if (r.includes('view') || r.includes('audit')) {
+      return [
+        'sales:read',
+        'purchases:read',
+        'inventory:read',
+        'parties:read',
+        'payments:read',
+        'expenses:read',
+        'gst:read',
+        'accounting:read',
+        'reports:read',
+      ];
+    }
+    return ALL_MODULES.flatMap((m) => [`${m.id}:read`, `${m.id}:edit`]);
+  };
+
+  const normalizeUserPermissions = (perms, role) => {
+    if (!Array.isArray(perms) || perms.length === 0) {
+      return getDefaultPermissionsForRole(role);
+    }
+    const result = new Set();
+    perms.forEach((p) => {
+      if (p === 'all' || p === '*') {
+        ALL_MODULES.forEach((m) => {
+          result.add(`${m.id}:read`);
+          result.add(`${m.id}:edit`);
+        });
+      } else if (p.includes(':')) {
+        result.add(p);
+      } else {
+        // Legacy module key without colon: grant both read & edit
+        result.add(`${p}:read`);
+        result.add(`${p}:edit`);
+      }
+    });
+    return Array.from(result);
+  };
+
+  const getUserPermissions = (u) => {
+    return normalizeUserPermissions(u?.permissions, u?.role);
+  };
 
   const openModal = (u = null) => {
     setEditing(u);
+    setShowModuleSelectorInUserModal(false);
     if (u) {
-      const isKnown = Object.keys(rolesConfig).includes(u.role);
+      const isKnown = Object.keys(ROLES_CONFIG).includes(u.role);
       setIsCustomRole(!isKnown);
       setForm({
         name: u.name || '',
@@ -209,6 +325,7 @@ export const UsersRolesPage = () => {
         role: u.role || 'Billing Clerk',
         password: '',
         status: u.status || (u.isActive ? 'Active' : 'Inactive'),
+        permissions: getUserPermissions(u),
       });
     } else {
       setIsCustomRole(false);
@@ -219,6 +336,7 @@ export const UsersRolesPage = () => {
         role: 'Billing Clerk',
         password: '',
         status: 'Active',
+        permissions: getDefaultPermissionsForRole('Billing Clerk'),
       });
     }
     setModalOpen(true);
@@ -240,6 +358,7 @@ export const UsersRolesPage = () => {
     }
 
     setSavingUser(true);
+    let createdId = null;
     try {
       if (editing && editing.id && !String(editing.id).startsWith('usr-') && !String(editing.id).startsWith('owner-')) {
         // Backend update
@@ -247,25 +366,31 @@ export const UsersRolesPage = () => {
           name: form.name.trim(),
           phone: form.mobile.trim(),
           role: form.role.trim(),
+          permissions: form.permissions,
           ...(form.password ? { password: form.password } : {}),
         });
       } else if (!editing) {
         // Backend create
         try {
-          await userService.createUser({
+          const res = await userService.createUser({
             name: form.name.trim(),
             email: form.email.trim(),
             mobile: form.mobile.trim(),
             role: form.role.trim(),
             password: form.password || 'Password@123',
+            permissions: form.permissions || [],
           });
+          const createdObj = res?.data || res?.user || res;
+          if (createdObj?._id || createdObj?.id) {
+            createdId = String(createdObj._id || createdObj.id);
+          }
         } catch (apiErr) {
           console.warn('Backend user create note:', apiErr.message);
         }
       }
 
       // Update frontend state
-      const targetId = editing ? editing.id : `user-${Date.now()}`;
+      const targetId = editing ? editing.id : (createdId || `user-${Date.now()}`);
       setState((prev) => {
         const existingUsers = Array.isArray(prev.users) ? prev.users : [];
         const exists = existingUsers.some((u) => u.id === targetId);
@@ -279,7 +404,7 @@ export const UsersRolesPage = () => {
           status: form.status,
           isActive: form.status === 'Active',
           lastLogin: editing?.lastLogin || 'Never',
-          permissions: rolesConfig[form.role]?.permissions || ['sales'],
+          permissions: form.permissions || getUserPermissions({ role: form.role }),
         };
         const nextUsers = exists
           ? existingUsers.map((u) => (u.id === targetId ? updatedRecord : u))
@@ -339,42 +464,126 @@ export const UsersRolesPage = () => {
     );
   };
 
-  const handleOpenEditRole = (roleKey, cfg) => {
-    setEditingRole(roleKey);
-    setRoleForm({
-      label: cfg.label || roleKey,
-      description: cfg.description || '',
-      permissions: Array.isArray(cfg.permissions) ? [...cfg.permissions] : [],
+  // Open Edit Permissions Modal for a specific user
+  const handleOpenEditUserPermissions = (u) => {
+    const currentPerms = getUserPermissions(u);
+    setEditingUserPerms(u);
+    setUserPermsForm({
+      userId: u.id,
+      userName: u.name,
+      userRole: u.role,
+      userEmail: u.email,
+      permissions: [...currentPerms],
     });
   };
 
-  const handleToggleModulePermission = (modId) => {
-    setRoleForm((prev) => {
-      const exists = prev.permissions.includes(modId);
-      const next = exists ? prev.permissions.filter((p) => p !== modId) : [...prev.permissions, modId];
+  const handleToggleUserModuleLevel = (modId, level) => {
+    setUserPermsForm((prev) => {
+      const cur = Array.isArray(prev.permissions) ? prev.permissions : [];
+      const readKey = `${modId}:read`;
+      const editKey = `${modId}:edit`;
+      const hasRead = cur.includes(readKey) || cur.includes(modId);
+      const hasEdit = cur.includes(editKey) || cur.includes(modId);
+
+      // Filter out existing keys for this module
+      let next = cur.filter((p) => p !== readKey && p !== editKey && p !== modId);
+
+      if (level === 'read') {
+        if (hasRead) {
+          // Unchecking read turns off both read and edit
+        } else {
+          // Checking read
+          next.push(readKey);
+          if (hasEdit) next.push(editKey);
+        }
+      } else if (level === 'edit') {
+        if (hasEdit) {
+          // Unchecking edit keeps read active
+          next.push(readKey);
+        } else {
+          // Checking edit automatically activates read too
+          next.push(readKey);
+          next.push(editKey);
+        }
+      }
+
       return { ...prev, permissions: next };
     });
   };
 
-  const handleSaveRolePermissions = (e) => {
-    e.preventDefault();
-    if (!editingRole) return;
-    setRolesConfig((prev) => ({
+  const handleSelectAllReadAndEdit = () => {
+    setUserPermsForm((prev) => ({
       ...prev,
-      [editingRole]: {
-        ...prev[editingRole],
-        label: roleForm.label,
-        description: roleForm.description,
-        permissions: roleForm.permissions,
-      },
+      permissions: ALL_MODULES.flatMap((m) => [`${m.id}:read`, `${m.id}:edit`]),
     }));
-    notify(`Permissions for role '${roleForm.label}' updated successfully!`);
-    setEditingRole(null);
   };
+
+  const handleSelectAllReadOnly = () => {
+    setUserPermsForm((prev) => ({
+      ...prev,
+      permissions: ALL_MODULES.map((m) => `${m.id}:read`),
+    }));
+  };
+
+  const handleClearAllUserModules = () => {
+    setUserPermsForm((prev) => ({
+      ...prev,
+      permissions: [],
+    }));
+  };
+
+  const handleResetUserToRoleDefaults = () => {
+    const defaults = getDefaultPermissionsForRole(userPermsForm.userRole);
+    setUserPermsForm((prev) => ({
+      ...prev,
+      permissions: defaults,
+    }));
+  };
+
+  const handleSaveUserPermissions = async (e) => {
+    e.preventDefault();
+    if (!editingUserPerms) return;
+    setSavingUserPerms(true);
+    try {
+      const targetId = editingUserPerms.id;
+      if (targetId && !String(targetId).startsWith('usr-') && !String(targetId).startsWith('owner-')) {
+        await userService.updateUser(targetId, {
+          permissions: userPermsForm.permissions,
+        });
+      }
+
+      setState((prev) => ({
+        ...prev,
+        users: (prev.users || []).map((u) =>
+          u.id === targetId ? { ...u, permissions: userPermsForm.permissions } : u
+        ),
+      }));
+
+      notify(`Permissions for '${editingUserPerms.name}' (${editingUserPerms.role}) updated successfully!`);
+      setEditingUserPerms(null);
+    } catch (err) {
+      notify(err.message || 'Failed to update user permissions', 'error');
+    } finally {
+      setSavingUserPerms(false);
+    }
+  };
+
+  // Filter users for Permissions Tab
+  const filteredPermUsers = useMemo(() => {
+    const list = state.users || [];
+    if (!permSearch.trim()) return list;
+    const q = permSearch.toLowerCase().trim();
+    return list.filter(
+      (u) =>
+        u.name?.toLowerCase().includes(q) ||
+        u.email?.toLowerCase().includes(q) ||
+        u.role?.toLowerCase().includes(q)
+    );
+  }, [state.users, permSearch]);
 
   const categories = [
     { id: 'users', label: 'Team Users', count: state.users?.length || 0 },
-    { id: 'permissions', label: 'PERMISSIONS' },
+    { id: 'permissions', label: 'PERMISSIONS', count: state.users?.length || 0 },
   ];
 
   return (
@@ -476,6 +685,14 @@ export const UsersRolesPage = () => {
                     >
                       <Edit3 className="h-4 w-4" />
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEditUserPermissions(r)}
+                      title="Edit Module Permissions"
+                      className="rounded p-1 text-indigo-600 hover:bg-indigo-50 transition-colors"
+                    >
+                      <ShieldCheck className="h-4 w-4" />
+                    </button>
                     {r.role?.toLowerCase() !== 'owner' && (
                       <>
                         <button
@@ -507,64 +724,261 @@ export const UsersRolesPage = () => {
         </div>
       )}
 
-      {/* CATEGORY 2: PERMISSIONS (ROLE PERMISSIONS MATRIX) */}
+      {/* CATEGORY 2: PERMISSIONS (USER PERMISSIONS MATRIX) */}
       {activeCategory === 'permissions' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          {/* Header & Controls Toolbar */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h3 className="text-sm font-semibold text-slate-900">Role Permissions Matrix</h3>
+              <h3 className="text-sm font-semibold text-slate-900">User Permissions Matrix</h3>
               <p className="text-xs text-slate-500">
-                Manage operational and access privileges assigned to organizational roles
+                Active authorization matrix: View and edit permitted modules for every user and their assigned role
               </p>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Search Filter */}
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search user name, email, role..."
+                  value={permSearch}
+                  onChange={(e) => setPermSearch(e.target.value)}
+                  className="h-8.5 rounded-md border border-slate-200 bg-white pl-8 pr-7 text-xs text-slate-800 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+                {permSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setPermSearch('')}
+                    className="absolute right-2 top-2 text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* View Switch: Cards / Table */}
+              <div className="flex items-center rounded-md border border-slate-200 bg-slate-50 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setPermViewMode('cards')}
+                  className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
+                    permViewMode === 'cards' ? 'bg-white text-indigo-700 shadow-2xs font-semibold' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="Card View"
+                >
+                  <LayoutGrid className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPermViewMode('table')}
+                  className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
+                    permViewMode === 'table' ? 'bg-white text-indigo-700 shadow-2xs font-semibold' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="Matrix Table View"
+                >
+                  <List className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              {/* Quick Add User button */}
+              <button type="button" onClick={() => openModal()} className={btnPrimary}>
+                <Plus className="h-3.5 w-3.5" /> Add User
+              </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {Object.entries(rolesConfig).map(([roleKey, cfg]) => (
-              <div
-                key={roleKey}
-                className="flex flex-col justify-between rounded-lg border border-slate-200 bg-white p-4 shadow-2xs hover:border-indigo-200 transition-colors"
-              >
-                <div>
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="font-semibold text-slate-900 text-sm">{cfg.label}</div>
-                      <span className="inline-block mt-0.5 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-mono text-slate-600 font-medium">
-                        {roleKey}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleOpenEditRole(roleKey, cfg)}
-                      className="inline-flex items-center gap-1 rounded border border-indigo-200 bg-indigo-50/70 px-2 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors shadow-2xs"
-                    >
-                      <Edit3 className="h-3 w-3" />
-                      Edit
-                    </button>
-                  </div>
-                  <p className="mt-2 text-xs text-slate-500 leading-relaxed">{cfg.description}</p>
-                </div>
+          {filteredPermUsers.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-200 bg-white p-8 text-center">
+              <Users className="mx-auto h-8 w-8 text-slate-300" />
+              <h4 className="mt-2 text-sm font-semibold text-slate-800">No users found</h4>
+              <p className="mt-1 text-xs text-slate-500">
+                {permSearch ? 'Try clearing your search query' : 'Add team users to manage their module permissions'}
+              </p>
+              {!permSearch && (
+                <button type="button" onClick={() => openModal()} className={`${btnPrimary} mt-3`}>
+                  <Plus className="h-3.5 w-3.5" /> Add First User
+                </button>
+              )}
+            </div>
+          ) : permViewMode === 'cards' ? (
+            /* CARDS VIEW */
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {filteredPermUsers.map((u) => {
+                const userPerms = getUserPermissions(u);
+                const isOwner = u.role?.toLowerCase() === 'owner';
+                const readModules = ALL_MODULES.filter((m) => hasModulePermission(userPerms, m.id, 'read'));
+                const editModules = ALL_MODULES.filter((m) => hasModulePermission(userPerms, m.id, 'edit'));
+                const readOnlyCount = readModules.length - editModules.length;
+                const isFullAccess = editModules.length === ALL_MODULES.length;
 
-                <div className="mt-4 pt-3 border-t border-slate-100">
-                  <div className="mb-1.5 text-[11px] font-semibold text-slate-700">Permitted Modules:</div>
-                  <div className="flex flex-wrap gap-1">
-                    {cfg.permissions && cfg.permissions.length > 0 ? (
-                      cfg.permissions.map((p) => (
-                        <span
-                          key={p}
-                          className="rounded bg-indigo-50 px-1.5 py-0.5 font-mono text-[10px] font-medium text-indigo-700 border border-indigo-100"
+                return (
+                  <div
+                    key={u.id}
+                    className="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-4.5 shadow-2xs hover:border-indigo-300 hover:shadow-xs transition-all"
+                  >
+                    <div>
+                      {/* Card Header: Avatar, Name, Role, Status & Edit Button */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700 border border-indigo-200">
+                            {u.name?.charAt(0)?.toUpperCase() || 'U'}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-semibold text-slate-900 text-sm truncate">{u.name}</span>
+                              {isOwner && (
+                                <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 border border-amber-200">
+                                  Owner
+                                </span>
+                              )}
+                            </div>
+                            <span className="inline-block mt-0.5 rounded bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700 border border-slate-200">
+                              Role: <strong>{u.role}</strong>
+                            </span>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditUserPermissions(u)}
+                          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50/80 px-2.5 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors shadow-2xs"
                         >
-                          {p}
+                          <Edit3 className="h-3 w-3" />
+                          Edit
+                        </button>
+                      </div>
+
+                      {/* User Contact Details */}
+                      <div className="mt-2.5 space-y-0.5 text-[11px] text-slate-500">
+                        <div className="truncate">✉️ {u.email}</div>
+                        {u.mobile || u.phone ? <div>📞 {u.mobile || u.phone}</div> : null}
+                      </div>
+
+                      {/* Access Count Banner */}
+                      <div className="mt-3 flex items-center justify-between rounded-lg bg-slate-50 px-2.5 py-1.5 border border-slate-100">
+                        <span className="text-[11px] font-semibold text-slate-700">
+                          Module Access Level
                         </span>
-                      ))
-                    ) : (
-                      <span className="text-[11px] text-slate-400 italic">No modules granted</span>
-                    )}
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                            isFullAccess
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : readModules.length > 0
+                              ? 'bg-indigo-100 text-indigo-800'
+                              : 'bg-rose-100 text-rose-800'
+                          }`}
+                        >
+                          {editModules.length} Edit • {readOnlyCount} Read
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Permitted Module Badges */}
+                    <div className="mt-3 pt-3 border-t border-slate-100">
+                      <div className="flex flex-wrap gap-1">
+                        {readModules.length > 0 ? (
+                          readModules.map((m) => {
+                            const hasEdit = hasModulePermission(userPerms, m.id, 'edit');
+                            const Icon = m.icon || Shield;
+                            return (
+                              <span
+                                key={m.id}
+                                className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium border ${
+                                  hasEdit
+                                    ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                    : 'bg-amber-50 text-amber-800 border-amber-200'
+                                }`}
+                              >
+                                <Icon className="h-2.5 w-2.5" />
+                                <span>{m.label.split(' ')[0]}</span>
+                                <span
+                                  className={`rounded px-1 py-0.2 text-[8px] font-bold uppercase tracking-wider ${
+                                    hasEdit ? 'bg-indigo-200/70 text-indigo-800' : 'bg-amber-200/70 text-amber-900'
+                                  }`}
+                                >
+                                  {hasEdit ? 'Edit' : 'Read'}
+                                </span>
+                              </span>
+                            );
+                          })
+                        ) : (
+                          <span className="text-[11px] text-rose-500 italic">No modules granted (Restricted Access)</span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            ))}
-          </div>
+                );
+              })}
+            </div>
+          ) : (
+            /* MATRIX TABLE VIEW */
+            <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-2xs">
+              <table className="min-w-full divide-y divide-slate-200 text-xs">
+                <thead className="bg-slate-50 text-slate-700">
+                  <tr>
+                    <th className="py-3 px-3 text-left font-semibold sticky left-0 bg-slate-50 z-10">User & Assigned Role</th>
+                    {ALL_MODULES.map((m) => (
+                      <th key={m.id} className="py-3 px-2 text-center font-semibold whitespace-nowrap" title={m.desc}>
+                        {m.label.split(' ')[0]}
+                      </th>
+                    ))}
+                    <th className="py-3 px-3 text-center font-semibold">Privileges</th>
+                    <th className="py-3 px-3 text-center font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredPermUsers.map((u) => {
+                    const userPerms = getUserPermissions(u);
+                    const readCount = ALL_MODULES.filter((m) => hasModulePermission(userPerms, m.id, 'read')).length;
+                    const editCount = ALL_MODULES.filter((m) => hasModulePermission(userPerms, m.id, 'edit')).length;
+
+                    return (
+                      <tr key={u.id} className="hover:bg-slate-50/70 transition-colors">
+                        <td className="py-2.5 px-3 whitespace-nowrap sticky left-0 bg-white z-10">
+                          <div className="font-semibold text-slate-900">{u.name}</div>
+                          <div className="text-[11px] text-slate-500">{u.role} • {u.email}</div>
+                        </td>
+                        {ALL_MODULES.map((m) => {
+                          const hasRead = hasModulePermission(userPerms, m.id, 'read');
+                          const hasEdit = hasModulePermission(userPerms, m.id, 'edit');
+                          return (
+                            <td key={m.id} className="py-2.5 px-2 text-center">
+                              {hasEdit ? (
+                                <span className="inline-block rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-bold text-indigo-700 border border-indigo-200">
+                                  Edit
+                                </span>
+                              ) : hasRead ? (
+                                <span className="inline-block rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-amber-700 border border-amber-200">
+                                  Read
+                                </span>
+                              ) : (
+                                <span className="text-slate-300 text-xs">—</span>
+                              )}
+                            </td>
+                          );
+                        })}
+                        <td className="py-2.5 px-3 text-center font-semibold text-[11px] whitespace-nowrap">
+                          <span className="text-indigo-700 font-mono">{editCount}E</span>
+                          <span className="text-slate-300 mx-1">/</span>
+                          <span className="text-amber-700 font-mono">{readCount - editCount}R</span>
+                        </td>
+                        <td className="py-2.5 px-3 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditUserPermissions(u)}
+                            className="rounded border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors"
+                          >
+                            Edit
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -611,27 +1025,48 @@ export const UsersRolesPage = () => {
             </div>
 
             <div className="rounded border border-slate-200 p-3 space-y-1.5">
-              <span className="text-slate-600 font-semibold block">Assigned Permissions / Privileges:</span>
-              <div className="flex flex-wrap gap-1 pt-1">
-                {viewingUser.permissions && viewingUser.permissions.length > 0 ? (
-                  viewingUser.permissions.map((perm) => (
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-slate-700 font-semibold">Granted Module Permissions:</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const u = viewingUser;
+                    setViewingUser(null);
+                    handleOpenEditUserPermissions(u);
+                  }}
+                  className="text-[11px] font-semibold text-indigo-600 hover:underline inline-flex items-center gap-1"
+                >
+                  <Edit3 className="h-3 w-3" /> Edit Permissions
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {ALL_MODULES.filter((m) => hasModulePermission(getUserPermissions(viewingUser), m.id, 'read')).map((mod) => {
+                  const hasEdit = hasModulePermission(getUserPermissions(viewingUser), mod.id, 'edit');
+                  return (
                     <span
-                      key={perm}
-                      className="rounded bg-emerald-50 px-2 py-0.5 font-mono text-[11px] font-medium text-emerald-700 border border-emerald-200"
+                      key={mod.id}
+                      className={`inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-[11px] font-medium border ${
+                        hasEdit
+                          ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                          : 'bg-amber-50 text-amber-800 border-amber-200'
+                      }`}
                     >
-                      {perm}
+                      <span>{mod.label}</span>
+                      <span className={`text-[9px] font-bold px-1 rounded uppercase tracking-wider ${
+                        hasEdit ? 'bg-indigo-200/70 text-indigo-800' : 'bg-amber-200/70 text-amber-900'
+                      }`}>
+                        {hasEdit ? 'Read & Edit' : 'Read'}
+                      </span>
                     </span>
-                  ))
-                ) : (
-                  <span className="text-slate-400 italic">Default role permissions apply</span>
-                )}
+                  );
+                })}
               </div>
             </div>
           </div>
         )}
       </Modal>
 
-      {/* MODAL 2: ADD / EDIT USER WITH DROPDOWN + MANUAL ROLE ENTRY */}
+      {/* MODAL 2: ADD / EDIT USER WITH DROPDOWN + MANUAL ROLE ENTRY + MODULE SELECTOR */}
       <Modal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
@@ -715,9 +1150,17 @@ export const UsersRolesPage = () => {
               <button
                 type="button"
                 onClick={() => {
-                  setIsCustomRole(!isCustomRole);
-                  if (!isCustomRole) setForm({ ...form, role: '' });
-                  else setForm({ ...form, role: 'Billing Clerk' });
+                  const nextCustom = !isCustomRole;
+                  setIsCustomRole(nextCustom);
+                  if (nextCustom) {
+                    setForm({ ...form, role: '', permissions: ALL_MODULES.map((m) => m.id) });
+                  } else {
+                    setForm({
+                      ...form,
+                      role: 'Billing Clerk',
+                      permissions: getDefaultPermissionsForRole('Billing Clerk'),
+                    });
+                  }
                 }}
                 className="text-[11px] font-semibold text-indigo-600 hover:underline"
               >
@@ -729,19 +1172,24 @@ export const UsersRolesPage = () => {
               <select
                 value={form.role}
                 onChange={(e) => {
-                  if (e.target.value === '__custom__') {
+                  const val = e.target.value;
+                  if (val === '__custom__') {
                     setIsCustomRole(true);
-                    setForm({ ...form, role: '' });
+                    setForm({ ...form, role: '', permissions: ALL_MODULES.map((m) => m.id) });
                   } else {
-                    setForm({ ...form, role: e.target.value });
+                    setForm({
+                      ...form,
+                      role: val,
+                      permissions: getDefaultPermissionsForRole(val),
+                    });
                   }
                 }}
                 className={inputClass}
                 required
               >
-                {Object.keys(rolesConfig).map((r) => (
+                {Object.keys(ROLES_CONFIG).map((r) => (
                   <option key={r} value={r}>
-                    {rolesConfig[r]?.label || r}
+                    {ROLES_CONFIG[r]?.label || r}
                   </option>
                 ))}
                 <option value="__custom__">➕ Manual / Custom Role Entry...</option>
@@ -753,12 +1201,18 @@ export const UsersRolesPage = () => {
                   required
                   placeholder="Type any custom role (e.g. Store Incharge, Senior Accountant)"
                   value={form.role}
-                  onChange={(e) => setForm({ ...form, role: e.target.value })}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      role: e.target.value,
+                      permissions: form.permissions?.length > 0 ? form.permissions : ALL_MODULES.map((m) => m.id),
+                    })
+                  }
                   className={inputClass}
                   autoFocus
                 />
                 <p className="text-[11px] text-slate-500">
-                  Custom role will be assigned with operational privileges.
+                  Custom role will be saved and displayed in the Permissions Matrix.
                 </p>
               </div>
             )}
@@ -775,81 +1229,288 @@ export const UsersRolesPage = () => {
               <option value="Inactive">Inactive</option>
             </select>
           </div>
+
+          {/* Expandable Module Permissions in Add/Edit User Modal */}
+          <div className="pt-2 border-t border-slate-200">
+            <button
+              type="button"
+              onClick={() => setShowModuleSelectorInUserModal(!showModuleSelectorInUserModal)}
+              className="flex w-full items-center justify-between py-1 text-xs font-semibold text-indigo-700 hover:text-indigo-800"
+            >
+              <span>
+                ⚙️ Customize Initial Module Permissions (
+                {ALL_MODULES.filter((m) => hasModulePermission(form.permissions, m.id, 'read')).length} enabled)
+              </span>
+              <span>{showModuleSelectorInUserModal ? '▲ Hide' : '▼ View / Edit'}</span>
+            </button>
+
+            {showModuleSelectorInUserModal && (
+              <div className="mt-2 space-y-2 rounded-lg bg-slate-50 p-2.5 border border-slate-200">
+                <div className="flex items-center justify-between gap-1 text-[11px]">
+                  <span className="text-slate-600">Select Read/Edit permissions per module:</span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setForm({
+                          ...form,
+                          permissions: ALL_MODULES.flatMap((m) => [`${m.id}:read`, `${m.id}:edit`]),
+                        })
+                      }
+                      className="text-indigo-600 hover:underline font-medium"
+                    >
+                      All Read & Edit
+                    </button>
+                    <span className="text-slate-300">|</span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setForm({
+                          ...form,
+                          permissions: ALL_MODULES.map((m) => `${m.id}:read`),
+                        })
+                      }
+                      className="text-amber-700 hover:underline font-medium"
+                    >
+                      All Read-Only
+                    </button>
+                    <span className="text-slate-300">|</span>
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, permissions: [] })}
+                      className="text-slate-500 hover:underline font-medium"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto p-1">
+                  {ALL_MODULES.map((mod) => {
+                    const hasRead = hasModulePermission(form.permissions, mod.id, 'read');
+                    const hasEdit = hasModulePermission(form.permissions, mod.id, 'edit');
+
+                    return (
+                      <div
+                        key={mod.id}
+                        className={`flex items-center justify-between rounded p-2 border text-xs transition-colors ${
+                          hasEdit
+                            ? 'border-indigo-300 bg-white'
+                            : hasRead
+                            ? 'border-amber-300 bg-amber-50/40'
+                            : 'border-slate-200 bg-slate-100/50'
+                        }`}
+                      >
+                        <span className="font-medium text-slate-800 text-[11px] truncate">{mod.label}</span>
+                        <div className="flex items-center gap-2.5 shrink-0">
+                          <label className="flex items-center gap-1 cursor-pointer text-[11px] font-medium text-slate-600">
+                            <input
+                              type="checkbox"
+                              checked={hasRead}
+                              onChange={() => {
+                                const cur = form.permissions || [];
+                                const readKey = `${mod.id}:read`;
+                                const editKey = `${mod.id}:edit`;
+                                let next = cur.filter((p) => p !== readKey && p !== editKey && p !== mod.id);
+                                if (!hasRead) {
+                                  next.push(readKey);
+                                  if (hasEdit) next.push(editKey);
+                                }
+                                setForm({ ...form, permissions: next });
+                              }}
+                              className="h-3.5 w-3.5 rounded text-indigo-600"
+                            />
+                            <span>Read</span>
+                          </label>
+                          <label className="flex items-center gap-1 cursor-pointer text-[11px] font-medium text-slate-600">
+                            <input
+                              type="checkbox"
+                              checked={hasEdit}
+                              onChange={() => {
+                                const cur = form.permissions || [];
+                                const readKey = `${mod.id}:read`;
+                                const editKey = `${mod.id}:edit`;
+                                let next = cur.filter((p) => p !== readKey && p !== editKey && p !== mod.id);
+                                if (!hasEdit) {
+                                  next.push(readKey);
+                                  next.push(editKey);
+                                } else {
+                                  next.push(readKey);
+                                }
+                                setForm({ ...form, permissions: next });
+                              }}
+                              className="h-3.5 w-3.5 rounded text-indigo-600"
+                            />
+                            <span>Edit</span>
+                          </label>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
         </form>
       </Modal>
 
-      {/* MODAL 3: EDIT ROLE PERMISSIONS */}
+      {/* MODAL 3: EDIT USER PERMISSIONS (READ/EDIT OPTIONS FOR ALL 12 MODULES) */}
       <Modal
-        open={Boolean(editingRole)}
-        onClose={() => setEditingRole(null)}
-        title={`Edit Role Permissions — ${roleForm.label}`}
+        open={Boolean(editingUserPerms)}
+        onClose={() => setEditingUserPerms(null)}
+        title={`Edit Module Permissions — ${userPermsForm.userName}`}
+        size="lg"
         footer={
           <>
-            <button type="button" onClick={() => setEditingRole(null)} className={btnSecondary}>
+            <button
+              type="button"
+              onClick={() => setEditingUserPerms(null)}
+              className={btnSecondary}
+              disabled={savingUserPerms}
+            >
               Cancel
             </button>
-            <button type="submit" form="role-perm-form" className={btnPrimary}>
-              Save Role Permissions
+            <button
+              type="submit"
+              form="user-perm-form"
+              className={btnPrimary}
+              disabled={savingUserPerms}
+            >
+              {savingUserPerms ? 'Saving Permissions...' : 'Save Permissions'}
             </button>
           </>
         }
       >
-        {editingRole && (
-          <form id="role-perm-form" onSubmit={handleSaveRolePermissions} className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <InputField label="Role Display Label" required>
-                <input
-                  type="text"
-                  required
-                  value={roleForm.label}
-                  onChange={(e) => setRoleForm({ ...roleForm, label: e.target.value })}
-                  className={inputClass}
-                />
-              </InputField>
-              <InputField label="Role Identifier">
-                <input
-                  type="text"
-                  disabled
-                  value={editingRole}
-                  className={`${inputClass} bg-slate-50 cursor-not-allowed font-mono text-xs`}
-                />
-              </InputField>
+        {editingUserPerms && (
+          <form id="user-perm-form" onSubmit={handleSaveUserPermissions} className="space-y-4">
+            {/* User Header Summary in Modal */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 rounded-lg bg-slate-50 p-3 border border-slate-200">
+              <div>
+                <div className="font-semibold text-sm text-slate-900">{userPermsForm.userName}</div>
+                <div className="text-xs text-slate-500">
+                  Role: <span className="font-semibold text-indigo-700">{userPermsForm.userRole}</span> • {userPermsForm.userEmail}
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={handleSelectAllReadAndEdit}
+                  className="rounded border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors shadow-2xs"
+                >
+                  All Read & Edit (12)
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSelectAllReadOnly}
+                  className="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-800 hover:bg-amber-100 transition-colors shadow-2xs"
+                >
+                  All Read-Only
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClearAllUserModules}
+                  className="rounded border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-100 transition-colors shadow-2xs"
+                >
+                  Clear All
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResetUserToRoleDefaults}
+                  className="rounded border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-100 transition-colors shadow-2xs"
+                >
+                  Reset Defaults
+                </button>
+              </div>
             </div>
 
-            <InputField label="Role Description">
-              <input
-                type="text"
-                value={roleForm.description}
-                onChange={(e) => setRoleForm({ ...roleForm, description: e.target.value })}
-                className={inputClass}
-              />
-            </InputField>
+            {/* 12 Modules to Select From */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-semibold text-slate-800">
+                  Configure Read / Edit Privileges per Module:
+                </label>
+                <span className="text-[11px] font-semibold text-indigo-700">
+                  {ALL_MODULES.filter((m) => hasModulePermission(userPermsForm.permissions, m.id, 'read')).length} of {ALL_MODULES.length} modules granted (
+                  {ALL_MODULES.filter((m) => hasModulePermission(userPermsForm.permissions, m.id, 'edit')).length} Read & Edit)
+                </span>
+              </div>
 
-            <div className="space-y-2 pt-2 border-t border-slate-200">
-              <label className="block text-xs font-semibold text-slate-800">
-                Granted Modules & Capabilities:
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto p-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-96 overflow-y-auto p-1">
                 {ALL_MODULES.map((mod) => {
-                  const checked = roleForm.permissions.includes(mod.id);
+                  const hasRead = hasModulePermission(userPermsForm.permissions, mod.id, 'read');
+                  const hasEdit = hasModulePermission(userPermsForm.permissions, mod.id, 'edit');
+                  const Icon = mod.icon || Shield;
+
                   return (
-                    <label
+                    <div
                       key={mod.id}
-                      className={`flex items-start gap-2.5 rounded-lg border p-2.5 cursor-pointer text-xs transition-colors ${
-                        checked ? 'border-indigo-300 bg-indigo-50/50' : 'border-slate-200 hover:bg-slate-50'
+                      className={`rounded-xl border p-3 text-xs transition-all ${
+                        hasEdit
+                          ? 'border-indigo-300 bg-indigo-50/50 shadow-2xs ring-1 ring-indigo-300/30'
+                          : hasRead
+                          ? 'border-amber-300 bg-amber-50/40 shadow-2xs ring-1 ring-amber-300/30'
+                          : 'border-slate-200 bg-white hover:border-slate-300'
                       }`}
                     >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => handleToggleModulePermission(mod.id)}
-                        className="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500"
-                      />
-                      <div>
-                        <div className="font-semibold text-slate-900">{mod.label}</div>
-                        <p className="text-[11px] text-slate-500">{mod.desc}</p>
+                      {/* Module Title & Status Pill */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div
+                            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
+                              hasEdit
+                                ? 'bg-indigo-100 text-indigo-700'
+                                : hasRead
+                                ? 'bg-amber-100 text-amber-700'
+                                : 'bg-slate-100 text-slate-400'
+                            }`}
+                          >
+                            <Icon className="h-4 w-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-semibold text-slate-900 text-xs truncate">{mod.label}</div>
+                            <p className="text-[10px] text-slate-500 leading-tight truncate">{mod.desc}</p>
+                          </div>
+                        </div>
+
+                        <span
+                          className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider border ${
+                            hasEdit
+                              ? 'bg-indigo-100 text-indigo-700 border-indigo-200'
+                              : hasRead
+                              ? 'bg-amber-100 text-amber-800 border-amber-200'
+                              : 'bg-slate-100 text-slate-400 border-slate-200'
+                          }`}
+                        >
+                          {hasEdit ? 'Read & Edit' : hasRead ? 'Read Only' : 'No Access'}
+                        </span>
                       </div>
-                    </label>
+
+                      {/* Read & Edit Checkbox Selectors */}
+                      <div className="mt-2.5 flex items-center justify-between pt-2 border-t border-slate-100">
+                        <span className="text-[11px] font-medium text-slate-600">Permissions:</span>
+                        <div className="flex items-center gap-4">
+                          <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-slate-700 hover:text-indigo-600 select-none">
+                            <input
+                              type="checkbox"
+                              checked={hasRead}
+                              onChange={() => handleToggleUserModuleLevel(mod.id, 'read')}
+                              className="h-4 w-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                            />
+                            <span>Read</span>
+                          </label>
+
+                          <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-slate-700 hover:text-indigo-600 select-none">
+                            <input
+                              type="checkbox"
+                              checked={hasEdit}
+                              onChange={() => handleToggleUserModuleLevel(mod.id, 'edit')}
+                              className="h-4 w-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                            />
+                            <span>Edit</span>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
                   );
                 })}
               </div>

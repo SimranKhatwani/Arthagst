@@ -35,6 +35,7 @@ router.get('/:id', userController.getById);
  * @access  Private (Owner / Admin)
  */
 router.patch('/:id', userController.update);
+router.put('/:id', userController.update);
 
 /**
  * @route   PATCH /api/users/:id/status
