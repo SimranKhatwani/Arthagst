@@ -402,10 +402,7 @@ export const SuperAdminLoginPage = () => {
 
         {/* Center Telemetry & Value Pillars */}
         <div className="relative z-10 my-auto py-8">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 mb-5">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>/sd Master System Access</span>
-          </div>
+
 
           <h1 className="font-display text-3xl xl:text-4xl font-bold tracking-tight text-white leading-tight">
             Multi-tenant fleet, SaaS billing, and platform governance.
@@ -454,15 +451,8 @@ export const SuperAdminLoginPage = () => {
           </div>
         </div>
 
-        {/* Footer Badges */}
-        <div className="relative z-10 pt-6 border-t border-slate-800/80 flex flex-wrap items-center justify-between text-xs text-slate-400 gap-3">
-          <div className="flex items-center gap-3">
-            <span className="px-2 py-0.5 rounded bg-slate-800/80 text-[11px] font-mono text-slate-300">256-Bit SSL</span>
-            <span className="px-2 py-0.5 rounded bg-slate-800/80 text-[11px] font-mono text-slate-300">Master Guarded</span>
-            <span className="px-2 py-0.5 rounded bg-slate-800/80 text-[11px] font-mono text-slate-300">SOC2 Standards</span>
-          </div>
-          <div>ArthaGST Master Control v2.5</div>
-        </div>
+
+
       </div>
 
       {/* RIGHT AUTH CARD PANEL */}
