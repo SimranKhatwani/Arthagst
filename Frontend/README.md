@@ -1,15 +1,27 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# ArthaGST Frontend
 
+🌐 **Live Deployed Application:** [https://arthagst.vercel.app](https://arthagst.vercel.app)  
+⚙️ **Live Backend API (Render):** [https://arthagst-1.onrender.com/api](https://arthagst-1.onrender.com/api)
 
-## Run Locally
+Vite + React 19 + Tailwind CSS single page web application for GST billing, godown warehouse tracking, POS retail checkout, and SME ERP management.
 
-**Prerequisites:**  Node.js
+---
 
+## 🚀 Production Deployment (Vercel)
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+- **Frontend URL**: [https://arthagst.vercel.app](https://arthagst.vercel.app)
+- **Connected Backend**: `https://arthagst-1.onrender.com/api`
+- **SPA Routing**: Handled via `vercel.json` rewrites to `/index.html`
+- **Environment Variables**:
+  - `VITE_API_BASE_URL`: `https://arthagst-1.onrender.com/api`
+  - `VITE_APP_URL`: `https://arthagst.vercel.app`
+
+---
+
+## 💻 Local Development
+
+```bash
+npm install
+npm run dev
+```
+Runs locally at `http://localhost:3000` (or `http://localhost:3001`).

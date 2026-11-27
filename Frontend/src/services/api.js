@@ -1,4 +1,34 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+export const resolveApiBaseUrl = () => {
+  // If running in a browser environment, check the current hostname
+  if (typeof window !== 'undefined' && window.location?.hostname) {
+    const host = window.location.hostname;
+    // On any deployed non-localhost origin (e.g. vercel.app, onrender.com, production domain):
+    // NEVER allow fallback or resolution to localhost
+    if (host !== 'localhost' && host !== '127.0.0.1' && host !== '0.0.0.0') {
+      const envUrl = import.meta.env.VITE_API_BASE_URL;
+      if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
+        let url = envUrl.trim().replace(/\/+$/, '');
+        if (!url.startsWith('http://') && !url.startsWith('https://')) {
+          url = `https://${url}`;
+        }
+        return url.endsWith('/api') ? url : `${url}/api`;
+      }
+      return 'https://arthagst-1.onrender.com/api';
+    }
+  }
+
+  const envUrl = import.meta.env.VITE_API_BASE_URL;
+  if (!envUrl) {
+    return import.meta.env.DEV ? 'http://localhost:5000/api' : 'https://arthagst-1.onrender.com/api';
+  }
+  let url = envUrl.trim().replace(/\/+$/, '');
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    url = `https://${url}`;
+  }
+  return url.endsWith('/api') ? url : `${url}/api`;
+};
+
+const API_BASE_URL = resolveApiBaseUrl();
 const TOKEN_KEY = 'arthagst_token';
 
 /**
@@ -83,7 +113,8 @@ export const apiClient = async (endpoint, options = {}) => {
     ...customConfig
   } = options;
 
-  let url = `${API_BASE_URL.replace(/\/+$/, '')}/${endpoint.replace(/^\/+/, '')}`;
+  const baseUrl = resolveApiBaseUrl();
+  let url = `${baseUrl.replace(/\/+$/, '')}/${endpoint.replace(/^\/+/, '')}`;
 
   if (params) {
     const searchParams = new URLSearchParams();

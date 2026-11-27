@@ -1,7 +1,8 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "description": "",
+  "description": "ArthaGST Express REST API",
+  "homepage": "https://arthagst-1.onrender.com",
   "main": "src/server.js",
   "scripts": {
     "dev": "nodemon src/server.js",

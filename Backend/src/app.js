@@ -26,11 +26,36 @@ app.use(
 // Cross-Origin Resource Sharing
 const parseCorsOrigins = () => {
   const envOrigin = process.env.CORS_ORIGIN;
+  const defaultOrigins = [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'https://arthagst.vercel.app',
+    'https://arthagst.onrender.com',
+    'https://arthagst-1.onrender.com',
+  ];
+
   if (!envOrigin || envOrigin.trim() === '*' || envOrigin.trim() === '') {
     return true; // Reflect requesting origin to maintain credentials support
   }
+
   const origins = envOrigin.split(',').map((o) => o.trim()).filter(Boolean);
-  return origins.length === 1 ? origins[0] : origins;
+
+  return (origin, callback) => {
+    if (!origin) return callback(null, true);
+    const cleanOrigin = origin.replace(/\/+$/, '');
+    const isAllowed =
+      origins.includes('*') ||
+      origins.some((o) => o.replace(/\/+$/, '') === cleanOrigin) ||
+      defaultOrigins.some((o) => o.replace(/\/+$/, '') === cleanOrigin) ||
+      cleanOrigin.endsWith('.vercel.app') ||
+      cleanOrigin.endsWith('.onrender.com');
+
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      callback(new Error(`Not allowed by CORS: ${origin}`));
+    }
+  };
 };
 
 const corsOptions = {
