@@ -653,7 +653,7 @@ export const StockManagementPage = () => {
   const [productId, setProductId] = useState(state.products[0]?.id || '');
   const [adjType, setAdjType] = useState('Stock In');
   const [qty, setQty] = useState(5);
-  const [warehouseId, setWarehouseId] = useState(state.warehouses[0]?.id || 'wh-1');
+  const [warehouseId, setWarehouseId] = useState(state.warehouses[0]?.id || state.warehouses[0]?._id || '');
   const [notes, setNotes] = useState('');
 
   const handleAdjust = (e) => {
@@ -1105,12 +1105,12 @@ export const BatchExpiryPage = () => {
   const { state, upsertRecord } = useApp();
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState({
-    productId: state.products[6]?.id || state.products[0]?.id || '',
+    productId: state.products[0]?.id || state.products[0]?._id || '',
     batchNo: '',
-    mfgDate: '2026-10-01',
-    expiryDate: '2027-09-30',
-    qty: 20,
-    warehouseId: 'wh-1',
+    mfgDate: new Date().toISOString().slice(0, 10),
+    expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+    qty: 1,
+    warehouseId: state.warehouses[0]?.id || state.warehouses[0]?._id || '',
   });
 
   const getExpiryStatus = (expDate) => {

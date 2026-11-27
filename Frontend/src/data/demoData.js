@@ -103,15 +103,7 @@ const products = [
   { id: 'prod-32', name: 'Thermal Shipping Labels 4x6 (1000 Labels Roll)', sku: 'PK-LBL-032', barcode: '8901234006054', hsn: '4821', category: 'Packaging', brand: 'ZebraDemo', unit: 'PCS', purchasePrice: 280, sellingPrice: 365, mrp: 450, gstRate: 18, cessRate: 0, openingStock: 85, stock: 58, minStock: 15, warehouseId: 'wh-3', archived: false },
 ];
 
-const batches = [
-  { id: 'bat-1', productId: 'prod-7', productName: 'Fortune Sunlite Refined Sunflower Oil 15L Tin', batchNo: 'FOR-26A1', mfgDate: '2026-03-10', expiryDate: '2026-12-15', qty: 28, warehouseId: 'wh-1' },
-  { id: 'bat-2', productId: 'prod-7', productName: 'Fortune Sunlite Refined Sunflower Oil 15L Tin', batchNo: 'FOR-26B4', mfgDate: '2026-07-05', expiryDate: '2027-07-04', qty: 20, warehouseId: 'wh-1' },
-  { id: 'bat-3', productId: 'prod-8', productName: 'India Gate Basmati Rice Classic (25kg Bag)', batchNo: 'IGB-2605', mfgDate: '2026-05-12', expiryDate: '2027-05-11', qty: 54, warehouseId: 'wh-1' },
-  { id: 'bat-4', productId: 'prod-10', productName: 'Aashirvaad Shudh Chakki Atta (10kg)', batchNo: 'AAS-2609', mfgDate: '2026-09-01', expiryDate: '2026-12-05', qty: 14, warehouseId: 'wh-3' },
-  { id: 'bat-5', productId: 'prod-11', productName: 'MDH Garam Masala 100g (Box of 20)', batchNo: 'MDH-2604', mfgDate: '2026-04-18', expiryDate: '2026-12-28', qty: 26, warehouseId: 'wh-3' },
-  { id: 'bat-6', productId: 'prod-12', productName: 'Tata Tea Gold 1kg Commercial Pack', batchNo: 'TTG-2608', mfgDate: '2026-08-14', expiryDate: '2027-08-13', qty: 5, warehouseId: 'wh-3' },
-  { id: 'bat-7', productId: 'prod-25', productName: 'Asian Paints TruCare Interior Primer 20L', batchNo: 'AP-2606', mfgDate: '2026-06-20', expiryDate: '2028-06-19', qty: 19, warehouseId: 'wh-2' },
-];
+const batches = [];
 
 const customers = [
   { id: 'cust-1', name: 'Rajeshwari Hardware & Electricals', businessName: 'Rajeshwari Hardware & Electricals', mobile: '9829144510', email: 'orders@rajeshwarihw.demo', gstin: '08AABCR4412K1Z8 (DEMO)', registrationType: 'Regular', billingAddress: '19, Gopalpura Bypass Road, Jaipur', shippingAddress: '19, Gopalpura Bypass Road, Jaipur', state: 'Rajasthan', openingBalance: 0, creditLimit: 300000, paymentTerms: 'Net 15', status: 'Active' },
@@ -480,37 +472,13 @@ const grns = [
   { id: 'grn-5', grnNumber: 'GRN/26-27/005', date: '2026-11-16', poReference: 'PO-26-118', supplierId: 'sup-8', supplierName: 'PackPro Corrugation & Tapes', warehouseId: 'wh-3', items: [{ productId: 'prod-32', productName: 'Thermal Shipping Labels 4x6 (1000 Labels Roll)', orderedQty: 50, receivedQty: 50, damagedQty: 0, missingQty: 0 }], status: 'Completed', notes: 'Received at Vishwakarma Depot' },
 ];
 
-const stockMovements = [
-  { id: 'sm-1', date: '2026-11-03', productId: 'prod-18', productName: 'Crompton HighSpeed 1200mm Ceiling Fan', sku: 'HA-CRO-018', warehouseId: 'wh-2', warehouseName: 'Sitapura Industrial Hub', type: 'Purchase', qtyChange: 18, reference: 'PB/26-27/014', notes: 'GRN/26-27/003 received' },
-  { id: 'sm-2', date: '2026-11-06', productId: 'prod-29', productName: 'Wonder BOPP Transparent Packing Tape 48mm (72 Rolls)', sku: 'PK-WON-029', warehouseId: 'wh-3', warehouseName: 'Vishwakarma Depot', type: 'Sale', qtyChange: -10, reference: 'ST/26-27/019', notes: 'Dispatched to Narmada Packaging' },
-  { id: 'sm-3', date: '2026-11-11', productId: 'prod-13', productName: 'JK Copier A4 75 GSM Paper (500 Sheets)', sku: 'ST-JKC-013', warehouseId: 'wh-1', warehouseName: 'Jaipur Main Godown', type: 'Purchase', qtyChange: 100, reference: 'PB/26-27/015', notes: 'Restock from JK Paper' },
-  { id: 'sm-4', date: '2026-11-12', productId: 'prod-4', productName: 'Syska 20W LED Batten Tube Light', sku: 'EL-SYS-004', warehouseId: 'wh-2', warehouseName: 'Sitapura Industrial Hub', type: 'Sale', qtyChange: -35, reference: 'ST/26-27/021', notes: 'Sold to Kota Hostel Group' },
-  { id: 'sm-5', date: '2026-11-14', productId: 'prod-11', productName: 'MDH Garam Masala 100g (Box of 20)', sku: 'GR-MDH-011', warehouseId: 'wh-3', warehouseName: 'Vishwakarma Depot', type: 'Return In', qtyChange: 2, reference: 'CN/26-27/005', notes: 'Sales return accepted back' },
-  { id: 'sm-6', date: '2026-11-16', productId: 'prod-32', productName: 'Thermal Shipping Labels 4x6 (1000 Labels Roll)', sku: 'PK-LBL-032', warehouseId: 'wh-3', warehouseName: 'Vishwakarma Depot', type: 'Purchase', qtyChange: 50, reference: 'PB/26-27/016', notes: 'PackPro supply' },
-  { id: 'sm-7', date: '2026-11-18', productId: 'prod-12', productName: 'Tata Tea Gold 1kg Commercial Pack', sku: 'GR-TAT-012', warehouseId: 'wh-3', warehouseName: 'Vishwakarma Depot', type: 'Damaged', qtyChange: -3, reference: 'ADJ-26-014', notes: 'Moisture damage during monsoon inspection' },
-];
+const stockMovements = [];
 
-const eInvoices = [
-  { id: 'einv-1', invoiceId: 'inv-4', invoiceNumber: 'ST/26-27/004', customerName: 'Surya Electricals & Appliances', gstin: '27AADCS8831N1Z6 (DEMO)', grandTotal: invoices.find((i) => i.id === 'inv-4')?.grandTotal || 59840, irn: 'DEMO-IRN-8f42b910e4c17a9b30192d7c4a1b9e02f1234567', ackNo: 'DEMO-ACK-112600048291', ackDate: '2026-05-19 14:22:10', status: 'Generated (Demo)', qrPayload: 'DEMO-EINV|08AABCS1234F1Z5|27AADCS8831N1Z6|ST/26-27/004' },
-  { id: 'einv-2', invoiceId: 'inv-7', invoiceNumber: 'ST/26-27/007', customerName: 'Kaveri Tech Park Facility Mgmt', gstin: '29AABCK9102E1Z7 (DEMO)', grandTotal: invoices.find((i) => i.id === 'inv-7')?.grandTotal || 102020, irn: 'DEMO-IRN-4c19a722d9e44b1081725e6f8c3d1a90b7712345', ackNo: 'DEMO-ACK-112600079104', ackDate: '2026-07-08 11:05:44', status: 'Generated (Demo)', qrPayload: 'DEMO-EINV|08AABCS1234F1Z5|29AABCK9102E1Z7|ST/26-27/007' },
-  { id: 'einv-3', invoiceId: 'inv-14', invoiceNumber: 'ST/26-27/014', customerName: 'Surya Electricals & Appliances', gstin: '27AADCS8831N1Z6 (DEMO)', grandTotal: invoices.find((i) => i.id === 'inv-14')?.grandTotal || 144500, irn: 'DEMO-IRN-2a88c501f1b32d9048127c3a9e5b1d82a9901122', ackNo: 'DEMO-ACK-112600148220', ackDate: '2026-10-12 16:40:12', status: 'Generated (Demo)', qrPayload: 'DEMO-EINV|08AABCS1234F1Z5|27AADCS8831N1Z6|ST/26-27/014' },
-];
+const eInvoices = [];
 
-const eWayBills = [
-  { id: 'ewb-1', ewbNumber: 'DEMO-EWB-741088920145', invoiceId: 'inv-4', invoiceNumber: 'ST/26-27/004', customerName: 'Surya Electricals & Appliances', transporter: 'VRL Logistics Ltd (Demo)', vehicleNo: 'RJ-14-GC-4412', mode: 'Road', distanceKm: 1148, generatedDate: '2026-05-19', validUntil: '2026-05-30', status: 'Active (Demo)' },
-  { id: 'ewb-2', ewbNumber: 'DEMO-EWB-741092441088', invoiceId: 'inv-7', invoiceNumber: 'ST/26-27/007', customerName: 'Kaveri Tech Park Facility Mgmt', transporter: 'SafeExpress Pvt Ltd (Demo)', vehicleNo: 'KA-01-AG-8821', mode: 'Road', distanceKm: 1920, generatedDate: '2026-07-08', validUntil: '2026-07-22', status: 'Active (Demo)' },
-  { id: 'ewb-3', ewbNumber: 'DEMO-EWB-741099310244', invoiceId: 'inv-14', invoiceNumber: 'ST/26-27/014', customerName: 'Surya Electricals & Appliances', transporter: 'VRL Logistics Ltd (Demo)', vehicleNo: 'MH-04-DK-2290', mode: 'Road', distanceKm: 1148, generatedDate: '2026-10-12', validUntil: '2026-10-24', status: 'Active (Demo)' },
-  { id: 'ewb-4', ewbNumber: 'DEMO-EWB-741102884120', invoiceId: 'inv-18', invoiceNumber: 'ST/26-27/018', customerName: 'Mahalaxmi Traders - Delhi', transporter: 'Jaipur-Delhi Cargo (Demo)', vehicleNo: 'DL-1L-AB-5519', mode: 'Road', distanceKm: 280, generatedDate: '2026-11-02', validUntil: '2026-11-05', status: 'Active (Demo)' },
-];
+const eWayBills = [];
 
-const gstr2bRecords = [
-  { id: '2b-1', supplierName: 'Havells India Distribution Hub', gstin: '08AAACH1122A1Z5 (DEMO)', invoiceNo: 'HAV/RAJ/26-081', date: '2026-04-02', taxable2B: 22760, tax2B: 2731.2, booksTaxable: 22760, booksTax: 2731.2, matchStatus: 'Matched', itcEligible: true },
-  { id: '2b-2', supplierName: 'Crompton Greaves Appliances Dist.', gstin: '27AAACC5566E1Z4 (DEMO)', invoiceNo: 'CRM/MH/840', date: '2026-11-03', taxable2B: 40390, tax2B: 7270.2, booksTaxable: 40390, booksTax: 7270.2, matchStatus: 'Matched', itcEligible: true },
-  { id: '2b-3', supplierName: 'JK Paper Merchants Delhi', gstin: '07AAACJ7788G1Z7 (DEMO)', invoiceNo: 'JKP/DL/518', date: '2026-11-11', taxable2B: 33750, tax2B: 4950, booksTaxable: 33750, booksTax: 4800, matchStatus: 'Tax Mismatch', itcEligible: true },
-  { id: '2b-4', supplierName: 'PackPro Corrugation & Tapes', gstin: '08AABCP8899H1Z3 (DEMO)', invoiceNo: 'PKP/JPR/229', date: '2026-11-16', taxable2B: 0, tax2B: 0, booksTaxable: 33500, booksTax: 4860, matchStatus: 'Missing in GSTR-2B', itcEligible: false },
-  { id: '2b-5', supplierName: 'Metro Courier Services (Unrecorded)', gstin: '08AAACM8110P1Z9 (DEMO)', invoiceNo: 'MCS/JPR/902', date: '2026-11-14', taxable2B: 6400, tax2B: 1152, booksTaxable: 0, booksTax: 0, matchStatus: 'Missing in Books', itcEligible: false },
-  { id: '2b-6', supplierName: 'Adani Wilmar Wholesale Agency', gstin: '08AABCA3344C1Z9 (DEMO)', invoiceNo: 'AWL/JPR/589', date: '2026-10-22', taxable2B: 89850, tax2B: 4492.5, booksTaxable: 89850, booksTax: 4492.5, matchStatus: 'GSTIN Mismatch', itcEligible: true },
-];
+const gstr2bRecords = [];
 
 const gstCalendar = [
   { id: 'cal-1', period: 'October 2026', returnType: 'GSTR-1', dueDate: '2026-11-11', prepStatus: 'Ready', filingStatus: 'Demo Prepared' },
@@ -557,41 +525,11 @@ const journalEntries = [
   },
 ];
 
-const notifications = [
-  { id: 'notif-1', category: 'Low Stock', title: 'Out of Stock: APC 600VA Back-UPS Power Backup', message: 'Current stock is 0 PCS (Minimum level: 6 PCS). Raise a purchase order with Luminous/APC supplier.', date: '2026-11-21', read: false },
-  { id: 'notif-2', category: 'Low Stock', title: 'Out of Stock: Solo Lever Arch Box File Foolscap', message: 'Current stock is 0 SET (Minimum level: 10 SET).', date: '2026-11-21', read: false },
-  { id: 'notif-3', category: 'Low Stock', title: 'Low Stock Alert: Prestige 1.5L Electric Kettle', message: 'Only 4 PCS remaining in Sitapura Industrial Hub (Min stock: 12 PCS).', date: '2026-11-20', read: false },
-  { id: 'notif-4', category: 'Low Stock', title: 'Low Stock Alert: Syska 20W LED Batten Tube Light', message: '8 PCS left against minimum threshold of 25 PCS.', date: '2026-11-20', read: false },
-  { id: 'notif-5', category: 'Expiry', title: 'Batch Expiry Alert: Aashirvaad Chakki Atta (10kg)', message: 'Batch AAS-2609 (14 PKT) expires on 05 Dec 2026.', date: '2026-11-19', read: false },
-  { id: 'notif-6', category: 'Expiry', title: 'Batch Expiry Alert: Fortune Sunflower Oil 15L', message: 'Batch FOR-26A1 (28 PCS) expires on 15 Dec 2026.', date: '2026-11-19', read: true },
-  { id: 'notif-7', category: 'Payment', title: 'Overdue Receivable: Rajeshwari Hardware', message: 'Invoice ST/26-27/015 is overdue since 03 Nov 2026.', date: '2026-11-18', read: false },
-  { id: 'notif-8', category: 'Payment', title: 'Partial Payment Received: Pinkcity Supermart', message: '40% settlement received for ST/26-27/016 via UPI.', date: '2026-11-18', read: true },
-  { id: 'notif-9', category: 'GST', title: 'GSTR-3B Due Reminder (Nov 2026 Period)', message: 'Review Output GST vs Eligible ITC before 20 Dec 2026.', date: '2026-11-17', read: false },
-  { id: 'notif-10', category: 'GST', title: 'GSTR-2B Reconciliation Mismatch Detected', message: '1 Tax Mismatch and 1 Missing in GSTR-2B item found in Nov recon.', date: '2026-11-16', read: true },
-  { id: 'notif-11', category: 'Integration', title: 'Demo Mode: IRP & E-Way Bill Sandbox Active', message: 'E-Invoice IRN and E-Way Bill actions generate simulated demo records locally.', date: '2026-11-15', read: true },
-  { id: 'notif-12', category: 'Subscription', title: 'Growth Plan Active — Next Renewal 31 Mar 2027', message: 'Sharma Traders is on the Growth Annual SaaS plan (Demo).', date: '2026-11-10', read: true },
-];
+const notifications = [];
 
 const users = [];
 
-const auditLogs = [
-  { id: 'aud-1', user: 'Anil Sharma', action: 'Created Invoice', module: 'Sales', recordRef: 'ST/26-27/026', timestamp: '2026-11-21 09:20:11', prevValue: '—', newValue: 'Finalized · UPI Paid' },
-  { id: 'aud-2', user: 'Priya Maheshwari', action: 'Updated GSTR-2B', module: 'GST', recordRef: 'JKP/DL/518', timestamp: '2026-11-20 17:45:02', prevValue: 'Unverified', newValue: 'Tax Mismatch Flagged' },
-  { id: 'aud-3', user: 'Rohit Jangid', action: 'Saved Draft Invoice', module: 'Sales', recordRef: 'ST/26-27/025', timestamp: '2026-11-19 16:12:40', prevValue: '—', newValue: 'Draft for Kaveri Tech Park' },
-  { id: 'aud-4', user: 'Anil Sharma', action: 'Cancelled Invoice', module: 'Sales', recordRef: 'ST/26-27/023', timestamp: '2026-11-17 15:08:29', prevValue: 'Finalized', newValue: 'Cancelled (Customer changed order)' },
-  { id: 'aud-5', user: 'Rakesh Verma', action: 'Stock Damage Entry', module: 'Inventory', recordRef: 'ADJ-26-014', timestamp: '2026-11-18 11:30:00', prevValue: '8 PCS', newValue: '5 PCS (-3 Damaged)' },
-  { id: 'aud-6', user: 'Rakesh Verma', action: 'Recorded GRN', module: 'Purchases', recordRef: 'GRN/26-27/005', timestamp: '2026-11-16 14:15:22', prevValue: 'Ordered: 50', newValue: 'Received: 50 PCS' },
-  { id: 'aud-7', user: 'Priya Maheshwari', action: 'Issued Credit Note', module: 'Sales Returns', recordRef: 'CN/26-27/005', timestamp: '2026-11-14 13:05:18', prevValue: '—', newValue: 'Issued against ST/26-27/016' },
-  { id: 'aud-8', user: 'Rohit Jangid', action: 'Recorded Payment In', module: 'Payments', recordRef: 'RCPT/26-27/017', timestamp: '2026-11-12 18:10:04', prevValue: 'Unpaid', newValue: 'Partial Payment Recorded' },
-  { id: 'aud-9', user: 'Anil Sharma', action: 'Created Purchase Bill', module: 'Purchases', recordRef: 'PB/26-27/015', timestamp: '2026-11-11 12:44:50', prevValue: '—', newValue: 'JK Paper Merchants Delhi' },
-  { id: 'aud-10', user: 'Priya Maheshwari', action: 'Recorded Expense', module: 'Expenses', recordRef: 'EXP/26-27/013', timestamp: '2026-11-05 10:20:00', prevValue: '—', newValue: '₹53,100 Showroom Rent' },
-  { id: 'aud-11', user: 'Anil Sharma', action: 'Generated Demo E-Way Bill', module: 'E-Way Bill', recordRef: 'DEMO-EWB-741102884120', timestamp: '2026-11-02 15:32:10', prevValue: 'Pending', newValue: 'Active (Demo)' },
-  { id: 'aud-12', user: 'Priya Maheshwari', action: 'Posted Journal Entry', module: 'Accounting', recordRef: 'JV/26-27/002', timestamp: '2026-11-01 09:50:12', prevValue: '—', newValue: 'Depreciation ₹12,500' },
-  { id: 'aud-13', user: 'Anil Sharma', action: 'Generated Demo IRN', module: 'E-Invoice', recordRef: 'ST/26-27/014', timestamp: '2026-10-12 16:40:12', prevValue: 'Not Generated', newValue: 'Generated (Demo)' },
-  { id: 'aud-14', user: 'Rakesh Verma', action: 'Updated Min Stock', module: 'Inventory', recordRef: 'HA-PRE-021', timestamp: '2026-10-10 11:05:33', prevValue: 'Min: 8', newValue: 'Min: 12' },
-  { id: 'aud-15', user: 'Anil Sharma', action: 'Added Customer', module: 'Parties', recordRef: 'cust-15', timestamp: '2026-10-05 14:22:09', prevValue: '—', newValue: 'Marwar Builders & Contractors' },
-  { id: 'aud-16', user: 'Priya Maheshwari', action: 'Updated GST Preferences', module: 'Settings', recordRef: 'GST-CONFIG', timestamp: '2026-04-01 10:00:00', prevValue: 'Exclusive', newValue: 'Tax Exclusive + Auto Round-Off' },
-];
+const auditLogs = [];
 
 const settings = {
   gst: {

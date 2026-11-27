@@ -39,6 +39,54 @@ export const loadAppState = () => {
         (u) => !u.email?.endsWith('.demo') && !String(u.id).startsWith('usr-')
       );
     }
+    // Strip legacy fake demo batches
+    if (Array.isArray(parsed.batches)) {
+      parsed.batches = parsed.batches.filter(
+        (b) =>
+          !String(b.id).startsWith('bat-') &&
+          !['FOR-26A1', 'FOR-26B4', 'IGB-2605', 'AAS-2609', 'MDH-2604', 'TTG-2608', 'AP-2606'].includes(b.batchNo)
+      );
+    }
+    // Strip legacy fake demo stock movements
+    if (Array.isArray(parsed.stockMovements)) {
+      parsed.stockMovements = parsed.stockMovements.filter(
+        (m) =>
+          !String(m.id).startsWith('sm-') &&
+          !['PB/26-27/014', 'ST/26-27/019', 'PB/26-27/015', 'ST/26-27/021', 'CN/26-27/005', 'PB/26-27/016', 'ADJ-26-014'].includes(m.reference)
+      );
+    }
+    // Strip legacy fake demo GSTR-2B records
+    if (Array.isArray(parsed.gstr2bRecords)) {
+      parsed.gstr2bRecords = parsed.gstr2bRecords.filter(
+        (r) =>
+          !String(r.id).startsWith('2b-') &&
+          !r.gstin?.includes('(DEMO)') &&
+          !['HAV/RAJ/26-081', 'CRM/MH/840', 'JKP/DL/518', 'PKP/JPR/229', 'MCS/JPR/902', 'AWL/JPR/589'].includes(r.invoiceNo)
+      );
+    }
+    // Strip legacy fake demo e-invoices and e-way bills
+    if (Array.isArray(parsed.eInvoices)) {
+      parsed.eInvoices = parsed.eInvoices.filter(
+        (e) => !String(e.id).startsWith('einv-') && !e.gstin?.includes('(DEMO)')
+      );
+    }
+    if (Array.isArray(parsed.eWayBills)) {
+      parsed.eWayBills = parsed.eWayBills.filter(
+        (e) => !String(e.id).startsWith('ewb-') && !String(e.status).includes('(Demo)')
+      );
+    }
+    // Strip legacy fake demo notifications and audit logs
+    if (Array.isArray(parsed.notifications)) {
+      parsed.notifications = parsed.notifications.filter(
+        (n) => !String(n.id).startsWith('notif-')
+      );
+    }
+    if (Array.isArray(parsed.auditLogs)) {
+      parsed.auditLogs = parsed.auditLogs.filter(
+        (a) => !String(a.id).startsWith('aud-')
+      );
+    }
+    saveAppState(parsed);
     return parsed;
   } catch {
     const initial = createInitialDemoState();

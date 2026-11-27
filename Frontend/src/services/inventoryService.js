@@ -1,4 +1,14 @@
+import api from './api';
 import { round2 } from './calculationService';
+
+export const getStockMovements = async (params = {}) => {
+  try {
+    const res = await api.get('/inventory/movements', { params });
+    return res.data;
+  } catch (err) {
+    return { movements: [] };
+  }
+};
 
 export const createStockMovementRecord = ({
   productId,

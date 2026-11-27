@@ -4,6 +4,7 @@ import {
   saveAppState,
   resetDemoData,
 } from '../services/storageService';
+import * as inventoryService from '../services/inventoryService';
 import {
   applyProductStockUpdates,
   createStockMovementRecord,
@@ -226,6 +227,7 @@ export const AppProvider = ({ children }) => {
         eInvoicesRes,
         eWayBillsRes,
         calendarRes,
+        movementsRes,
       ] = await Promise.allSettled([
         salesInvoiceService.getInvoices({ limit: 100 }),
         quotationService.getQuotations({ limit: 100 }),
@@ -245,6 +247,7 @@ export const AppProvider = ({ children }) => {
         eInvoiceService.getEInvoices({ limit: 100 }),
         eWayBillService.getEWayBills({ limit: 100 }),
         gstService.getFilingCalendar(),
+        inventoryService.getStockMovements({ limit: 100 }),
       ]);
 
       setState((prev) => {
@@ -555,6 +558,41 @@ export const AppProvider = ({ children }) => {
         if (calendarRes.status === 'fulfilled' && calendarRes.value) {
           next.gstCalendar = Array.isArray(calendarRes.value) ? calendarRes.value : (calendarRes.value.calendar || calendarRes.value.data || []);
         }
+
+        if (movementsRes.status === 'fulfilled' && movementsRes.value) {
+          const rawMv = movementsRes.value.movements || movementsRes.value.data?.movements || [];
+          next.stockMovements = rawMv.map((m) => ({
+            ...m,
+            id: String(m._id || m.id),
+            date: m.date ? new Date(m.date).toISOString().slice(0, 10) : (m.createdAt ? new Date(m.createdAt).toISOString().slice(0, 10) : ''),
+            productName: m.productName || m.productId?.name || '',
+            warehouseName: m.warehouseName || m.warehouseId?.warehouseName || m.warehouseId?.name || '',
+            sku: m.sku || m.productId?.SKU || '',
+            qtyChange: m.quantity !== undefined ? m.quantity : (m.qtyChange || 0),
+            type: m.movementType === 'in' ? 'Stock In' : (m.movementType === 'out' ? 'Stock Out' : (m.type || 'Adjustment')),
+            reference: m.referenceNumber || m.reference || '—',
+            notes: m.notes || m.description || '',
+          }));
+        } else {
+          next.stockMovements = (next.stockMovements || []).filter(
+            (m) =>
+              !String(m.id).startsWith('sm-') &&
+              !['PB/26-27/014', 'ST/26-27/019', 'PB/26-27/015', 'ST/26-27/021', 'CN/26-27/005', 'PB/26-27/016', 'ADJ-26-014'].includes(m.reference)
+          );
+        }
+
+        // Clean any fake demo batches or fake GSTR-2B records for authenticated tenants
+        next.batches = (next.batches || []).filter(
+          (b) =>
+            !String(b.id).startsWith('bat-') &&
+            !['FOR-26A1', 'FOR-26B4', 'IGB-2605', 'AAS-2609', 'MDH-2604', 'TTG-2608', 'AP-2606'].includes(b.batchNo)
+        );
+        next.gstr2bRecords = (next.gstr2bRecords || []).filter(
+          (r) =>
+            !String(r.id).startsWith('2b-') &&
+            !r.gstin?.includes('(DEMO)') &&
+            !['HAV/RAJ/26-081', 'CRM/MH/840', 'JKP/DL/518', 'PKP/JPR/229', 'MCS/JPR/902', 'AWL/JPR/589'].includes(r.invoiceNo)
+        );
 
         return next;
       });
