@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
   UserPlus,
+  Loader2,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { calculateInvoiceTotals, formatINR } from '../../services/calculationService';
@@ -350,38 +351,61 @@ export const POSBillingPage = () => {
         ...computed,
       };
 
+      const currentCart = [...cart];
       const saved = await saveSalesInvoice(payload, paymentPayload);
-      const invoiceData = saved?.invoice || saved?.data || saved || {};
+      const invoiceData = saved?.data || saved?.invoice || saved || {};
+
+      const receiptItems = (currentCart && currentCart.length > 0)
+        ? currentCart.map((c) => ({
+            name: c.name || c.productName || 'Item',
+            productName: c.name || c.productName || 'Item',
+            qty: c.qty || c.quantity || 1,
+            quantity: c.qty || c.quantity || 1,
+            rate: c.rate || c.unitPrice || 0,
+            unitPrice: c.rate || c.unitPrice || 0,
+            gstRate: c.gstRate || 0,
+            totalAmount: c.totalAmount !== undefined
+              ? c.totalAmount
+              : Number(((c.rate || 0) * (c.qty || 1) * (1 + (c.gstRate || 0) / 100)).toFixed(2)),
+            lineTotal: c.totalAmount !== undefined
+              ? c.totalAmount
+              : Number(((c.rate || 0) * (c.qty || 1) * (1 + (c.gstRate || 0) / 100)).toFixed(2)),
+          }))
+        : ((invoiceData.items || []).map((it) => ({
+            name: it.productName || it.name || 'Item',
+            productName: it.productName || it.name || 'Item',
+            qty: it.quantity || it.qty || 1,
+            quantity: it.quantity || it.qty || 1,
+            rate: it.unitPrice || it.rate || 0,
+            unitPrice: it.unitPrice || it.rate || 0,
+            gstRate: it.gstRate || 0,
+            totalAmount: it.lineTotal !== undefined ? it.lineTotal : ((it.unitPrice || 0) * (it.quantity || 1)),
+            lineTotal: it.lineTotal !== undefined ? it.lineTotal : ((it.unitPrice || 0) * (it.quantity || 1)),
+          })));
+
+      const receiptTaxable = invoiceData.taxableAmount !== undefined && Number(invoiceData.taxableAmount) > 0
+        ? Number(invoiceData.taxableAmount)
+        : (invoiceData.taxableValue !== undefined && Number(invoiceData.taxableValue) > 0 ? Number(invoiceData.taxableValue) : computed.taxableValue);
+
+      const receiptTotalTax = (invoiceData.cgstTotal !== undefined || invoiceData.igstTotal !== undefined)
+        ? ((Number(invoiceData.cgstTotal) || 0) + (Number(invoiceData.sgstTotal) || 0) + (Number(invoiceData.igstTotal) || 0) + (Number(invoiceData.cessTotal) || 0))
+        : (invoiceData.totalTax !== undefined && Number(invoiceData.totalTax) > 0 ? Number(invoiceData.totalTax) : computed.totalTax);
+
+      const receiptGrandTotal = invoiceData.grandTotal !== undefined && Number(invoiceData.grandTotal) > 0
+        ? Number(invoiceData.grandTotal)
+        : computed.grandTotal;
 
       const receiptData = {
         invoiceNumber: invoiceData.invoiceNumber || payload.invoiceNumber || 'INV-0001',
         date: payload.date || (invoiceData.invoiceDate ? new Date(invoiceData.invoiceDate).toLocaleDateString('en-IN') : today),
-        customerName: activeCustomer?.name || invoiceData.partyName || payload.customerName || 'Walk-in Customer',
-        customerGstin: activeCustomer?.gstin || activeCustomer?.GSTIN || invoiceData.partyGSTIN || '',
+        customerName: activeCustomer?.name || invoiceData.customerName || invoiceData.partyName || payload.customerName || 'Walk-in Customer',
+        customerGstin: activeCustomer?.gstin || activeCustomer?.GSTIN || invoiceData.customerGstin || invoiceData.partyGSTIN || '',
         paymentMethod: displayMethod,
-        taxableValue: invoiceData.taxableAmount !== undefined ? invoiceData.taxableAmount : computed.taxableValue,
-        totalTax: (invoiceData.cgstTotal !== undefined || invoiceData.igstTotal !== undefined)
-          ? ((invoiceData.cgstTotal || 0) + (invoiceData.sgstTotal || 0) + (invoiceData.igstTotal || 0) + (invoiceData.cessTotal || 0))
-          : computed.totalTax,
-        grandTotal: invoiceData.grandTotal !== undefined ? invoiceData.grandTotal : computed.grandTotal,
+        taxableValue: receiptTaxable,
+        totalTax: receiptTotalTax,
+        grandTotal: receiptGrandTotal,
         roundOff: invoiceData.roundOff !== undefined ? invoiceData.roundOff : computed.roundOff,
-        items: (cart && cart.length > 0)
-          ? cart.map((c) => ({
-              name: c.name || c.productName,
-              qty: c.qty || c.quantity || 1,
-              rate: c.rate || c.unitPrice || 0,
-              gstRate: c.gstRate || 0,
-              totalAmount: c.totalAmount !== undefined
-                ? c.totalAmount
-                : Number(((c.rate || 0) * (c.qty || 1) * (1 + (c.gstRate || 0) / 100)).toFixed(2)),
-            }))
-          : (invoiceData.items || []).map((it) => ({
-              name: it.productName || it.name,
-              qty: it.quantity || it.qty || 1,
-              rate: it.unitPrice || it.rate || 0,
-              gstRate: it.gstRate || 0,
-              totalAmount: it.lineTotal !== undefined ? it.lineTotal : ((it.unitPrice || 0) * (it.quantity || 1)),
-            })),
+        items: receiptItems,
       };
 
       setReceiptInv(receiptData);
@@ -671,7 +695,7 @@ export const POSBillingPage = () => {
             <div className="flex gap-2">
               <button
                 type="button"
-                disabled={!cart.length}
+                disabled={!cart.length || isCheckingOut}
                 onClick={handleHoldBill}
                 className={`${btnSecondary} flex-1`}
               >
@@ -679,11 +703,20 @@ export const POSBillingPage = () => {
               </button>
               <button
                 type="button"
-                disabled={!cart.length}
+                disabled={!cart.length || isCheckingOut}
                 onClick={handleCheckout}
-                className={`${btnPrimary} flex-1`}
+                className={`${btnPrimary} flex-1 justify-center ${isCheckingOut ? 'cursor-wait opacity-90' : ''}`}
               >
-                <CheckCircle2 className="h-3.5 w-3.5" /> Pay &amp; Receipt
+                {isCheckingOut ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin text-white" />
+                    <span>Generating Receipt...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Pay &amp; Generate Receipt
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -719,7 +752,7 @@ export const POSBillingPage = () => {
           <div className="space-y-3">
             <div id="pos-thermal-receipt" className="mx-auto max-w-[320px] rounded border border-slate-200 bg-white p-4 space-y-3 font-mono text-xs text-slate-900">
               <div className="text-center border-b border-dashed border-slate-300 pb-2">
-                <div className="text-sm font-bold">{state.business.businessName}</div>
+                <div className="text-sm font-bold">{(state.business?.businessName || 'Artha Tech Enterprises').replace(/Aurelle/gi, 'Artha')}</div>
                 <div className="text-[11px]">{state.business.address}, {state.business.city}</div>
                 <div className="text-[11px]">GSTIN: {state.business.gstin}</div>
               </div>
@@ -791,7 +824,7 @@ export const POSBillingPage = () => {
                 </div>
               </div>
               <div className="border-t border-dashed border-slate-300 pt-2 text-center text-[10px] text-slate-500">
-                Thank you for shopping with {state.business.businessName}
+                Thank you for shopping with {(state.business?.businessName || 'Artha Tech Enterprises').replace(/Aurelle/gi, 'Artha')}
               </div>
             </div>
 

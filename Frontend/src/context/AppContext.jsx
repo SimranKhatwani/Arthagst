@@ -1731,16 +1731,23 @@ export const AppProvider = ({ children }) => {
           savedInv = await salesInvoiceService.createInvoice(createPayload);
         }
 
-        const invoiceRecord = savedInv?.invoice || savedInv;
+        // Unpack backend response: handle { data: invoice }, { invoice }, or direct object
+        const rawInvoice = savedInv?.data || savedInv?.invoice || savedInv;
+        const invoiceRecord = { ...(rawInvoice?.data || rawInvoice) };
         const invId = invoiceRecord._id || invoiceRecord.id;
 
-        if (invoicePayload.status === 'Finalized' && invoiceRecord.invoiceStatus !== 'posted') {
-          const postedRes = await salesInvoiceService.postInvoice(invId);
-          Object.assign(invoiceRecord, postedRes?.invoice || postedRes);
+        if (invoicePayload.status === 'Finalized' && invId && invoiceRecord.invoiceStatus !== 'posted') {
+          try {
+            const postedRes = await salesInvoiceService.postInvoice(invId);
+            const postedData = postedRes?.data || postedRes?.invoice || postedRes;
+            Object.assign(invoiceRecord, postedData);
+          } catch (postErr) {
+            console.warn('Auto-post sales invoice error:', postErr.message);
+          }
         }
 
         const remainingBal = invoiceRecord.balanceAmount !== undefined ? invoiceRecord.balanceAmount : (invoiceRecord.outstandingBalance !== undefined ? invoiceRecord.outstandingBalance : 0);
-        if (paymentDetails && Number(paymentDetails.amount) > 0 && remainingBal > 0) {
+        if (paymentDetails && Number(paymentDetails.amount) > 0 && remainingBal > 0 && invId) {
           try {
             const payAmt = Math.min(Number(paymentDetails.amount), remainingBal);
             await paymentService.createPayment({
@@ -1752,10 +1759,45 @@ export const AppProvider = ({ children }) => {
               referenceNumber: paymentDetails.referenceNo || `INV-${invoiceRecord.invoiceNumber}`,
               allocations: [{ salesInvoiceId: String(invId), allocatedAmount: payAmt }],
             });
+            invoiceRecord.paidAmount = (invoiceRecord.paidAmount || 0) + payAmt;
+            invoiceRecord.balanceAmount = Math.max(0, (invoiceRecord.balanceAmount || 0) - payAmt);
+            invoiceRecord.paymentStatus = invoiceRecord.balanceAmount === 0 ? 'paid' : 'partial';
           } catch (payErr) {
             console.warn('Initial invoice payment warning:', payErr.message);
           }
         }
+
+        // Normalize invoice fields for unified frontend consumption
+        invoiceRecord.customerName = invoiceRecord.customerName || invoiceRecord.partyName || invoicePayload.customerName || 'Walk-in Customer';
+        invoiceRecord.partyName = invoiceRecord.customerName;
+        invoiceRecord.paymentMethod = invoicePayload.paymentMethod || invoiceRecord.paymentMethod || 'Cash';
+        invoiceRecord.taxableValue = invoiceRecord.taxableValue ?? invoiceRecord.taxableAmount ?? invoicePayload.taxableValue ?? 0;
+        invoiceRecord.taxableAmount = invoiceRecord.taxableValue;
+        invoiceRecord.totalTax = invoiceRecord.totalTax ?? ((invoiceRecord.cgstTotal || 0) + (invoiceRecord.sgstTotal || 0) + (invoiceRecord.igstTotal || 0) + (invoiceRecord.cessTotal || 0));
+        if (invoiceRecord.totalTax === 0 && invoicePayload.totalTax) {
+          invoiceRecord.totalTax = invoicePayload.totalTax;
+        }
+
+        // Normalize items so neither .name nor .productName, .qty nor .quantity is ever missing
+        invoiceRecord.items = (invoiceRecord.items && invoiceRecord.items.length > 0 ? invoiceRecord.items : (invoicePayload.items || [])).map((it, idx) => {
+          const orig = invoicePayload.items?.[idx] || {};
+          const itName = it.productName || it.name || orig.name || orig.productName || 'Item';
+          const itQty = it.quantity ?? it.qty ?? orig.qty ?? orig.quantity ?? 1;
+          const itRate = it.unitPrice ?? it.rate ?? orig.rate ?? orig.unitPrice ?? 0;
+          const itTotal = it.lineTotal ?? it.totalAmount ?? orig.totalAmount ?? (itRate * itQty);
+          return {
+            ...it,
+            name: itName,
+            productName: itName,
+            qty: itQty,
+            quantity: itQty,
+            rate: itRate,
+            unitPrice: itRate,
+            totalAmount: itTotal,
+            lineTotal: itTotal,
+            gstRate: it.gstRate ?? orig.gstRate ?? 0,
+          };
+        });
 
         setState((prev) => {
           const invList = prev.invoices || [];

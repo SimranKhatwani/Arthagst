@@ -9,6 +9,7 @@ import {
   XCircle,
   RotateCcw,
   IndianRupee,
+  Loader2,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { formatINR, formatDateIN } from '../../services/calculationService';
@@ -38,6 +39,7 @@ export const InvoicesPage = () => {
   const [previewInv, setPreviewInv] = useState(null);
   const [payModalInv, setPayModalInv] = useState(null);
   const [payForm, setPayForm] = useState({ amount: '', method: 'UPI', referenceNo: '', date: new Date().toISOString().slice(0, 10) });
+  const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
 
   const filteredInvoices = useMemo(() => {
     return (state.invoices || []).filter((inv) => {
@@ -97,22 +99,27 @@ export const InvoicesPage = () => {
 
   const submitPayment = async (e) => {
     e.preventDefault();
-    if (!payModalInv) return;
-    const bal = Math.max(0, (payModalInv.grandTotal || 0) - (payModalInv.amountPaid || 0));
-    const amt = Math.min(bal, Number(payForm.amount) || 0);
-    const ok = await recordPayment({
-      type: 'Payment In',
-      date: payForm.date,
-      partyId: payModalInv.customerId,
-      partyName: payModalInv.customerName,
-      invoiceId: payModalInv.id || payModalInv._id,
-      invoiceNumber: payModalInv.invoiceNumber,
-      amount: amt,
-      method: payForm.method,
-      referenceNo: payForm.referenceNo,
-      notes: `Invoice payment for ${payModalInv.invoiceNumber}`,
-    });
-    if (ok) setPayModalInv(null);
+    if (!payModalInv || isSubmittingPayment) return;
+    setIsSubmittingPayment(true);
+    try {
+      const bal = Math.max(0, (payModalInv.grandTotal || 0) - (payModalInv.amountPaid || 0));
+      const amt = Math.min(bal, Number(payForm.amount) || 0);
+      const ok = await recordPayment({
+        type: 'Payment In',
+        date: payForm.date,
+        partyId: payModalInv.customerId,
+        partyName: payModalInv.customerName,
+        invoiceId: payModalInv.id || payModalInv._id,
+        invoiceNumber: payModalInv.invoiceNumber,
+        amount: amt,
+        method: payForm.method,
+        referenceNo: payForm.referenceNo,
+        notes: `Invoice payment for ${payModalInv.invoiceNumber}`,
+      });
+      if (ok) setPayModalInv(null);
+    } finally {
+      setIsSubmittingPayment(false);
+    }
   };
 
   const columns = [
@@ -395,8 +402,15 @@ export const InvoicesPage = () => {
             <button type="button" onClick={() => setPayModalInv(null)} className={btnSecondary}>
               Cancel
             </button>
-            <button type="submit" form="quick-pay-form" className={btnPrimary}>
-              Save Payment
+            <button type="submit" form="quick-pay-form" disabled={isSubmittingPayment} className={btnPrimary}>
+              {isSubmittingPayment ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Saving Payment...
+                </>
+              ) : (
+                'Save Payment'
+              )}
             </button>
           </>
         }

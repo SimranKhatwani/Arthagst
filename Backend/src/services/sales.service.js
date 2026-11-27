@@ -470,15 +470,16 @@ export const postInvoice = async (tenantId, userId, invoiceId) => {
         tenantId,
       }).session(session);
 
-      if (product && product.productType === 'goods' && product.trackInventory) {
+      if (product && product.productType !== 'service') {
         let inventory = await Inventory.findOne({
           tenantId,
           productId: product._id,
           warehouseId: invoice.warehouseId,
         }).session(session);
 
-        if (!inventory && ((product.stock && product.stock >= item.quantity) || (product.openingStock && product.openingStock >= item.quantity))) {
-          const startingQty = product.stock || product.openingStock || 0;
+        const startingQty = product.stock !== undefined ? product.stock : (product.openingStock || 0);
+
+        if (!inventory) {
           inventory = new Inventory({
             tenantId,
             productId: product._id,
@@ -489,23 +490,14 @@ export const postInvoice = async (tenantId, userId, invoiceId) => {
           });
         }
 
-        const available = inventory ? inventory.availableQuantity : 0;
-        if (!inventory || available < item.quantity) {
-          const error = new Error(
-            `Insufficient stock for '${item.productName}' in warehouse '${invoice.warehouseName}'. Available: ${available}, Required: ${item.quantity}`
-          );
-          error.statusCode = 400;
-          throw error;
-        }
-
-        const prevStock = inventory.quantity;
-        const newStock = prevStock - item.quantity;
+        const prevStock = inventory.quantity !== undefined ? inventory.quantity : startingQty;
+        const newStock = Math.max(0, prevStock - item.quantity);
 
         inventory.quantity = newStock;
-        inventory.availableQuantity = newStock - inventory.reservedQuantity;
+        inventory.availableQuantity = Math.max(0, newStock - (inventory.reservedQuantity || 0));
         await inventory.save({ session });
 
-        product.stock = Math.max(0, (product.stock || 0) - item.quantity);
+        product.stock = Math.max(0, (product.stock !== undefined ? product.stock : startingQty) - item.quantity);
         await product.save({ session });
 
         // Record append-only stock movement

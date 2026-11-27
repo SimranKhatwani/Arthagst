@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Plus, Trash2, Eye, Printer, Save, CheckCircle2, UserPlus } from 'lucide-react';
+import { Plus, Trash2, Eye, Printer, Save, CheckCircle2, UserPlus, Loader2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { INDIAN_STATES, GST_RATES, PAYMENT_METHODS, REGISTRATION_TYPES } from '../../data/constants';
 import { calculateInvoiceTotals, formatINR } from '../../services/calculationService';
@@ -792,8 +792,17 @@ export const CreateInvoicePage = () => {
               onClick={() => handleSave('Finalized', true)}
               className={`${btnSecondary} flex-1 disabled:opacity-50`}
             >
-              <Printer className="h-3.5 w-3.5" />
-              Generate &amp; Print
+              {isSaving ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Printer className="h-3.5 w-3.5" />
+                  Generate &amp; Print
+                </>
+              )}
             </button>
             <button
               type="button"
@@ -801,8 +810,17 @@ export const CreateInvoicePage = () => {
               onClick={() => handleSave('Finalized', false)}
               className={`${btnPrimary} flex-1 disabled:opacity-50`}
             >
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              {isSaving ? 'Generating...' : 'Generate Invoice'}
+              {isSaving ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Generate Invoice
+                </>
+              )}
             </button>
           </div>
         </div>
