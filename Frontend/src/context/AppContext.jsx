@@ -130,7 +130,7 @@ export const AppProvider = ({ children }) => {
               hsn: p.HSN || p.hsn,
               HSN: p.HSN || p.hsn,
               minStock: p.lowStockAlert !== undefined ? p.lowStockAlert : p.minStock,
-              stock: p.openingStock !== undefined ? p.openingStock : (p.stock || 0),
+              stock: p.stock !== undefined ? p.stock : (p.openingStock || 0),
             };
           });
         }
@@ -1739,16 +1739,18 @@ export const AppProvider = ({ children }) => {
           Object.assign(invoiceRecord, postedRes?.invoice || postedRes);
         }
 
-        if (paymentDetails && Number(paymentDetails.amount) > 0) {
+        const remainingBal = invoiceRecord.balanceAmount !== undefined ? invoiceRecord.balanceAmount : (invoiceRecord.outstandingBalance !== undefined ? invoiceRecord.outstandingBalance : 0);
+        if (paymentDetails && Number(paymentDetails.amount) > 0 && remainingBal > 0) {
           try {
+            const payAmt = Math.min(Number(paymentDetails.amount), remainingBal);
             await paymentService.createPayment({
               direction: 'in',
               partyId,
               paymentDate: invoicePayload.date || new Date().toISOString().slice(0, 10),
-              amount: Number(paymentDetails.amount),
+              amount: payAmt,
               paymentMethod: paymentDetails.method === 'Cash' ? 'cash' : (paymentDetails.method === 'UPI' ? 'UPI' : 'bank'),
               referenceNumber: paymentDetails.referenceNo || `INV-${invoiceRecord.invoiceNumber}`,
-              allocations: [{ salesInvoiceId: String(invId), allocatedAmount: Number(paymentDetails.amount) }],
+              allocations: [{ salesInvoiceId: String(invId), allocatedAmount: payAmt }],
             });
           } catch (payErr) {
             console.warn('Initial invoice payment warning:', payErr.message);
@@ -1885,16 +1887,18 @@ export const AppProvider = ({ children }) => {
           Object.assign(billRecord, postedRes?.bill || postedRes);
         }
 
-        if (Number(purchasePayload.amountPaid) > 0) {
+        const remainingBal = billRecord.balanceAmount !== undefined ? billRecord.balanceAmount : (billRecord.outstandingBalance !== undefined ? billRecord.outstandingBalance : 0);
+        if (Number(purchasePayload.amountPaid) > 0 && remainingBal > 0) {
           try {
+            const payAmt = Math.min(Number(purchasePayload.amountPaid), remainingBal);
             await paymentService.createPayment({
               direction: 'out',
               partyId: supplierId,
               paymentDate: purchasePayload.date || new Date().toISOString().slice(0, 10),
-              amount: Number(purchasePayload.amountPaid),
+              amount: payAmt,
               paymentMethod: purchasePayload.paymentMethod === 'Cash' ? 'cash' : (purchasePayload.paymentMethod === 'UPI' ? 'UPI' : 'bank'),
               referenceNumber: `BILL-${billRecord.billNumber}`,
-              allocations: [{ purchaseBillId: String(billId), allocatedAmount: Number(purchasePayload.amountPaid) }],
+              allocations: [{ purchaseBillId: String(billId), allocatedAmount: payAmt }],
             });
           } catch (payErr) {
             console.warn('Initial purchase payment warning:', payErr.message);

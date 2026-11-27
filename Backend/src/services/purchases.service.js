@@ -633,6 +633,9 @@ export const postGRN = async (tenantId, userId, grnId) => {
           }
           await inventory.save({ session });
 
+          product.stock = (product.stock || 0) + item.acceptedQuantity;
+          await product.save({ session });
+
           // Record append-only stock movement
           const movement = new StockMovement({
             tenantId,
@@ -728,6 +731,9 @@ export const cancelGRN = async (tenantId, userId, grnId) => {
               inventory.quantity = newStock;
               inventory.availableQuantity = newStock - inventory.reservedQuantity;
               await inventory.save({ session });
+
+              product.stock = Math.max(0, (product.stock || 0) - item.acceptedQuantity);
+              await product.save({ session });
 
               const movement = new StockMovement({
                 tenantId,
@@ -1010,6 +1016,9 @@ export const postPurchaseBill = async (tenantId, userId, billId) => {
           }
           await inventory.save({ session });
 
+          product.stock = (product.stock || 0) + item.quantity;
+          await product.save({ session });
+
           const movement = new StockMovement({
             tenantId,
             productId: product._id,
@@ -1122,6 +1131,9 @@ export const cancelPurchaseBill = async (tenantId, userId, billId) => {
             inventory.quantity = newStock;
             inventory.availableQuantity = newStock - inventory.reservedQuantity;
             await inventory.save({ session });
+
+            product.stock = Math.max(0, (product.stock || 0) - item.quantity);
+            await product.save({ session });
 
             const movement = new StockMovement({
               tenantId,
@@ -1352,6 +1364,9 @@ export const postDebitNote = async (tenantId, userId, debitNoteId) => {
         inventory.quantity = newStock;
         inventory.availableQuantity = newStock - inventory.reservedQuantity;
         await inventory.save({ session });
+
+        product.stock = Math.max(0, (product.stock || 0) - item.returnedQuantity);
+        await product.save({ session });
 
         const movement = new StockMovement({
           tenantId,

@@ -158,6 +158,9 @@ export const initializeOpeningStock = async (tenantId, userId, data) => {
 
     await inventory.save({ session });
 
+    product.stock = (product.stock || 0) + data.quantity;
+    await product.save({ session });
+
     // Record append-only movement
     const movement = new StockMovement({
       tenantId,
@@ -218,6 +221,9 @@ export const stockIn = async (tenantId, userId, data) => {
     }
 
     await inventory.save({ session });
+
+    product.stock = (product.stock || 0) + data.quantity;
+    await product.save({ session });
 
     // Record movement
     const movement = new StockMovement({
@@ -283,6 +289,9 @@ export const stockOut = async (tenantId, userId, data) => {
     inventory.quantity = newStock;
     inventory.availableQuantity = newStock - inventory.reservedQuantity;
     await inventory.save({ session });
+
+    product.stock = Math.max(0, (product.stock || 0) - data.quantity);
+    await product.save({ session });
 
     // Record movement
     const movement = new StockMovement({
@@ -360,6 +369,10 @@ export const adjustStock = async (tenantId, userId, data) => {
     }
 
     await inventory.save({ session });
+
+    const diff = targetQuantity - previousStock;
+    product.stock = Math.max(0, (product.stock || 0) + diff);
+    await product.save({ session });
 
     // Record movement
     const movement = new StockMovement({

@@ -549,6 +549,9 @@ const finalizeBillInternal = async (tenantId, user, bill, payments = [], session
       inventory.availableQuantity = newStock - inventory.reservedQuantity;
       await inventory.save({ session });
 
+      product.stock = Math.max(0, (product.stock || 0) - item.quantity);
+      await product.save({ session });
+
       // Record immutable stock movement
       const movement = new StockMovement({
         tenantId,
@@ -1046,6 +1049,9 @@ export const cancelPosBill = async (tenantId, user, billId, cancellationReason) 
               availableQuantity: newStock,
             });
             await inventory.save({ session });
+
+            product.stock = (product.stock || 0) + item.quantity;
+            await product.save({ session });
           }
 
           // Record reversing stock movement

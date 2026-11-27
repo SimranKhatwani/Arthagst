@@ -493,6 +493,9 @@ export const postInvoice = async (tenantId, userId, invoiceId) => {
         inventory.availableQuantity = newStock - inventory.reservedQuantity;
         await inventory.save({ session });
 
+        product.stock = Math.max(0, (product.stock || 0) - item.quantity);
+        await product.save({ session });
+
         // Record append-only stock movement
         const movement = new StockMovement({
           tenantId,
@@ -654,6 +657,9 @@ export const cancelInvoice = async (tenantId, userId, invoiceId, cancellationRea
             inventory.availableQuantity = newStock - inventory.reservedQuantity;
           }
           await inventory.save({ session });
+
+          product.stock = (product.stock || 0) + item.quantity;
+          await product.save({ session });
 
           // Record restoration movement
           const movement = new StockMovement({
@@ -1818,6 +1824,9 @@ export const postCreditNote = async (tenantId, userId, creditNoteId) => {
           inventory.availableQuantity = newStock - inventory.reservedQuantity;
         }
         await inventory.save({ session });
+
+        product.stock = (product.stock || 0) + item.returnedQuantity;
+        await product.save({ session });
 
         // Record append-only stock return movement
         const movement = new StockMovement({
