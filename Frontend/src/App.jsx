@@ -166,7 +166,7 @@ const ProtectedSuperAdmin = ({ children }) => {
 const PublicAuthRoute = ({ children }) => {
   const { state, authLoading } = useApp();
 
-  if (authLoading) {
+  if (authLoading && getToken()) {
     return <AuthLoadingScreen message="Loading..." />;
   }
 
@@ -183,7 +183,7 @@ const PublicAuthRoute = ({ children }) => {
 const PublicSuperAdminAuthRoute = ({ children }) => {
   const { state, authLoading } = useApp();
 
-  if (authLoading) {
+  if (authLoading && getToken()) {
     return <AuthLoadingScreen message="Loading..." />;
   }
 

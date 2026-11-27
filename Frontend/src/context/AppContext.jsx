@@ -704,6 +704,13 @@ export const AppProvider = ({ children }) => {
     }
 
     let isMounted = true;
+    const safetyTimer = setTimeout(() => {
+      if (isMounted) {
+        console.warn('Session verification safety timeout reached (4s). Clearing authLoading.');
+        setAuthLoading(false);
+      }
+    }, 4000);
+
     authService
       .getMe()
       .then((data) => {
@@ -752,11 +759,13 @@ export const AppProvider = ({ children }) => {
         }));
       })
       .finally(() => {
+        clearTimeout(safetyTimer);
         if (isMounted) setAuthLoading(false);
       });
 
     return () => {
       isMounted = false;
+      clearTimeout(safetyTimer);
     };
   }, []);
 
@@ -843,7 +852,6 @@ export const AppProvider = ({ children }) => {
   // Backend Authentication & Session State
   const login = useCallback(
     async ({ tenantCode, email, password, isSuperAdmin }) => {
-      setAuthLoading(true);
       try {
         let data;
         if (isSuperAdmin && (!tenantCode || !tenantCode.trim())) {
@@ -869,7 +877,6 @@ export const AppProvider = ({ children }) => {
             subscriptionStatus: data.tenant?.subscriptionStatus || 'active',
           },
         }));
-        setAuthLoading(false);
         notify(`Welcome back, ${data.user?.name || 'Administrator'}!`);
         if (data.user?.isSuperAdmin || data.user?.role === 'super_admin') {
           loadSuperAdminData();
@@ -879,7 +886,6 @@ export const AppProvider = ({ children }) => {
         }
         return data;
       } catch (err) {
-        setAuthLoading(false);
         throw err;
       }
     },
@@ -888,7 +894,6 @@ export const AppProvider = ({ children }) => {
 
   const register = useCallback(
     async (payload) => {
-      setAuthLoading(true);
       try {
         const data = await authService.register(payload);
         setToken(data.token);
@@ -908,13 +913,11 @@ export const AppProvider = ({ children }) => {
             subscriptionStatus: data.tenant.subscriptionStatus,
           },
         }));
-        setAuthLoading(false);
         notify(`Business account created for ${data.tenant.businessName}!`);
         loadPhase1Data();
         loadPhase2Data();
         return data;
       } catch (err) {
-        setAuthLoading(false);
         throw err;
       }
     },

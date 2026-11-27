@@ -138,9 +138,16 @@ export const apiClient = async (endpoint, options = {}) => {
     ...headers,
   };
 
+  const timeoutMs = customConfig.timeout || 12000;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
+
   const config = {
     method,
     headers: reqHeaders,
+    signal: customConfig.signal || controller.signal,
     ...customConfig,
   };
 
@@ -195,11 +202,19 @@ export const apiClient = async (endpoint, options = {}) => {
 
     return normalizeMongoIds(resData);
   } catch (err) {
+    if (err.name === 'AbortError') {
+      const timeoutError = new Error(`Connection timed out after ${timeoutMs / 1000}s. The server is taking too long to respond. Please check backend service status.`);
+      timeoutError.status = 504;
+      timeoutError.statusCode = 504;
+      throw timeoutError;
+    }
     if (!err.status && err.status !== 0) {
       err.message = err.message || 'Network error. Please check your internet or backend connection.';
       err.status = 0;
     }
     throw err;
+  } finally {
+    clearTimeout(timeoutId);
   }
 };
 
