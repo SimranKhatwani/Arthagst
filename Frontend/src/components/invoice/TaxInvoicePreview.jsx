@@ -91,7 +91,7 @@ export const TaxInvoicePreview = ({ invoice, business, eInvoice = null }) => {
           <div className="mt-3 flex flex-col items-start justify-between gap-3 rounded border border-indigo-200 bg-indigo-50/50 p-3 text-xs sm:flex-row sm:items-center">
             <div className="space-y-0.5">
               <div className="font-semibold text-indigo-900">
-                E-Invoice Reference (Simulated Demo Record)
+                E-Invoice Reference
               </div>
               <div className="font-mono text-[11px] text-slate-700 break-all">
                 IRN: {eInvoice.irn}

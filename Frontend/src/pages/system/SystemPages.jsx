@@ -1744,9 +1744,7 @@ export const SettingsPage = ({ defaultTab = 'business-tax' }) => {
 
         {tab === 'integrations' && (
           <div className="space-y-3 text-xs">
-            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900">
-              Prototype Sandbox: External IRP, E-Way Bill, and UPI QR integrations run in simulated local demo mode.
-            </div>
+
             <label className="flex items-center gap-2"><input type="checkbox" checked={cfg.integrations.irpSandboxMode} onChange={(e) => setCfg({ ...cfg, integrations: { ...cfg.integrations, irpSandboxMode: e.target.checked } })} /> IRP E-Invoice Sandbox Simulation</label>
             <label className="flex items-center gap-2"><input type="checkbox" checked={cfg.integrations.ewayBillSandboxMode} onChange={(e) => setCfg({ ...cfg, integrations: { ...cfg.integrations, ewayBillSandboxMode: e.target.checked } })} /> E-Way Bill NIC Sandbox Simulation</label>
             <label className="flex items-center gap-2"><input type="checkbox" checked={cfg.integrations.upiStaticQrEnabled} onChange={(e) => setCfg({ ...cfg, integrations: { ...cfg.integrations, upiStaticQrEnabled: e.target.checked } })} /> Show Business UPI Payment Details on Invoices</label>

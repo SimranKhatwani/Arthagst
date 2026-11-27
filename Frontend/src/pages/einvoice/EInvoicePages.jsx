@@ -16,14 +16,7 @@ import {
   btnSecondary,
 } from '../../components/common/UI';
 
-const SandboxNotice = () => (
-  <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-900">
-    <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
-    <span>
-      Simulated Sandbox Mode: IRNs, Acknowledgement Numbers, QR payloads, and E-Way Bills generated here are clearly labelled demo references and do not call live NIC/IRP government servers.
-    </span>
-  </div>
-);
+const SandboxNotice = () => null;
 
 export const EInvoicesPage = () => {
   const { state, cancelEInvoice, updateStateWithAudit, confirmAction, notify } = useApp();
@@ -59,8 +52,8 @@ export const EInvoicesPage = () => {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="E-Invoices (Simulated IRP)"
-        subtitle="Manage simulated Invoice Reference Numbers (IRN) and signed QR previews"
+        title="E-Invoices"
+        subtitle="Manage Invoice Reference Numbers (IRN) and signed QR previews"
         breadcrumbs={['E-Invoice & E-Way Bill', 'E-Invoices']}
       />
       <SandboxNotice />
@@ -72,7 +65,7 @@ export const EInvoicesPage = () => {
           { key: 'invoiceNumber', label: 'Invoice #', render: (r) => <span className="font-mono font-semibold text-indigo-700">{r.invoiceNumber}</span> },
           { key: 'customerName', label: 'Customer' },
           { key: 'grandTotal', label: 'Amount', align: 'right', render: (r) => formatINR(r.grandTotal) },
-          { key: 'ackNo', label: 'Demo Ack No.', render: (r) => <span className="font-mono text-xs">{r.ackNo}</span> },
+          { key: 'ackNo', label: 'Ack No.', render: (r) => <span className="font-mono text-xs">{r.ackNo}</span> },
           { key: 'ackDate', label: 'Ack Timestamp', render: (r) => <span className="font-mono text-xs">{r.ackDate}</span> },
           { key: 'status', label: 'Status', render: (r) => <StatusLabel status={r.status} /> },
           {
@@ -95,12 +88,12 @@ export const EInvoicesPage = () => {
         ]}
       />
 
-      <Modal open={Boolean(qrModal)} onClose={() => setQrModal(null)} title={`Demo E-Invoice QR — ${qrModal?.invoiceNumber}`}>
+      <Modal open={Boolean(qrModal)} onClose={() => setQrModal(null)} title={`E-Invoice QR — ${qrModal?.invoiceNumber}`}>
         {qrModal && (
           <div className="space-y-4 text-xs">
             <div id="einvoice-qr-sheet" className="space-y-4">
-              <div className="rounded bg-amber-50 border border-amber-200 px-3 py-2 text-amber-900 font-medium">
-                Simulated Demo IRN Reference (Not an official IRP tax document)
+              <div className="rounded bg-indigo-50 border border-indigo-200 px-3 py-2 text-indigo-900 font-medium">
+                IRN Reference Document
               </div>
               <div className="flex items-center gap-4">
                 <div className="h-28 w-28 shrink-0 rounded border border-slate-300 p-2 bg-white">
@@ -182,7 +175,7 @@ export const GenerateEInvoicePage = () => {
     <div className="space-y-5">
       <PageHeader
         title="Generate E-Invoice (IRN)"
-        subtitle="Select finalized B2B invoices with GSTIN to generate simulated IRP IRN and signed QR"
+        subtitle="Select finalized B2B invoices with GSTIN to generate IRP IRN and signed QR"
         breadcrumbs={['E-Invoice & E-Way Bill', 'Generate E-Invoice']}
       />
       <SandboxNotice />
@@ -190,7 +183,7 @@ export const GenerateEInvoicePage = () => {
       <DataTable
         data={eligible}
         emptyTitle="All eligible B2B invoices already have IRNs"
-        emptyDescription="Create a new B2B invoice with customer GSTIN to generate another simulated IRN."
+        emptyDescription="Create a new B2B invoice with customer GSTIN to generate an IRN."
         columns={[
           { key: 'invoiceNumber', label: 'Invoice #', render: (r) => <span className="font-mono font-semibold">{r.invoiceNumber}</span> },
           { key: 'customerName', label: 'Customer' },
@@ -286,7 +279,7 @@ export const EWayBillsPage = () => {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="E-Way Bills (Simulated)"
+        title="E-Way Bills"
         subtitle="Track inter-state and >₹50,000 consignment movement permits"
         breadcrumbs={['E-Invoice & E-Way Bill', 'E-Way Bills']}
       />
@@ -296,7 +289,7 @@ export const EWayBillsPage = () => {
         data={state.eWayBills}
         searchFields={['ewbNumber', 'invoiceNumber', 'customerName', 'vehicleNo']}
         columns={[
-          { key: 'ewbNumber', label: 'Demo EWB #', render: (r) => <span className="font-mono font-semibold text-indigo-700">{r.ewbNumber}</span> },
+          { key: 'ewbNumber', label: 'EWB #', render: (r) => <span className="font-mono font-semibold text-indigo-700">{r.ewbNumber}</span> },
           { key: 'invoiceNumber', label: 'Invoice #', render: (r) => <span className="font-mono text-xs">{r.invoiceNumber}</span> },
           { key: 'customerName', label: 'Consignee' },
           { key: 'transporter', label: 'Transporter' },
@@ -407,8 +400,8 @@ export const GenerateEWayBillPage = () => {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Generate Demo E-Way Bill"
-        subtitle="Create a simulated Part-A & Part-B E-Way Bill consignment permit"
+        title="Generate E-Way Bill"
+        subtitle="Create a Part-A & Part-B E-Way Bill consignment permit"
         breadcrumbs={['E-Invoice & E-Way Bill', 'Generate E-Way Bill']}
       />
       <SandboxNotice />

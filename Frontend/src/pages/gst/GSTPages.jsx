@@ -27,14 +27,7 @@ import {
   btnSecondary,
 } from '../../components/common/UI';
 
-const DemoTaxNotice = () => (
-  <div className="flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50/70 px-4 py-2.5 text-xs text-indigo-900">
-    <AlertTriangle className="h-4 w-4 shrink-0 text-indigo-600" />
-    <span>
-      GST returns and summaries are computed live from your demo transactions. Actual GSTN portal filing is simulated for prototype demonstration.
-    </span>
-  </div>
-);
+const DemoTaxNotice = () => null;
 
 export const GSTDashboardPage = () => {
   const { state, selectedFY } = useApp();

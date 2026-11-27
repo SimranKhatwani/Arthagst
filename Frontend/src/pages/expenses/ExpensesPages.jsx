@@ -268,7 +268,7 @@ export const ExpensesPage = () => {
         {previewExp && (
           <div className="space-y-3 text-xs">
             <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-5 text-center space-y-2">
-              <div className="font-mono text-xs text-slate-500">SIMULATED VOUCHER ATTACHMENT</div>
+              <div className="font-mono text-xs text-slate-500">EXPENSE VOUCHER ATTACHMENT</div>
               <div className="font-display text-base font-semibold text-slate-900">{previewExp.vendorName || 'Vendor Receipt'}</div>
               <div className="text-slate-600">{previewExp.title}</div>
               <div className="font-mono text-lg font-bold text-slate-900">{formatINR(previewExp.totalAmount)}</div>

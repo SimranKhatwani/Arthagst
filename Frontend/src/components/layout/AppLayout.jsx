@@ -782,7 +782,7 @@ export const AppLayout = ({ children }) => {
       >
         <div className="space-y-3 text-xs text-slate-600">
           <p>
-            You are exploring an interactive frontend prototype pre-loaded with realistic data for{' '}
+            You are managing business operations in ArthaGST for{' '}
             <strong className="text-slate-900">Sharma Traders (Jaipur, Rajasthan)</strong> for FY 2026-27.
           </p>
           <div className="rounded-md border border-slate-200 bg-slate-50 p-3 space-y-1.5">
@@ -795,9 +795,6 @@ export const AppLayout = ({ children }) => {
               <li>Use POS Billing for fast retail checkout with barcode search and split payments.</li>
             </ul>
           </div>
-          <p className="text-[11px] text-slate-500">
-            Note: All GSTINs, PANs, IRP E-Invoice IRNs, E-Way Bills, and GSTR-2B filings in this prototype are simulated demo workflows stored locally in your browser.
-          </p>
         </div>
       </Modal>
     </div>
