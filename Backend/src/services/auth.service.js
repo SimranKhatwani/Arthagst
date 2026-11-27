@@ -187,7 +187,7 @@ export const loginUser = async ({ tenantCode, email, password }) => {
     let t = await Tenant.findOne({ tenantCode: envTenantCode });
     if (!t) {
       t = await Tenant.create({
-        businessName: 'Aurelle Tech Enterprises',
+        businessName: 'Artha Tech Enterprises',
         tenantCode: envTenantCode,
         ownerName: process.env.ADMIN_NAME || 'Platform Administrator',
         email: envAdminEmail,

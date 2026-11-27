@@ -87,9 +87,9 @@ export const LoginPage = () => {
   };
 
   return (
-    <div className="flex h-screen max-h-screen overflow-hidden bg-slate-900">
+    <div className="flex min-h-screen overflow-y-auto bg-slate-900">
       {/* LEFT HERO / VALUE PROPOSITION PANEL */}
-      <div className="hidden lg:flex w-1/2 flex-col justify-between p-8 xl:p-12 text-white relative overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 h-full">
+      <div className="hidden lg:flex w-1/2 flex-col justify-between p-8 xl:p-12 text-white relative overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950">
         {/* Ambient Glow Elements */}
         <div className="absolute -top-32 -left-32 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-violet-600/20 rounded-full blur-3xl pointer-events-none" />
@@ -163,7 +163,7 @@ export const LoginPage = () => {
       </div>
 
       {/* RIGHT AUTH CARD PANEL */}
-      <div className="flex flex-1 items-center justify-center p-4 sm:p-6 bg-slate-50 relative h-full overflow-hidden">
+      <div className="flex flex-1 items-center justify-center p-4 sm:p-6 bg-slate-50 relative min-h-screen">
         <div className="absolute inset-0 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:20px_20px] opacity-40 pointer-events-none" />
 
         <div className="w-full max-w-md rounded-2xl border border-slate-200/90 bg-white/95 backdrop-blur-md p-6 sm:p-8 shadow-xl shadow-slate-200/50 relative z-10">
@@ -209,7 +209,6 @@ export const LoginPage = () => {
                 <label className="text-xs font-semibold text-slate-700 flex items-center gap-1">
                   Organization / Tenant Code <span className="text-rose-500">*</span>
                 </label>
-
               </div>
               <div className="relative">
                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
@@ -322,7 +321,18 @@ export const LoginPage = () => {
             </button>
           </form>
 
-
+          {/* Designed & Developed Footer */}
+          <div className="mt-6 text-center text-xs text-slate-500">
+            Designed &amp; Developed by <span className="text-rose-500">❤️</span>{' '}
+            <a
+              href="https://requinsolutions.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-slate-700 hover:text-indigo-600 underline underline-offset-2"
+            >
+              Requin Solutions Pvt. Ltd
+            </a>
+          </div>
         </div>
       </div>
     </div>
@@ -382,194 +392,235 @@ export const SuperAdminLoginPage = () => {
   };
 
   return (
-    <div className="h-screen max-h-screen overflow-hidden flex bg-white font-sans antialiased">
-      {/* LEFT HERO PANEL (Matches ArthaGST Main Login Aesthetic) */}
-      <div className="hidden lg:flex lg:w-1/2 flex-col justify-between bg-slate-950 p-8 xl:p-12 text-white relative overflow-hidden border-r border-slate-800 h-full">
-        {/* Glow ambient effects */}
-        <div className="absolute -top-24 -left-24 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-violet-600/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute inset-0 bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:24px_24px] opacity-20 pointer-events-none" />
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/20 to-indigo-50/30 text-slate-900 flex flex-col justify-center selection:bg-blue-500/20 selection:text-blue-900 relative overflow-x-hidden">
+      {/* Soft Blue Ambient Glows */}
+      <div className="absolute top-0 right-1/4 w-[480px] h-[480px] bg-blue-100/40 rounded-full blur-3xl pointer-events-none -z-0" />
+      <div className="absolute bottom-0 left-1/4 w-[480px] h-[480px] bg-indigo-100/40 rounded-full blur-3xl pointer-events-none -z-0" />
 
-        {/* Brand Header */}
-        <div className="relative z-10 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 font-display text-base font-bold text-white shadow-lg shadow-indigo-500/30">
-            A
-          </div>
-          <div>
-            <div className="font-display text-xl font-bold tracking-tight text-white">ArthaGST Control</div>
-            <div className="text-xs text-indigo-400 font-medium">Master Platform Console</div>
-          </div>
-        </div>
-
-        {/* Center Telemetry & Value Pillars */}
-        <div className="relative z-10 my-auto py-8">
-
-
-          <h1 className="font-display text-3xl xl:text-4xl font-bold tracking-tight text-white leading-tight">
-            Multi-tenant fleet, SaaS billing, and platform governance.
-          </h1>
-
-          <p className="mt-4 text-sm text-slate-300 leading-relaxed max-w-lg">
-            Supervise organization tenants, manage subscription plans, monitor system telemetry, and govern platform-wide security from one centralized control plane.
-          </p>
-
-          <div className="mt-8 space-y-3 max-w-lg">
-            <div className="flex items-start gap-3.5 p-3.5 rounded-xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-sm">
-              <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shrink-0">
-                <Building2 className="w-4 h-4" />
+      <div className="flex flex-1 flex-col lg:flex-row relative z-10">
+        {/* LEFT HERO PANEL - White & Blue Theme */}
+        <div className="hidden lg:flex lg:w-1/2 flex-col justify-between bg-white/70 backdrop-blur-sm p-8 xl:p-14 border-r border-slate-200/80">
+          {/* Brand Header */}
+          <div className="flex items-center justify-between">
+            <Link to="/" className="flex items-center gap-3 group">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 font-display text-base font-bold text-white shadow-md shadow-blue-600/30 group-hover:scale-105 transition-transform">
+                A
               </div>
               <div>
-                <div className="text-xs font-semibold text-white">Tenant Fleet Orchestration</div>
-                <div className="mt-0.5 text-xs text-slate-400 leading-normal">
-                  Provision, suspend, or configure businesses with strictly isolated database schemas and dedicated settings.
-                </div>
+                <div className="font-display text-xl font-bold tracking-tight text-slate-900 group-hover:text-blue-600 transition-colors">ArthaGST Control</div>
+                <div className="text-xs text-blue-600 font-medium">Master Platform Console (/sd)</div>
               </div>
-            </div>
-
-            <div className="flex items-start gap-3.5 p-3.5 rounded-xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-sm">
-              <div className="p-2 rounded-lg bg-violet-500/10 text-violet-400 border border-violet-500/20 shrink-0">
-                <Layers className="w-4 h-4" />
-              </div>
-              <div>
-                <div className="text-xs font-semibold text-white">SaaS Subscription &amp; Billing Engine</div>
-                <div className="mt-0.5 text-xs text-slate-400 leading-normal">
-                  Manage pricing tiers, trial lifecycles, plan feature quotas, and recurring subscription renewals.
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3.5 p-3.5 rounded-xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-sm">
-              <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
-                <ShieldCheck className="w-4 h-4" />
-              </div>
-              <div>
-                <div className="text-xs font-semibold text-white">Master Security &amp; Audit Governance</div>
-                <div className="mt-0.5 text-xs text-slate-400 leading-normal">
-                  Track cross-tenant actions, immutable audit logs, administrative logins, and critical security events.
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-
-
-      </div>
-
-      {/* RIGHT AUTH CARD PANEL */}
-      <div className="flex flex-1 items-center justify-center p-4 sm:p-6 bg-slate-50 relative h-full overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:20px_20px] opacity-40 pointer-events-none" />
-
-        <div className="w-full max-w-md rounded-2xl border border-slate-200/90 bg-white/95 backdrop-blur-md p-6 sm:p-8 shadow-xl shadow-slate-200/50 relative z-10">
-          {/* Mobile Logo */}
-          <div className="flex lg:hidden items-center gap-2.5 mb-4">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 font-display text-base font-bold text-white shadow-md shadow-indigo-500/30">
-              A
-            </div>
-            <div>
-              <div className="font-display text-lg font-bold text-slate-900">ArthaGST Control</div>
-              <div className="text-[10px] text-indigo-600 font-medium">Master Console (/sd)</div>
-            </div>
-          </div>
-
-          <div className="mb-4 sm:mb-5">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100 mb-1.5">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              Platform Super Admin Portal (/sd)
-            </span>
-            <h2 className="font-display text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
-              Super Admin Sign In
-            </h2>
-            <p className="mt-1 text-xs text-slate-500">
-              Enter master platform administrator credentials to manage tenants and SaaS billing.
-            </p>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-3.5">
-            {/* Email Field */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Super Admin Email Address <span className="text-rose-500">*</span>
-              </label>
-              <div className="relative">
-                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
-                  <Mail className="w-4 h-4" />
-                </div>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className={`w-full rounded-xl border ${fieldErrors.email ? 'border-rose-400 bg-rose-50/30' : 'border-slate-300'
-                    } bg-white py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all`}
-                  placeholder="superadmin@artha.com"
-                  autoComplete="email"
-                />
-              </div>
-              {fieldErrors.email && (
-                <p className="mt-1 text-[11px] text-rose-600">{fieldErrors.email}</p>
-              )}
-            </div>
-
-            {/* Password Field */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-semibold text-slate-700">
-                  Master Password <span className="text-rose-500">*</span>
-                </label>
-              </div>
-              <div className="relative">
-                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
-                  <Lock className="w-4 h-4" />
-                </div>
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className={`w-full rounded-xl border ${fieldErrors.password ? 'border-rose-400 bg-rose-50/30' : 'border-slate-300'
-                    } bg-white py-2.5 pl-9 pr-10 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all`}
-                  placeholder="••••••••"
-                  autoComplete="current-password"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600 cursor-pointer"
-                  tabIndex={-1}
-                  aria-label="Toggle password visibility"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-              {fieldErrors.password && (
-                <p className="mt-1 text-[11px] text-rose-600">{fieldErrors.password}</p>
-              )}
-            </div>
-
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full mt-2 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-white font-medium text-sm bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/20 active:scale-[0.99] transition-all disabled:opacity-50 cursor-pointer"
-            >
-              {loading ? (
-                <>
-                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Verifying Master Credentials...
-                </>
-              ) : (
-                <>
-                  <span>Access Super Admin Console</span>
-                  <ArrowRight className="w-4 h-4" />
-                </>
-              )}
-            </button>
-          </form>
-
-          <div className="mt-6 pt-5 border-t border-slate-100 text-center text-xs text-slate-500">
-            Organization Staff?{' '}
-            <Link to="/login" className="font-semibold text-indigo-600 hover:text-indigo-700 hover:underline">
-              Go to Business Login &rarr;
             </Link>
+            <Link to="/" className="text-xs font-semibold text-blue-600 hover:text-blue-700 transition-colors">
+              ← Overview
+            </Link>
+          </div>
+
+          {/* Center Telemetry & Value Pillars */}
+          <div className="max-w-lg space-y-5 my-auto py-8">
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                SaaS Fleet Control Plane
+              </div>
+              <h1 className="font-display text-2xl xl:text-3xl font-extrabold tracking-tight text-slate-900 leading-tight">
+                Multi-tenant fleet, SaaS billing, and platform governance.
+              </h1>
+              <p className="text-xs xl:text-sm text-slate-600 leading-relaxed">
+                Supervise organization tenants, manage subscription plans, monitor system telemetry, and govern platform-wide security from one centralized control plane.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-start gap-3.5 p-3.5 rounded-xl border border-slate-200/90 bg-white shadow-2xs">
+                <div className="p-2 rounded-lg bg-blue-50 text-blue-600 border border-blue-100 shrink-0">
+                  <Building2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-semibold text-slate-900">Tenant Fleet Orchestration</div>
+                  <div className="mt-0.5 text-xs text-slate-500 leading-normal">
+                    Provision, suspend, or configure businesses with strictly isolated database schemas and dedicated settings.
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3.5 p-3.5 rounded-xl border border-slate-200/90 bg-white shadow-2xs">
+                <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-100 shrink-0">
+                  <Layers className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-semibold text-slate-900">SaaS Subscription &amp; Billing Engine</div>
+                  <div className="mt-0.5 text-xs text-slate-500 leading-normal">
+                    Manage pricing tiers, trial lifecycles, plan feature quotas, and recurring subscription renewals.
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3.5 p-3.5 rounded-xl border border-slate-200/90 bg-white shadow-2xs">
+                <div className="p-2 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-100 shrink-0">
+                  <ShieldCheck className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-semibold text-slate-900">Master Security &amp; Audit Governance</div>
+                  <div className="mt-0.5 text-xs text-slate-500 leading-normal">
+                    Track cross-tenant actions, immutable audit logs, administrative logins, and critical security events.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-4 border-t border-slate-200/80 flex items-center justify-between text-[11px] text-slate-500">
+            <span>ArthaGST Master Control v2.4</span>
+            <span className="flex items-center gap-1.5 text-emerald-600 font-medium">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Platform Operational
+            </span>
+          </div>
+        </div>
+
+        {/* RIGHT AUTH CARD PANEL */}
+        <div className="flex flex-1 items-center justify-center p-6 sm:p-10">
+          <div className="w-full max-w-md rounded-2xl border border-slate-200/90 bg-white p-6 sm:p-8 shadow-xl shadow-blue-950/5">
+            {/* Mobile Logo */}
+            <div className="flex lg:hidden items-center justify-between gap-2.5 mb-6 pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 font-display text-base font-bold text-white shadow-md shadow-blue-600/30">
+                  A
+                </div>
+                <div>
+                  <div className="font-display text-base font-bold text-slate-900">ArthaGST Control</div>
+                  <div className="text-[10px] text-blue-600 font-medium">Master Console (/sd)</div>
+                </div>
+              </div>
+              <Link to="/login" className="text-xs font-semibold text-blue-600 hover:text-blue-700">
+                ← Org Login
+              </Link>
+            </div>
+
+            <div className="mb-5">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 mb-2">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                Platform Super Admin Portal (/sd)
+              </span>
+              <h2 className="font-display text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+                Super Admin Sign In
+              </h2>
+              <p className="mt-1 text-xs text-slate-500">
+                Enter master platform administrator credentials to manage tenants and SaaS billing.
+              </p>
+            </div>
+
+            {error && (
+              <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-bold">Authentication Failed</div>
+                  <div className="mt-0.5 text-rose-700 leading-relaxed">{error}</div>
+                </div>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Email Field */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Super Admin Email Address <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                    <Mail className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className={`w-full rounded-xl border ${
+                      fieldErrors.email ? 'border-rose-400 bg-rose-50/40' : 'border-slate-300'
+                    } bg-white py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-600 focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all`}
+                    placeholder="superadmin@artha.com"
+                    autoComplete="email"
+                  />
+                </div>
+                {fieldErrors.email && (
+                  <p className="mt-1 text-[11px] text-rose-600">{fieldErrors.email}</p>
+                )}
+              </div>
+
+              {/* Password Field */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-slate-700">
+                    Master Password <span className="text-rose-500">*</span>
+                  </label>
+                </div>
+                <div className="relative">
+                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                    <Lock className="w-4 h-4" />
+                  </div>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className={`w-full rounded-xl border ${
+                      fieldErrors.password ? 'border-rose-400 bg-rose-50/40' : 'border-slate-300'
+                    } bg-white py-2.5 pl-9 pr-10 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-600 focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all`}
+                    placeholder="••••••••"
+                    autoComplete="current-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    tabIndex={-1}
+                    aria-label="Toggle password visibility"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                {fieldErrors.password && (
+                  <p className="mt-1 text-[11px] text-rose-600">{fieldErrors.password}</p>
+                )}
+              </div>
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full mt-2 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-white font-medium text-sm bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 shadow-md shadow-blue-600/25 active:scale-[0.99] transition-all disabled:opacity-50 cursor-pointer"
+              >
+                {loading ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Verifying Master Credentials...
+                  </>
+                ) : (
+                  <>
+                    <span>Access Super Admin Console</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </form>
+
+            <div className="mt-6 pt-5 border-t border-slate-100 text-center text-xs text-slate-500">
+              Organization Staff?{' '}
+              <Link to="/login" className="font-semibold text-blue-600 hover:text-blue-700 hover:underline">
+                Go to Business Login &rarr;
+              </Link>
+            </div>
+
+            {/* In-Card Attribution matching UI theme */}
+            <div className="mt-4 text-center text-xs text-slate-500">
+              Designed &amp; Developed by <span className="text-rose-500">❤️</span>{' '}
+              <a
+                href="https://requinsolutions.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-bold text-blue-600 hover:text-blue-700 underline underline-offset-2"
+              >
+                Requin Solutions Pvt. Ltd
+              </a>
+            </div>
           </div>
         </div>
       </div>
@@ -839,6 +890,19 @@ export const RegisterPage = () => {
           <Link to="/login" className="font-semibold text-indigo-600 hover:text-indigo-700 hover:underline">
             Sign In &rarr;
           </Link>
+        </div>
+
+        {/* Designed & Developed Footer */}
+        <div className="mt-6 text-center text-xs text-slate-500">
+          Designed &amp; Developed by <span className="text-rose-500">❤️</span>{' '}
+          <a
+            href="https://requinsolutions.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-slate-700 hover:text-indigo-600 underline underline-offset-2"
+          >
+            Requin Solutions Pvt. Ltd
+          </a>
         </div>
       </div>
     </div>

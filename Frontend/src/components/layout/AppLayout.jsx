@@ -38,7 +38,7 @@ import { Modal, btnPrimary, btnSecondary } from '../common/UI';
 
 export const NAV_GROUPS = [
   {
-    section: 'Dashboard',
+    section: 'OPERATIONS DIRECTORY',
     items: [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
       { id: 'pos', label: 'POS Billing', icon: MonitorSmartphone, path: '/pos' },
@@ -308,6 +308,23 @@ const SidebarContent = ({
       }
       className="no-scrollbar flex-1 overflow-y-auto px-3 py-3.5 space-y-6"
     >
+      {/* Attribution Card matching theme */}
+      {(!collapsed || isMobile) ? (
+        <div className="mx-1 mb-4 rounded-xl border border-slate-800 bg-slate-800/60 p-3 shadow-xs hover:border-slate-700/80 transition-colors">
+          <div className="text-[11px] font-medium text-slate-400 tracking-tight">Designed &amp; Developed by</div>
+          <div className="mt-0.5 text-xs font-bold text-indigo-400 flex items-center gap-1.5">
+            <span className="text-sm">💻</span> Requin Solutions Pvt. Ltd
+          </div>
+        </div>
+      ) : (
+        <div
+          className="mx-auto mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-slate-800/80 border border-slate-700/80 text-sm shadow-xs text-indigo-400 cursor-default"
+          title="Designed & Developed by Requin Solutions Pvt. Ltd"
+        >
+          💻
+        </div>
+      )}
+
       {NAV_GROUPS.map((group) => (
         <div key={group.section}>
           {(!collapsed || isMobile) && (

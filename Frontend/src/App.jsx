@@ -12,6 +12,7 @@ import {
   OnboardingWizardPage,
   SuperAdminLoginPage,
 } from './pages/auth/AuthPages';
+import { LandingPage } from './pages/landing/LandingPage';
 
 // Dashboard
 import { DashboardPage } from './pages/dashboard/DashboardPage';
@@ -226,8 +227,8 @@ const AppRoutes = () => {
           }
         />
 
-        {/* Tenant App Routes */}
-        <Route path="/" element={<Navigate to={state.isAuthenticated ? '/dashboard' : '/login'} replace />} />
+        {/* Landing & Tenant App Routes */}
+        <Route path="/" element={<LandingPage />} />
         <Route path="/dashboard" element={<ProtectedTenant><DashboardPage /></ProtectedTenant>} />
 
         {/* Sales */}
