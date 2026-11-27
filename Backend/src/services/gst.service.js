@@ -343,7 +343,7 @@ export const getGSTR1Data = async (tenantId, options = {}) => {
         });
       }
 
-      const hsnKey = `${hsn || 'OTHERS'}_${item.gstRate || 0}`;
+      const hsnKey = `${hsn || 'OTHERS'}_${item.gstRate || 0}_${item.productName || ''}`;
       if (!hsnMap[hsnKey]) {
         hsnMap[hsnKey] = {
           hsn_sc: hsn || 'OTHERS',

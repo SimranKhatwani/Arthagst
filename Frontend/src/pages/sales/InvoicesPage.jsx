@@ -134,58 +134,65 @@ export const InvoicesPage = () => {
     { key: 'customerName', label: 'Customer', sortable: true },
     {
       key: 'date',
-      label: 'Invoice Date',
+      label: 'Date',
       sortable: true,
       nowrap: true,
-      render: (r) => <span className="font-mono text-xs">{formatDateIN(r.date)}</span>,
-    },
-    {
-      key: 'dueDate',
-      label: 'Due Date',
-      sortable: true,
-      nowrap: true,
-      render: (r) => <span className="font-mono text-xs">{formatDateIN(r.dueDate)}</span>,
-    },
-    {
-      key: 'taxableValue',
-      label: 'Taxable',
-      align: 'right',
-      sortable: true,
-      render: (r) => formatINR(r.taxableValue),
-    },
-    {
-      key: 'totalTax',
-      label: 'GST',
-      align: 'right',
-      sortable: true,
-      render: (r) => formatINR(r.totalTax),
+      render: (r) => (
+        <div>
+          <span className="font-mono text-xs">{formatDateIN(r.date)}</span>
+          {r.dueDate && r.dueDate !== r.date && (
+            <div className="text-[10px] text-slate-400">Due {formatDateIN(r.dueDate)}</div>
+          )}
+        </div>
+      ),
     },
     {
       key: 'grandTotal',
-      label: 'Grand Total',
+      label: 'Amount',
       align: 'right',
       sortable: true,
-      render: (r) => <span className="font-semibold text-slate-900">{formatINR(r.grandTotal)}</span>,
-    },
-    {
-      key: 'amountPaid',
-      label: 'Paid',
-      align: 'right',
-      render: (r) => formatINR(r.amountPaid),
+      render: (r) => (
+        <div className="text-right">
+          <div className="font-semibold text-slate-900">{formatINR(r.grandTotal)}</div>
+          <div className="text-[10px] text-slate-400">Tax {formatINR(r.totalTax || 0)}</div>
+        </div>
+      ),
     },
     {
       key: 'balance',
       label: 'Balance',
       align: 'right',
-      render: (r) =>
-        formatINR(
-          r.status === 'Cancelled' ? 0 : Math.max(0, (r.grandTotal || 0) - (r.amountPaid || 0))
-        ),
+      render: (r) => {
+        const bal = r.status === 'Cancelled' ? 0 : Math.max(0, (r.grandTotal || 0) - (r.amountPaid || 0));
+        return (
+          <div className="text-right">
+            <span className={`font-mono font-medium ${bal > 0 ? 'text-amber-700' : 'text-slate-600'}`}>{formatINR(bal)}</span>
+            {r.amountPaid > 0 && <div className="text-[10px] text-emerald-600">Paid {formatINR(r.amountPaid)}</div>}
+          </div>
+        );
+      },
     },
     {
       key: 'paymentStatus',
       label: 'Payment',
-      render: (r) => <StatusLabel status={r.paymentStatus} />,
+      render: (r) => (
+        <div className="flex items-center gap-1.5">
+          <StatusLabel status={r.paymentStatus} />
+          {r.status === 'Finalized' && r.paymentStatus !== 'Paid' && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                openPaymentModal(r);
+              }}
+              className="inline-flex items-center gap-0.5 rounded bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors shadow-2xs cursor-pointer"
+              title="Record payment for this invoice"
+            >
+              <IndianRupee className="h-3 w-3" /> Pay
+            </button>
+          )}
+        </div>
+      ),
     },
     {
       key: 'status',
@@ -346,6 +353,28 @@ export const InvoicesPage = () => {
         onClose={() => setPreviewInv(null)}
         title={`Tax Invoice — ${previewInv?.invoiceNumber}`}
         size="xl"
+        footer={
+          <div className="flex items-center justify-between w-full">
+            <div>
+              {previewInv?.status === 'Finalized' && previewInv?.paymentStatus !== 'Paid' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const inv = previewInv;
+                    setPreviewInv(null);
+                    openPaymentModal(inv);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 shadow-2xs cursor-pointer"
+                >
+                  <IndianRupee className="h-3.5 w-3.5" /> Record Payment (Mark as Paid)
+                </button>
+              )}
+            </div>
+            <button type="button" onClick={() => setPreviewInv(null)} className={btnSecondary}>
+              Close
+            </button>
+          </div>
+        }
       >
         <TaxInvoicePreview
           invoice={previewInv}

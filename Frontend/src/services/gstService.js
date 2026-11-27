@@ -80,30 +80,37 @@ export const computeGSTSummary = ({
   const activePurchases = purchases.filter((p) => p.status !== 'Cancelled');
   const activeExpenses = expenses.filter((e) => e.status !== 'Archived' && e.itcEligible !== false);
 
+  const getInvTax = (i, head) => {
+    if (head === 'cgst') return Number(i.cgst ?? i.cgstTotal ?? (i.placeOfSupply === i.sellerState || (!i.igst && !i.igstTotal) ? (i.totalTax || 0) / 2 : 0)) || 0;
+    if (head === 'sgst') return Number(i.sgst ?? i.sgstTotal ?? (i.placeOfSupply === i.sellerState || (!i.igst && !i.igstTotal) ? (i.totalTax || 0) / 2 : 0)) || 0;
+    if (head === 'igst') return Number(i.igst ?? i.igstTotal ?? (i.placeOfSupply && i.sellerState && i.placeOfSupply !== i.sellerState ? (i.totalTax || 0) : 0)) || 0;
+    return 0;
+  };
+
   const outCgst = round2(
-    activeInvoices.reduce((s, i) => s + (Number(i.cgst) || 0), 0) -
-      activeCNs.reduce((s, c) => s + (Number(c.cgst) || 0), 0)
+    activeInvoices.reduce((s, i) => s + getInvTax(i, 'cgst'), 0) -
+      activeCNs.reduce((s, c) => s + (Number(c.cgst ?? c.cgstTotal) || 0), 0)
   );
   const outSgst = round2(
-    activeInvoices.reduce((s, i) => s + (Number(i.sgst) || 0), 0) -
-      activeCNs.reduce((s, c) => s + (Number(c.sgst) || 0), 0)
+    activeInvoices.reduce((s, i) => s + getInvTax(i, 'sgst'), 0) -
+      activeCNs.reduce((s, c) => s + (Number(c.sgst ?? c.sgstTotal) || 0), 0)
   );
   const outIgst = round2(
-    activeInvoices.reduce((s, i) => s + (Number(i.igst) || 0), 0) -
-      activeCNs.reduce((s, c) => s + (Number(c.igst) || 0), 0)
+    activeInvoices.reduce((s, i) => s + getInvTax(i, 'igst'), 0) -
+      activeCNs.reduce((s, c) => s + (Number(c.igst ?? c.igstTotal) || 0), 0)
   );
   const outputTax = round2(Math.max(0, outCgst + outSgst + outIgst));
 
   const inCgst = round2(
-    activePurchases.reduce((s, p) => s + (Number(p.cgst) || 0), 0) +
+    activePurchases.reduce((s, p) => s + (Number(p.cgst ?? p.cgstTotal) || 0), 0) +
       activeExpenses.reduce((s, e) => s + (Number(e.cgst) || 0), 0)
   );
   const inSgst = round2(
-    activePurchases.reduce((s, p) => s + (Number(p.sgst) || 0), 0) +
+    activePurchases.reduce((s, p) => s + (Number(p.sgst ?? p.sgstTotal) || 0), 0) +
       activeExpenses.reduce((s, e) => s + (Number(e.sgst) || 0), 0)
   );
   const inIgst = round2(
-    activePurchases.reduce((s, p) => s + (Number(p.igst) || 0), 0) +
+    activePurchases.reduce((s, p) => s + (Number(p.igst ?? p.igstTotal) || 0), 0) +
       activeExpenses.reduce((s, e) => s + (Number(e.igst) || 0), 0)
   );
   const inputItc = round2(inCgst + inSgst + inIgst);
@@ -114,11 +121,11 @@ export const computeGSTSummary = ({
   const netLiability = round2(Math.max(0, outputTax - inputItc));
 
   const totalOutwardTaxable = round2(
-    activeInvoices.reduce((s, i) => s + (Number(i.taxableValue) || 0), 0) -
-      activeCNs.reduce((s, c) => s + (Number(c.taxableValue) || 0), 0)
+    activeInvoices.reduce((s, i) => s + (Number(i.taxableValue ?? i.taxableAmount ?? (i.grandTotal ? (i.grandTotal - (i.totalTax || 0)) : 0)) || 0), 0) -
+      activeCNs.reduce((s, c) => s + (Number(c.taxableValue ?? c.taxableAmount) || 0), 0)
   );
   const totalInwardTaxable = round2(
-    activePurchases.reduce((s, p) => s + (Number(p.taxableValue) || 0), 0) +
+    activePurchases.reduce((s, p) => s + (Number(p.taxableValue ?? p.taxableAmount) || 0), 0) +
       activeExpenses.reduce((s, e) => s + (Number(e.amount) || 0), 0)
   );
 
@@ -147,14 +154,16 @@ export const generateHSNSummary = (invoices = []) => {
     .filter((i) => i.status !== 'Draft' && i.status !== 'Cancelled')
     .forEach((inv) => {
       (inv.items || []).forEach((item) => {
-        const hsn = item.hsn || '9999';
-        const key = `${hsn}_${item.gstRate}`;
+        const hsn = item.hsn || item.HSN || '9999';
+        const name = item.name || item.productName || 'Taxable Goods';
+        const rate = Number(item.gstRate) || 0;
+        const key = `${hsn}_${rate}_${name}`;
         if (!map.has(key)) {
           map.set(key, {
             hsn,
-            description: item.name || 'Taxable Goods',
-            uqc: item.unit || 'PCS',
-            gstRate: Number(item.gstRate) || 0,
+            description: name,
+            uqc: item.unit || item.unitName || 'PCS',
+            gstRate: rate,
             qty: 0,
             taxableValue: 0,
             cgst: 0,
@@ -164,11 +173,29 @@ export const generateHSNSummary = (invoices = []) => {
           });
         }
         const row = map.get(key);
-        row.qty += Number(item.qty) || 0;
-        row.taxableValue = round2(row.taxableValue + (Number(item.taxableAmount) || 0));
-        row.cgst = round2(row.cgst + (Number(item.cgst) || 0));
-        row.sgst = round2(row.sgst + (Number(item.sgst) || 0));
-        row.igst = round2(row.igst + (Number(item.igst) || 0));
+        const qty = Number(item.qty || item.quantity) || 1;
+        row.qty += qty;
+
+        const ratePrice = Number(item.rate || item.unitPrice || 0);
+        const calcTaxable = ratePrice * qty;
+        const itemTaxable = Number(item.taxableValue ?? item.taxableAmount ?? (calcTaxable > 0 ? calcTaxable : 0)) || 0;
+        row.taxableValue = round2(row.taxableValue + itemTaxable);
+
+        let cTax = Number(item.cgst) || 0;
+        let sTax = Number(item.sgst) || 0;
+        let iTax = Number(item.igst) || 0;
+        if (!cTax && !sTax && !iTax && rate > 0 && itemTaxable > 0) {
+          const expectedTax = round2(itemTaxable * (rate / 100));
+          if (inv.placeOfSupply && inv.sellerState && inv.placeOfSupply !== inv.sellerState) {
+            iTax = expectedTax;
+          } else {
+            cTax = round2(expectedTax / 2);
+            sTax = round2(expectedTax / 2);
+          }
+        }
+        row.cgst = round2(row.cgst + cTax);
+        row.sgst = round2(row.sgst + sTax);
+        row.igst = round2(row.igst + iTax);
         row.totalTax = round2(row.cgst + row.sgst + row.igst);
       });
     });
