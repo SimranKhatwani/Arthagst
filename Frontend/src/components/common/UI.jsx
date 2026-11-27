@@ -427,3 +427,5 @@ export const btnSecondary =
   'inline-flex items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 disabled:opacity-50';
 export const btnDanger =
   'inline-flex items-center justify-center gap-1.5 rounded-md border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-100 transition-colors whitespace-nowrap shrink-0';
+
+export { GSTINInput } from './GSTINInput.jsx';

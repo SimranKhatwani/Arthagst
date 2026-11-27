@@ -1,4 +1,23 @@
 import { z } from 'zod';
+import { validateGSTIN } from '../utils/gstinValidator.js';
+
+const gstinOptionalSchema = z
+  .string()
+  .trim()
+  .optional()
+  .nullable()
+  .or(z.literal(''))
+  .superRefine((val, ctx) => {
+    if (!val || String(val).trim() === '') return;
+    const res = validateGSTIN(val);
+    if (!res.isValid) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: res.error || 'Invalid Indian GSTIN format',
+      });
+    }
+  })
+  .transform((val) => (val && String(val).trim() !== '' ? String(val).trim().toUpperCase() : null));
 
 export const superAdminLoginSchema = z.object({
   email: z
@@ -54,7 +73,7 @@ export const createTenantSchema = z.object({
   city: z.string().trim().optional().default(''),
   state: z.string().trim().optional().default(''),
   businessAddress: z.string().trim().optional().default(''),
-  GSTIN: z.string().trim().nullable().optional(),
+  GSTIN: gstinOptionalSchema,
   PAN: z.string().trim().nullable().optional(),
   planName: z.string().trim().optional().default('Growth'),
 });
@@ -71,7 +90,7 @@ export const updateTenantSchema = z.object({
   city: z.string().trim().optional(),
   state: z.string().trim().optional(),
   businessAddress: z.string().trim().optional(),
-  GSTIN: z.string().trim().nullable().optional(),
+  GSTIN: gstinOptionalSchema,
   PAN: z.string().trim().nullable().optional(),
   isActive: z.boolean().optional(),
   subscriptionStatus: z.enum(['trial', 'active', 'past_due', 'suspended', 'cancelled', 'expired']).optional(),

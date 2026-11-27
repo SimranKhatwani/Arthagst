@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { validateGSTIN } from '../utils/gstinValidator.js';
 
 export const posItemInputSchema = z.object({
   productId: z
@@ -47,7 +48,22 @@ export const createPosBillSchema = z.object({
     })
     .optional()
     .default(''),
-  customerGSTIN: z.string().trim().max(15).optional().default(''),
+  customerGSTIN: z
+    .string()
+    .trim()
+    .optional()
+    .default('')
+    .superRefine((val, ctx) => {
+      if (!val || String(val).trim() === '') return;
+      const res = validateGSTIN(val);
+      if (!res.isValid) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: res.error || 'Invalid customer GSTIN',
+        });
+      }
+    })
+    .transform((val) => (val && String(val).trim() !== '' ? String(val).trim().toUpperCase() : '')),
   placeOfSupply: z.string().trim().optional(),
   billDate: z.string().optional(),
   items: z

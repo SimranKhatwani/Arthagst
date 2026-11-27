@@ -1,7 +1,25 @@
 import { z } from 'zod';
+import { validateGSTIN } from '../utils/gstinValidator.js';
 
-const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
 const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+
+const gstinFieldSchema = z
+  .string()
+  .trim()
+  .optional()
+  .nullable()
+  .or(z.literal(''))
+  .superRefine((val, ctx) => {
+    if (!val || String(val).trim() === '') return;
+    const res = validateGSTIN(val);
+    if (!res.isValid) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: res.error || 'Invalid Indian GSTIN format (e.g. 27AAPFU0939F1ZV)',
+      });
+    }
+  })
+  .transform((val) => (val && String(val).trim() !== '' ? String(val).trim().toUpperCase() : null));
 
 export const createPartySchema = z
   .object({
@@ -39,13 +57,7 @@ export const createPartySchema = z
       .optional()
       .nullable()
       .or(z.literal('')),
-    GSTIN: z
-      .string()
-      .trim()
-      .regex(GSTIN_REGEX, 'Invalid Indian GSTIN format (e.g. 27AAPFU0939F1ZV)')
-      .optional()
-      .nullable()
-      .or(z.literal('')),
+    GSTIN: gstinFieldSchema,
     PAN: z
       .string()
       .trim()
@@ -106,13 +118,7 @@ export const updatePartySchema = z.object({
     })
     .optional(),
   email: z.string().trim().email('Invalid email').optional().nullable().or(z.literal('')),
-  GSTIN: z
-    .string()
-    .trim()
-    .regex(GSTIN_REGEX, 'Invalid Indian GSTIN format')
-    .optional()
-    .nullable()
-    .or(z.literal('')),
+  GSTIN: gstinFieldSchema,
   PAN: z
     .string()
     .trim()

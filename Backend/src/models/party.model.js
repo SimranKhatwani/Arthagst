@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { validateGSTIN } from '../utils/gstinValidator.js';
 
 const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
 const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
@@ -80,9 +81,12 @@ const partySchema = new mongoose.Schema(
       validate: {
         validator: function (v) {
           if (!v) return true; // Optional
-          return GSTIN_REGEX.test(v);
+          return validateGSTIN(v).isValid;
         },
-        message: 'Invalid Indian GSTIN format (e.g. 27AAPFU0939F1ZV)',
+        message: function (props) {
+          const res = validateGSTIN(props.value);
+          return res.error || 'Invalid Indian GSTIN format (e.g. 27AAPFU0939F1ZV)';
+        },
       },
     },
     PAN: {

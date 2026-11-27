@@ -26,7 +26,8 @@ import {
   REGISTRATION_TYPES,
   FINANCIAL_YEARS,
 } from '../../data/constants';
-import { InputField, inputClass, btnPrimary, btnSecondary } from '../../components/common/UI';
+import { InputField, GSTINInput, inputClass, btnPrimary, btnSecondary } from '../../components/common/UI';
+import { validateGSTIN } from '../../utils/gstinValidator';
 
 export const LoginPage = () => {
   const { login } = useApp();
@@ -845,7 +846,7 @@ export const RegisterPage = () => {
 };
 
 export const OnboardingWizardPage = () => {
-  const { state, completeOnboarding } = useApp();
+  const { state, completeOnboarding, notify } = useApp();
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
 
@@ -878,8 +879,31 @@ export const OnboardingWizardPage = () => {
     { num: 5, label: 'Branding' },
   ];
 
+  const validateCurrentStep = (targetStep) => {
+    if (step === 2 && form.gstRegistered && form.gstin && form.gstin.trim()) {
+      const gstinVal = validateGSTIN(form.gstin);
+      if (!gstinVal.isValid) {
+        notify?.(`Invalid GSTIN: ${gstinVal.error}`, 'error');
+        return false;
+      }
+    }
+    return true;
+  };
+
   const handleFinish = () => {
-    completeOnboarding(form);
+    if (form.gstRegistered && form.gstin && form.gstin.trim()) {
+      const gstinVal = validateGSTIN(form.gstin);
+      if (!gstinVal.isValid) {
+        notify?.(`Invalid GSTIN: ${gstinVal.error}`, 'error');
+        setStep(2);
+        return;
+      }
+    }
+    const finalForm = {
+      ...form,
+      gstin: form.gstin ? form.gstin.trim().toUpperCase() : '',
+    };
+    completeOnboarding(finalForm);
     navigate('/dashboard');
   };
 
@@ -913,7 +937,10 @@ export const OnboardingWizardPage = () => {
             <button
               key={s.num}
               type="button"
-              onClick={() => setStep(s.num)}
+              onClick={() => {
+                if (s.num > step && !validateCurrentStep(s.num)) return;
+                setStep(s.num);
+              }}
               className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs transition-colors ${step === s.num
                 ? 'border-indigo-600 bg-indigo-50 font-semibold text-indigo-900'
                 : step > s.num
@@ -993,15 +1020,19 @@ export const OnboardingWizardPage = () => {
                 Business is GST Registered
               </label>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <InputField label="GSTIN (Demo Format)">
-                  <input
-                    type="text"
-                    disabled={!form.gstRegistered}
-                    value={form.gstin}
-                    onChange={(e) => setForm({ ...form, gstin: e.target.value })}
-                    className={inputClass}
-                  />
-                </InputField>
+                <GSTINInput
+                  label="GSTIN"
+                  disabled={!form.gstRegistered}
+                  value={form.gstin}
+                  onChange={(e) => setForm({ ...form, gstin: e.target.value })}
+                  onPanDerived={(pan) => {
+                    if (!form.pan) setForm((prev) => ({ ...prev, pan }));
+                  }}
+                  onStateDetected={(s) => {
+                    if (s?.name) setForm((prev) => ({ ...prev, state: s.name }));
+                  }}
+                  required={form.gstRegistered}
+                />
                 <InputField label="Registration Type">
                   <select
                     disabled={!form.gstRegistered}
@@ -1189,7 +1220,10 @@ export const OnboardingWizardPage = () => {
             {step < 5 ? (
               <button
                 type="button"
-                onClick={() => setStep((s) => Math.min(5, s + 1))}
+                onClick={() => {
+                  if (!validateCurrentStep(step + 1)) return;
+                  setStep((s) => Math.min(5, s + 1));
+                }}
                 className={btnPrimary}
               >
                 Next Step

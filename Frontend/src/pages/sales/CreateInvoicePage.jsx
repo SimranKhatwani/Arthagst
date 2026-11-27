@@ -9,10 +9,12 @@ import {
   PageHeader,
   Modal,
   InputField,
+  GSTINInput,
   inputClass,
   btnPrimary,
   btnSecondary,
 } from '../../components/common/UI';
+import { validateGSTIN } from '../../utils/gstinValidator';
 import { TaxInvoicePreview } from '../../components/invoice/TaxInvoicePreview';
 
 export const CreateInvoicePage = () => {
@@ -292,9 +294,17 @@ export const CreateInvoicePage = () => {
       notify('Customer name and mobile are required', 'error');
       return;
     }
+    if (newCust.gstin && newCust.gstin.trim()) {
+      const gstinVal = validateGSTIN(newCust.gstin);
+      if (!gstinVal.isValid) {
+        notify(`Invalid GSTIN: ${gstinVal.error}`, 'error');
+        return;
+      }
+    }
     const created = {
       id: `cust-${Date.now()}`,
       ...newCust,
+      gstin: newCust.gstin ? newCust.gstin.trim().toUpperCase() : '',
       businessName: newCust.name,
       shippingAddress: newCust.billingAddress,
       openingBalance: 0,
@@ -869,14 +879,15 @@ export const CreateInvoicePage = () => {
                 ))}
               </select>
             </InputField>
-            <InputField label="GSTIN (Optional)">
-              <input
-                type="text"
-                value={newCust.gstin}
-                onChange={(e) => setNewCust({ ...newCust, gstin: e.target.value })}
-                className={inputClass}
-              />
-            </InputField>
+            <GSTINInput
+              label="GSTIN (Optional)"
+              value={newCust.gstin}
+              onChange={(e) => setNewCust({ ...newCust, gstin: e.target.value })}
+              onStateDetected={(s) => {
+                if (s && s.name) setNewCust((prev) => ({ ...prev, state: s.name }));
+              }}
+              required={false}
+            />
             <InputField label="Email">
               <input
                 type="email"

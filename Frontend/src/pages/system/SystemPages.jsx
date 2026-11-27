@@ -43,11 +43,13 @@ import {
   SegmentedTabs,
   Modal,
   InputField,
+  GSTINInput,
   inputClass,
   btnPrimary,
   btnSecondary,
   btnDanger,
 } from '../../components/common/UI';
+import { validateGSTIN } from '../../utils/gstinValidator';
 
 export const NotificationsPage = () => {
   const { state, setState, notify } = useApp();
@@ -1561,8 +1563,19 @@ export const SettingsPage = ({ defaultTab = 'business-tax' }) => {
       notify('Please enter a valid 10-digit phone number', 'error');
       return;
     }
+    if (biz.gstin && biz.gstin.trim()) {
+      const gstinVal = validateGSTIN(biz.gstin);
+      if (!gstinVal.isValid) {
+        notify(`Invalid GSTIN: ${gstinVal.error}`, 'error');
+        return;
+      }
+    }
     try {
-      await updateBusinessAndSettings(biz, cfg);
+      const payloadBiz = {
+        ...biz,
+        gstin: biz.gstin ? biz.gstin.trim().toUpperCase() : '',
+      };
+      await updateBusinessAndSettings(payloadBiz, cfg);
     } catch (err) {
       notify(err.message || 'Failed to save settings', 'error');
     }
@@ -1620,7 +1633,18 @@ export const SettingsPage = ({ defaultTab = 'business-tax' }) => {
                 Tax &amp; GST Configuration
               </h3>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <InputField label="GSTIN"><input type="text" value={biz.gstin} onChange={(e) => setBiz({ ...biz, gstin: e.target.value })} className={`${inputClass} font-mono`} /></InputField>
+                <GSTINInput
+                  label="GSTIN"
+                  value={biz.gstin}
+                  onChange={(e) => setBiz({ ...biz, gstin: e.target.value })}
+                  onPanDerived={(pan) => {
+                    if (!biz.pan) setBiz((b) => ({ ...b, pan }));
+                  }}
+                  onStateDetected={(s) => {
+                    if (!biz.state && s?.name) setBiz((b) => ({ ...b, state: s.name }));
+                  }}
+                  required={false}
+                />
                 <InputField label="PAN"><input type="text" value={biz.pan} onChange={(e) => setBiz({ ...biz, pan: e.target.value })} className={`${inputClass} font-mono`} /></InputField>
                 <InputField label="E-Way Bill Threshold (₹)"><input type="number" value={cfg.gst.eWayBillThreshold} onChange={(e) => setCfg({ ...cfg, gst: { ...cfg.gst, eWayBillThreshold: Number(e.target.value) } })} className={inputClass} /></InputField>
                 <div className="space-y-2 pt-4 text-xs">

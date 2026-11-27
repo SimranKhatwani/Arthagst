@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Plus, Edit3, Trash2, Eye, Download, ArrowLeft } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { INDIAN_STATES, REGISTRATION_TYPES } from '../../data/constants';
+import { validateGSTIN } from '../../utils/gstinValidator';
 import {
   formatINR,
   formatDateIN,
@@ -18,6 +19,7 @@ import {
   SegmentedTabs,
   Modal,
   InputField,
+  GSTINInput,
   inputClass,
   btnPrimary,
   btnSecondary,
@@ -94,6 +96,13 @@ export const CustomersPage = () => {
     if (!/^[6-9]\d{9}$/.test(phoneVal)) {
       notify('Please enter a valid 10-digit mobile number', 'error');
       return;
+    }
+    if (form.gstin && form.gstin.trim()) {
+      const gstinCheck = validateGSTIN(form.gstin);
+      if (!gstinCheck.isValid) {
+        notify(gstinCheck.error, 'error');
+        return;
+      }
     }
     try {
       await upsertRecord(
@@ -237,9 +246,14 @@ export const CustomersPage = () => {
               {REGISTRATION_TYPES.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
           </InputField>
-          <InputField label="GSTIN (Optional for Unregistered)">
-            <input type="text" value={form.gstin} onChange={(e) => setForm({ ...form, gstin: e.target.value })} className={`${inputClass} font-mono`} />
-          </InputField>
+          <GSTINInput
+            value={form.gstin}
+            onChange={(e) => setForm({ ...form, gstin: e.target.value })}
+            label="GSTIN (Optional for Unregistered)"
+            onPanDerived={(pan) => {
+              if (!form.pan) setForm((prev) => ({ ...prev, pan }));
+            }}
+          />
           <InputField label="State">
             <select value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} className={inputClass}>
               {INDIAN_STATES.map((s) => <option key={s.code} value={s.name}>{s.name}</option>)}
@@ -445,6 +459,13 @@ export const SuppliersPage = () => {
       notify('Please enter a valid 10-digit mobile number', 'error');
       return;
     }
+    if (form.gstin && form.gstin.trim()) {
+      const gstinCheck = validateGSTIN(form.gstin);
+      if (!gstinCheck.isValid) {
+        notify(gstinCheck.error, 'error');
+        return;
+      }
+    }
     try {
       await upsertRecord(
         'suppliers',
@@ -553,8 +574,29 @@ export const SuppliersPage = () => {
           <InputField label="Contact Person"><input type="text" value={form.contactPerson} onChange={(e) => setForm({ ...form, contactPerson: e.target.value })} className={inputClass} /></InputField>
           <InputField label="Mobile" required><input type="tel" inputMode="numeric" pattern="[6-9][0-9]{9}" maxLength={10} placeholder="10-digit mobile number" required value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value.replace(/\D/g, '').slice(0, 10) })} className={inputClass} /></InputField>
           <InputField label="Email"><input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={inputClass} /></InputField>
-          <InputField label="GSTIN"><input type="text" value={form.gstin} onChange={(e) => setForm({ ...form, gstin: e.target.value })} className={`${inputClass} font-mono`} /></InputField>
-          <InputField label="PAN"><input type="text" value={form.pan} onChange={(e) => setForm({ ...form, pan: e.target.value })} className={`${inputClass} font-mono`} /></InputField>
+          <GSTINInput
+            value={form.gstin}
+            onChange={(e) => setForm({ ...form, gstin: e.target.value })}
+            label="GSTIN (Optional)"
+            onPanDerived={(pan) => {
+              if (!form.pan) setForm((prev) => ({ ...prev, pan }));
+            }}
+          />
+          <InputField label="PAN">
+            <input
+              type="text"
+              maxLength={10}
+              placeholder="e.g. AAAAA9999A"
+              value={form.pan}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  pan: e.target.value.toUpperCase().replace(/[^0-9A-Z]/g, '').slice(0, 10),
+                })
+              }
+              className={`${inputClass} font-mono uppercase`}
+            />
+          </InputField>
           <InputField label="State">
             <select value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} className={inputClass}>
               {INDIAN_STATES.map((s) => <option key={s.code} value={s.name}>{s.name}</option>)}

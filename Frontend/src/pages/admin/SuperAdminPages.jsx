@@ -29,10 +29,12 @@ import {
   StatusLabel,
   Modal,
   InputField,
+  GSTINInput,
   inputClass,
   btnPrimary,
   btnSecondary,
 } from '../../components/common/UI';
+import { validateGSTIN } from '../../utils/gstinValidator';
 
 export const SuperAdminDashboardPage = () => {
   const { state } = useApp();
@@ -327,15 +329,27 @@ export const SuperAdminTenantsPage = () => {
       return;
     }
 
+    if (editForm.GSTIN && editForm.GSTIN.trim()) {
+      const gstinVal = validateGSTIN(editForm.GSTIN);
+      if (!gstinVal.isValid) {
+        notify?.(`Invalid GSTIN: ${gstinVal.error}`, 'error');
+        return;
+      }
+    }
+
     try {
       setSubmitting(true);
-      await superAdminService.updateTenant(tenantId, editForm);
+      const payload = {
+        ...editForm,
+        GSTIN: editForm.GSTIN && editForm.GSTIN.trim() ? editForm.GSTIN.trim().toUpperCase() : null,
+      };
+      await superAdminService.updateTenant(tenantId, payload);
       
       // Optimistic instant table update
       setTenantsList((prev) =>
         prev.map((item) =>
           (item._id || item.id) === tenantId || (item.tenantCode || item.code) === (selectedTenant.tenantCode || selectedTenant.code)
-            ? { ...item, ...editForm }
+            ? { ...item, ...payload }
             : item
         )
       );
@@ -961,15 +975,18 @@ export const SuperAdminTenantsPage = () => {
               ))}
             </select>
           </InputField>
-          <InputField label="GSTIN">
-            <input
-              type="text"
-              placeholder="e.g. 27AAPFU0939F1ZV"
-              value={editForm.GSTIN}
-              onChange={(e) => setEditForm({ ...editForm, GSTIN: e.target.value.toUpperCase() })}
-              className={`${inputClass} uppercase`}
-            />
-          </InputField>
+          <GSTINInput
+            label="GSTIN"
+            value={editForm.GSTIN}
+            onChange={(e) => setEditForm({ ...editForm, GSTIN: e.target.value })}
+            onPanDerived={(pan) => {
+              if (!editForm.PAN) setEditForm((prev) => ({ ...prev, PAN: pan }));
+            }}
+            onStateDetected={(s) => {
+              if (!editForm.state && s?.name) setEditForm((prev) => ({ ...prev, state: s.name }));
+            }}
+            required={false}
+          />
           <InputField label="PAN">
             <input
               type="text"

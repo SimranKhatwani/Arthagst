@@ -1,15 +1,28 @@
 import { getFinancialYear, round2, INDIAN_STATES, resolveStateCode } from './sales.calculator.js';
+import {
+  GST_STATE_CODES,
+  calculateGSTINChecksum,
+  validateGSTIN,
+  isValidGSTIN as validateGSTINBool,
+} from '../utils/gstinValidator.js';
 
-export { getFinancialYear, round2, INDIAN_STATES, resolveStateCode };
+export {
+  getFinancialYear,
+  round2,
+  INDIAN_STATES,
+  resolveStateCode,
+  GST_STATE_CODES,
+  calculateGSTINChecksum,
+  validateGSTIN,
+};
 
 export const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
 
 /**
- * Validate GSTIN format
+ * Validate GSTIN format with strict state code, structure, and Mod-36 checksum
  */
 export const isValidGSTIN = (gstin) => {
-  if (!gstin || typeof gstin !== 'string') return false;
-  return GSTIN_REGEX.test(gstin.trim().toUpperCase());
+  return validateGSTINBool(gstin);
 };
 
 /**

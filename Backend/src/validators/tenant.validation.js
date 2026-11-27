@@ -1,6 +1,6 @@
 import { z } from 'zod';
+import { validateGSTIN } from '../utils/gstinValidator.js';
 
-const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
 const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
 
 export const updateTenantProfileSchema = z.object({
@@ -15,9 +15,23 @@ export const updateTenantProfileSchema = z.object({
       message: 'Phone number must be a valid 10-digit mobile number',
     })
     .optional(),
-  GSTIN: z.string().trim().toUpperCase().refine(val => !val || GSTIN_REGEX.test(val), {
-    message: 'Invalid Indian GSTIN format (e.g. 27AAPFU0939F1ZV)',
-  }).nullable().optional(),
+  GSTIN: z
+    .string()
+    .trim()
+    .optional()
+    .nullable()
+    .or(z.literal(''))
+    .superRefine((val, ctx) => {
+      if (!val || String(val).trim() === '') return;
+      const res = validateGSTIN(val);
+      if (!res.isValid) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: res.error || 'Invalid Indian GSTIN format (e.g. 27AAPFU0939F1ZV)',
+        });
+      }
+    })
+    .transform((val) => (val && String(val).trim() !== '' ? String(val).trim().toUpperCase() : null)),
   PAN: z.string().trim().toUpperCase().refine(val => !val || PAN_REGEX.test(val), {
     message: 'Invalid Indian PAN format (e.g. AAPFU0939F)',
   }).nullable().optional(),
