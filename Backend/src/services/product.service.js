@@ -3,6 +3,7 @@ import Product from '../models/product.model.js';
 import Category from '../models/category.model.js';
 import Unit from '../models/unit.model.js';
 import Inventory from '../models/inventory.model.js';
+import Warehouse from '../models/warehouse.model.js';
 import * as auditLogService from './auditLog.service.js';
 
 /**
@@ -110,6 +111,26 @@ export const createProduct = async (tenantId, data) => {
   const product = new Product(productPayload);
   await product.save();
 
+  // If goods product with initial stock, automatically initialize warehouse inventory
+  if (product.productType === 'goods' && ((product.openingStock && product.openingStock > 0) || (product.stock && product.stock > 0))) {
+    try {
+      const warehouse = await Warehouse.findOne({ tenantId, isDeleted: false, isActive: true });
+      if (warehouse) {
+        const initialQty = product.stock || product.openingStock || 0;
+        await Inventory.create({
+          tenantId,
+          productId: product._id,
+          warehouseId: warehouse._id,
+          quantity: initialQty,
+          reservedQuantity: 0,
+          availableQuantity: initialQty,
+        });
+      }
+    } catch (invErr) {
+      console.warn('Initial warehouse inventory notice:', invErr.message);
+    }
+  }
+
   await product.populate([
     { path: 'categoryId', select: 'name' },
     { path: 'unitId', select: 'name shortName gstUqcCode allowDecimal' },
@@ -189,8 +210,29 @@ export const getProducts = async (tenantId, query) => {
     Product.countDocuments(filter),
   ]);
 
+  // Dynamically resolve real-time warehouse inventory quantities
+  const productIds = products.map((p) => p._id);
+  const inventoryAgg = await Inventory.aggregate([
+    { $match: { productId: { $in: productIds } } },
+    { $group: { _id: '$productId', totalQty: { $sum: '$quantity' } } },
+  ]);
+
+  const inventoryMap = new Map();
+  inventoryAgg.forEach((inv) => {
+    inventoryMap.set(String(inv._id), inv.totalQty);
+  });
+
+  const enrichedProducts = products.map((p) => {
+    const pObj = p.toObject ? p.toObject() : { ...p };
+    const pIdStr = String(p._id);
+    if (inventoryMap.has(pIdStr)) {
+      pObj.stock = inventoryMap.get(pIdStr);
+    }
+    return pObj;
+  });
+
   return {
-    products,
+    products: enrichedProducts,
     pagination: {
       total,
       page,
@@ -224,7 +266,15 @@ export const getProductById = async (tenantId, productId) => {
     throw error;
   }
 
-  return product;
+  const pObj = product.toObject ? product.toObject() : { ...product };
+  const invAgg = await Inventory.aggregate([
+    { $match: { productId: product._id } },
+    { $group: { _id: '$productId', totalQty: { $sum: '$quantity' } } },
+  ]);
+  if (invAgg.length > 0) {
+    pObj.stock = invAgg[0].totalQty;
+  }
+  return pObj;
 };
 
 /**
@@ -379,11 +429,23 @@ export const updateProduct = async (tenantId, productId, data) => {
 
     // Sync warehouse inventory record if it exists
     try {
-      const inv = await Inventory.findOne({ tenantId, productId: product._id });
+      let inv = await Inventory.findOne({ tenantId, productId: product._id });
       if (inv) {
         inv.quantity = newQty;
         inv.availableQuantity = Math.max(0, newQty - (inv.reservedQuantity || 0));
         await inv.save();
+      } else {
+        const warehouse = await Warehouse.findOne({ tenantId, isDeleted: false, isActive: true });
+        if (warehouse) {
+          await Inventory.create({
+            tenantId,
+            productId: product._id,
+            warehouseId: warehouse._id,
+            quantity: newQty,
+            reservedQuantity: 0,
+            availableQuantity: newQty,
+          });
+        }
       }
     } catch {
       // Non-blocking inventory sync

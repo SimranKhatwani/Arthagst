@@ -351,7 +351,40 @@ export const POSBillingPage = () => {
       };
 
       const saved = await saveSalesInvoice(payload, paymentPayload);
-      setReceiptInv(saved || payload);
+      const invoiceData = saved?.invoice || saved?.data || saved || {};
+
+      const receiptData = {
+        invoiceNumber: invoiceData.invoiceNumber || payload.invoiceNumber || 'INV-0001',
+        date: payload.date || (invoiceData.invoiceDate ? new Date(invoiceData.invoiceDate).toLocaleDateString('en-IN') : today),
+        customerName: activeCustomer?.name || invoiceData.partyName || payload.customerName || 'Walk-in Customer',
+        customerGstin: activeCustomer?.gstin || activeCustomer?.GSTIN || invoiceData.partyGSTIN || '',
+        paymentMethod: displayMethod,
+        taxableValue: invoiceData.taxableAmount !== undefined ? invoiceData.taxableAmount : computed.taxableValue,
+        totalTax: (invoiceData.cgstTotal !== undefined || invoiceData.igstTotal !== undefined)
+          ? ((invoiceData.cgstTotal || 0) + (invoiceData.sgstTotal || 0) + (invoiceData.igstTotal || 0) + (invoiceData.cessTotal || 0))
+          : computed.totalTax,
+        grandTotal: invoiceData.grandTotal !== undefined ? invoiceData.grandTotal : computed.grandTotal,
+        roundOff: invoiceData.roundOff !== undefined ? invoiceData.roundOff : computed.roundOff,
+        items: (cart && cart.length > 0)
+          ? cart.map((c) => ({
+              name: c.name || c.productName,
+              qty: c.qty || c.quantity || 1,
+              rate: c.rate || c.unitPrice || 0,
+              gstRate: c.gstRate || 0,
+              totalAmount: c.totalAmount !== undefined
+                ? c.totalAmount
+                : Number(((c.rate || 0) * (c.qty || 1) * (1 + (c.gstRate || 0) / 100)).toFixed(2)),
+            }))
+          : (invoiceData.items || []).map((it) => ({
+              name: it.productName || it.name,
+              qty: it.quantity || it.qty || 1,
+              rate: it.unitPrice || it.rate || 0,
+              gstRate: it.gstRate || 0,
+              totalAmount: it.lineTotal !== undefined ? it.lineTotal : ((it.unitPrice || 0) * (it.quantity || 1)),
+            })),
+      };
+
+      setReceiptInv(receiptData);
       setCart([]);
       setDiscountPct(0);
       setSplitCash(0);
@@ -692,22 +725,70 @@ export const POSBillingPage = () => {
               </div>
               <div className="flex justify-between text-[11px]">
                 <span>Bill: {receiptInv.invoiceNumber}</span>
-                <span>{receiptInv.date}</span>
+                <span>{receiptInv.date || receiptInv.invoiceDate || new Date().toLocaleDateString('en-IN')}</span>
               </div>
-              <div className="text-[11px]">Customer: {receiptInv.customerName}</div>
+              <div className="text-[11px]">
+                Customer: <strong className="font-semibold">{receiptInv.customerName || receiptInv.partyName || 'Walk-in Customer'}</strong>
+              </div>
+              {receiptInv.customerGstin && (
+                <div className="text-[10px] text-slate-500 font-mono">GSTIN: {receiptInv.customerGstin}</div>
+              )}
               <div className="border-y border-dashed border-slate-300 py-2 space-y-1">
-                {(receiptInv.items || []).map((it, i) => (
-                  <div key={i} className="flex justify-between">
-                    <span className="truncate pr-2">{it.name} x{it.qty}</span>
-                    <span>{formatINR(it.totalAmount)}</span>
-                  </div>
-                ))}
+                {(receiptInv.items || []).map((it, i) => {
+                  const itName = it.name || it.productName || 'Item';
+                  const itQty = it.qty || it.quantity || 1;
+                  const itRate = it.rate || it.unitPrice || 0;
+                  const itTotal = it.totalAmount !== undefined
+                    ? it.totalAmount
+                    : (it.lineTotal !== undefined ? it.lineTotal : itRate * itQty);
+                  return (
+                    <div key={i} className="flex justify-between items-center text-[11px]">
+                      <span className="truncate pr-2">
+                        {itName} × {itQty}
+                      </span>
+                      <span className="font-semibold font-mono">{formatINR(itTotal)}</span>
+                    </div>
+                  );
+                })}
               </div>
               <div className="space-y-0.5 text-[11px]">
-                <div className="flex justify-between"><span>Taxable:</span><span>{formatINR(receiptInv.taxableValue)}</span></div>
-                <div className="flex justify-between"><span>GST:</span><span>{formatINR(receiptInv.totalTax)}</span></div>
-                <div className="flex justify-between text-sm font-bold pt-1"><span>TOTAL:</span><span>{formatINR(receiptInv.grandTotal)}</span></div>
-                <div className="flex justify-between"><span>Paid via:</span><span>{receiptInv.paymentMethod}</span></div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Taxable:</span>
+                  <span className="font-mono">
+                    {formatINR(
+                      receiptInv.taxableValue !== undefined
+                        ? receiptInv.taxableValue
+                        : (receiptInv.taxableAmount !== undefined ? receiptInv.taxableAmount : 0)
+                    )}
+                  </span>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>GST:</span>
+                  <span className="font-mono">
+                    {formatINR(
+                      receiptInv.totalTax !== undefined
+                        ? receiptInv.totalTax
+                        : ((receiptInv.cgstTotal || 0) +
+                           (receiptInv.sgstTotal || 0) +
+                           (receiptInv.igstTotal || 0) +
+                           (receiptInv.cessTotal || 0))
+                    )}
+                  </span>
+                </div>
+                {receiptInv.roundOff !== 0 && receiptInv.roundOff !== undefined && (
+                  <div className="flex justify-between text-[10px] text-slate-500">
+                    <span>Round-off:</span>
+                    <span className="font-mono">{formatINR(receiptInv.roundOff)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-sm font-bold pt-1 border-t border-dotted border-slate-200">
+                  <span>TOTAL:</span>
+                  <span className="font-mono text-indigo-700">{formatINR(receiptInv.grandTotal)}</span>
+                </div>
+                <div className="flex justify-between text-slate-600 pt-0.5">
+                  <span>Paid via:</span>
+                  <span className="font-semibold">{receiptInv.paymentMethod || 'Cash'}</span>
+                </div>
               </div>
               <div className="border-t border-dashed border-slate-300 pt-2 text-center text-[10px] text-slate-500">
                 Thank you for shopping with {state.business.businessName}
@@ -721,10 +802,11 @@ export const POSBillingPage = () => {
               <button
                 type="button"
                 onClick={() => {
+                  const invNum = receiptInv.invoiceNumber || 'INV-0001';
                   downloadPrintableHtml(
                     'pos-thermal-receipt',
-                    `receipt-${receiptInv.invoiceNumber.replace(/[^a-zA-Z0-9-]/g, '_')}.html`,
-                    `Receipt ${receiptInv.invoiceNumber}`
+                    `receipt-${invNum.replace(/[^a-zA-Z0-9-]/g, '_')}.html`,
+                    `Receipt ${invNum}`
                   );
                   notify('Printable receipt downloaded (.html)');
                 }}
@@ -734,14 +816,15 @@ export const POSBillingPage = () => {
               </button>
               <button
                 type="button"
-                onClick={() =>
+                onClick={() => {
+                  const invNum = receiptInv.invoiceNumber || 'INV-0001';
                   printElement({
                     elementId: 'pos-thermal-receipt',
-                    title: `Receipt ${receiptInv.invoiceNumber}`,
-                    fileName: `receipt-${receiptInv.invoiceNumber.replace(/[^a-zA-Z0-9-]/g, '_')}.html`,
+                    title: `Receipt ${invNum}`,
+                    fileName: `receipt-${invNum.replace(/[^a-zA-Z0-9-]/g, '_')}.html`,
                     onNotify: notify,
-                  })
-                }
+                  });
+                }}
                 className={btnPrimary}
               >
                 <Printer className="h-3.5 w-3.5" /> Print Receipt

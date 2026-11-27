@@ -1757,8 +1757,33 @@ export const AppProvider = ({ children }) => {
           }
         }
 
+        setState((prev) => {
+          const invList = prev.invoices || [];
+          const exists = invList.some((i) => (i._id || i.id) === invId);
+          const nextInvoices = exists
+            ? invList.map((i) => ((i._id || i.id) === invId ? { ...i, ...invoiceRecord } : i))
+            : [invoiceRecord, ...invList];
+
+          const nextProducts = (prev.products || []).map((p) => {
+            const purchasedItem = (backendItems || []).find(
+              (it) => String(it.productId) === String(p._id) || String(it.productId) === String(p.id)
+            );
+            if (purchasedItem && p.stock !== undefined) {
+              return { ...p, stock: Math.max(0, p.stock - purchasedItem.quantity) };
+            }
+            return p;
+          });
+
+          return { ...prev, invoices: nextInvoices, products: nextProducts };
+        });
+
         notify(invoicePayload.status === 'Draft' ? 'Draft invoice saved' : 'Tax invoice generated and stock updated');
-        await Promise.all([loadPhase1Data(), loadPhase2Data()]);
+
+        // Refresh full state in background without blocking POS checkout UI
+        Promise.all([loadPhase1Data(), loadPhase2Data()]).catch((syncErr) =>
+          console.warn('Background sync notice:', syncErr.message)
+        );
+
         return invoiceRecord;
       } catch (err) {
         notify(err.message || 'Failed to save sales invoice', 'error');
@@ -1905,8 +1930,33 @@ export const AppProvider = ({ children }) => {
           }
         }
 
+        setState((prev) => {
+          const billList = prev.purchases || [];
+          const exists = billList.some((b) => (b._id || b.id) === billId);
+          const nextBills = exists
+            ? billList.map((b) => ((b._id || b.id) === billId ? { ...b, ...billRecord } : b))
+            : [billRecord, ...billList];
+
+          const nextProducts = (prev.products || []).map((p) => {
+            const purItem = (backendItems || []).find(
+              (it) => String(it.productId) === String(p._id) || String(it.productId) === String(p.id)
+            );
+            if (purItem && p.stock !== undefined) {
+              return { ...p, stock: (p.stock || 0) + purItem.quantity };
+            }
+            return p;
+          });
+
+          return { ...prev, purchases: nextBills, products: nextProducts };
+        });
+
         notify('Purchase bill saved and inventory stock increased');
-        await Promise.all([loadPhase1Data(), loadPhase2Data()]);
+
+        // Background sync to refresh caches without delaying user
+        Promise.all([loadPhase1Data(), loadPhase2Data()]).catch((syncErr) =>
+          console.warn('Background sync notice:', syncErr.message)
+        );
+
         return billRecord;
       } catch (err) {
         notify(err.message || 'Failed to save purchase bill', 'error');
@@ -2179,7 +2229,9 @@ export const AppProvider = ({ children }) => {
           finalize: true,
         });
         notify(`POS Invoice ${res.invoiceNumber} billed successfully`);
-        await Promise.all([loadPhase1Data(), loadPhase2Data()]);
+        Promise.all([loadPhase1Data(), loadPhase2Data()]).catch((syncErr) =>
+          console.warn('Background sync notice:', syncErr.message)
+        );
         return res;
       } catch (err) {
         notify(err.message || 'Failed to complete POS billing', 'error');

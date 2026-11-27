@@ -477,6 +477,18 @@ export const postInvoice = async (tenantId, userId, invoiceId) => {
           warehouseId: invoice.warehouseId,
         }).session(session);
 
+        if (!inventory && ((product.stock && product.stock >= item.quantity) || (product.openingStock && product.openingStock >= item.quantity))) {
+          const startingQty = product.stock || product.openingStock || 0;
+          inventory = new Inventory({
+            tenantId,
+            productId: product._id,
+            warehouseId: invoice.warehouseId,
+            quantity: startingQty,
+            reservedQuantity: 0,
+            availableQuantity: startingQty,
+          });
+        }
+
         const available = inventory ? inventory.availableQuantity : 0;
         if (!inventory || available < item.quantity) {
           const error = new Error(
