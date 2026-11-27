@@ -215,47 +215,84 @@ const SidebarContent = ({
   navScrollRef,
   savedScrollTopRef,
   navigate,
-}) => (
-  <div className="flex h-full flex-col bg-slate-900 text-slate-300">
-    {/* Brand */}
-    <div className="flex h-16 shrink-0 items-center justify-between border-b border-slate-800 px-4">
-      <button
-        type="button"
-        onClick={() => navigate('/dashboard')}
-        className="flex items-center gap-3 overflow-hidden text-left group"
-      >
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-600 font-display text-sm font-bold text-white shadow-md shadow-indigo-600/30">
-          A
-        </div>
-        {(!collapsed || isMobile) && (
-          <div className="flex flex-col">
-            <span className="truncate font-display text-base font-bold tracking-tight text-white group-hover:text-indigo-200 transition-colors">
-              ArthaGST
-            </span>
-            <span className="text-[10px] font-medium text-indigo-400 tracking-wide uppercase">
-              Business Suite
-            </span>
+  currentUser,
+  onLogout,
+}) => {
+  const userName =
+    currentUser?.name ||
+    currentUser?.displayName ||
+    (currentUser?.email ? currentUser.email.split('@')[0] : 'John Doe');
+  const userRole = (currentUser?.role || 'Guest').toUpperCase();
+
+  const getInitials = (str) => {
+    if (!str) return 'JD';
+    const parts = str.trim().split(/\s+/);
+    if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    return str.slice(0, 2).toUpperCase();
+  };
+  const initials = getInitials(userName);
+
+  return (
+    <div className="flex h-full flex-col bg-slate-900 text-slate-300">
+      {/* Brand */}
+    <div
+      className={`flex h-16 shrink-0 items-center ${
+        collapsed && !isMobile ? 'justify-center px-2' : 'justify-between px-4'
+      } border-b border-slate-800`}
+    >
+      {collapsed && !isMobile ? (
+        <button
+          type="button"
+          onClick={() => setCollapsed(false)}
+          title="Expand sidebar (ArthaGST)"
+          className="group relative flex h-10 w-10 items-center justify-center rounded-xl hover:bg-slate-800 transition-colors cursor-pointer"
+        >
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-600 font-display text-sm font-bold text-white shadow-md shadow-indigo-600/30 group-hover:scale-95 transition-transform">
+            A
           </div>
-        )}
-      </button>
-      {!isMobile && (
-        <button
-          type="button"
-          onClick={() => setCollapsed((c) => !c)}
-          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
-        >
-          {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+          <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-slate-800/90 text-indigo-300 opacity-0 group-hover:opacity-100 transition-opacity">
+            <PanelLeftOpen className="h-4 w-4" />
+          </div>
         </button>
-      )}
-      {isMobile && (
-        <button
-          type="button"
-          onClick={() => setMobileOpen(false)}
-          className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white"
-        >
-          <X className="h-4 w-4" />
-        </button>
+      ) : (
+        <>
+          <button
+            type="button"
+            onClick={() => navigate('/dashboard')}
+            className="flex items-center gap-3 overflow-hidden text-left group"
+          >
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-600 font-display text-sm font-bold text-white shadow-md shadow-indigo-600/30">
+              A
+            </div>
+            <div className="flex flex-col">
+              <span className="truncate font-display text-base font-bold tracking-tight text-white group-hover:text-indigo-200 transition-colors">
+                ArthaGST
+              </span>
+              <span className="text-[10px] font-medium text-indigo-400 tracking-wide uppercase">
+                Business Suite
+              </span>
+            </div>
+          </button>
+          {!isMobile && (
+            <button
+              type="button"
+              onClick={() => setCollapsed(true)}
+              title="Collapse sidebar"
+              className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer"
+            >
+              <PanelLeftClose className="h-4 w-4" />
+            </button>
+          )}
+          {isMobile && (
+            <button
+              type="button"
+              onClick={() => setMobileOpen(false)}
+              className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white cursor-pointer"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </>
       )}
     </div>
 
@@ -412,8 +449,56 @@ const SidebarContent = ({
         </div>
       ))}
     </div>
+
+    {/* Sticky User Profile & Sign Out Footer */}
+    <div
+      className={`shrink-0 border-t border-slate-800/80 bg-slate-900/95 p-3 ${
+        collapsed && !isMobile ? 'flex justify-center' : ''
+      }`}
+    >
+      {collapsed && !isMobile ? (
+        <button
+          type="button"
+          onClick={onLogout}
+          title={`Sign Out (${userName})`}
+          className="group relative flex h-10 w-10 items-center justify-center rounded-xl hover:bg-slate-800 transition-colors cursor-pointer"
+        >
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-500/15 border border-indigo-500/25 text-indigo-300 font-bold text-xs group-hover:opacity-0 transition-opacity">
+            {initials}
+          </div>
+          <div className="absolute inset-0 flex items-center justify-center rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity">
+            <LogOut className="h-4 w-4" />
+          </div>
+        </button>
+      ) : (
+        <div className="flex items-center justify-between gap-3 px-2 py-1.5 rounded-xl hover:bg-slate-800/60 transition-colors">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-500/15 border border-indigo-500/25 text-indigo-300 font-bold text-xs shadow-xs">
+              {initials}
+            </div>
+            <div className="flex flex-col min-w-0">
+              <span className="truncate text-sm font-semibold text-white leading-tight">
+                {userName}
+              </span>
+              <span className="truncate text-[10px] font-bold uppercase tracking-wider text-indigo-400 mt-0.5">
+                {userRole} • ACTIVE
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onLogout}
+            title="Sign Out"
+            className="rounded-lg p-2 text-slate-400 hover:bg-rose-500/15 hover:text-rose-400 transition-colors cursor-pointer shrink-0"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+    </div>
   </div>
-);
+  );
+};
 
 export const AppLayout = ({ children }) => {
   const {
@@ -557,6 +642,19 @@ export const AppLayout = ({ children }) => {
     return results.slice(0, 8);
   }, [searchQuery, state.invoices, state.customers, state.products]);
 
+  const handleLogout = async () => {
+    const ok = await confirmAction({
+      title: 'Sign Out?',
+      message: 'Are you sure you want to sign out of your session?',
+      confirmText: 'Sign Out',
+      danger: true,
+    });
+    if (ok) {
+      logout();
+      navigate('/login');
+    }
+  };
+
   const sidebarProps = {
     collapsed,
     setCollapsed,
@@ -569,6 +667,8 @@ export const AppLayout = ({ children }) => {
     navScrollRef,
     savedScrollTopRef,
     navigate,
+    currentUser: state.currentUser,
+    onLogout: handleLogout,
   };
 
   return (
@@ -602,9 +702,18 @@ export const AppLayout = ({ children }) => {
             <button
               type="button"
               onClick={() => setMobileOpen(true)}
-              className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 lg:hidden"
+              className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 lg:hidden cursor-pointer"
             >
               <Menu className="h-5 w-5" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setCollapsed((c) => !c)}
+              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              className="hidden lg:flex rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors cursor-pointer"
+            >
+              {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
             </button>
 
             <div className="hidden sm:flex items-center gap-2.5 rounded-lg border border-slate-200/90 bg-slate-50/80 px-3 py-1.5 text-xs shadow-2xs">
