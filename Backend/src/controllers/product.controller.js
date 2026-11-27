@@ -72,6 +72,8 @@ export const getById = async (req, res, next) => {
 export const update = async (req, res, next) => {
   try {
     const validatedData = updateProductSchema.parse(req.body);
+    if (validatedData.sku && !validatedData.SKU) validatedData.SKU = validatedData.sku;
+    if (validatedData.hsn && !validatedData.HSN) validatedData.HSN = validatedData.hsn;
     const product = await productService.updateProduct(
       req.tenantId,
       req.params.id,

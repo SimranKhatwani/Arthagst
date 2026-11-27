@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import Product from '../models/product.model.js';
 import Category from '../models/category.model.js';
 import Unit from '../models/unit.model.js';
+import Inventory from '../models/inventory.model.js';
 import * as auditLogService from './auditLog.service.js';
 
 /**
@@ -249,8 +250,9 @@ export const updateProduct = async (tenantId, productId, data) => {
   }
 
   // Check duplicate SKU if changed
-  if (data.SKU && data.SKU.trim().toUpperCase() !== product.SKU) {
-    const normalizedSKU = data.SKU.trim().toUpperCase();
+  const incomingSKU = (data.SKU || data.sku || '').trim().toUpperCase();
+  if (incomingSKU && incomingSKU !== product.SKU) {
+    const normalizedSKU = incomingSKU;
     const existingSKU = await Product.findOne({
       tenantId,
       _id: { $ne: productId },
@@ -259,7 +261,7 @@ export const updateProduct = async (tenantId, productId, data) => {
     });
 
     if (existingSKU) {
-      const error = new Error(`SKU '${data.SKU}' is already in use in your organization.`);
+      const error = new Error(`SKU '${incomingSKU}' is already in use in your organization.`);
       error.statusCode = 409;
       throw error;
     }
@@ -357,6 +359,7 @@ export const updateProduct = async (tenantId, productId, data) => {
     'sellingPrice',
     'mrp',
     'openingStock',
+    'stock',
     'lowStockAlert',
     'trackInventory',
     'images',
@@ -369,9 +372,28 @@ export const updateProduct = async (tenantId, productId, data) => {
     }
   });
 
+  if (data.stock !== undefined || data.openingStock !== undefined) {
+    const newQty = Number(data.stock !== undefined ? data.stock : data.openingStock) || 0;
+    product.stock = newQty;
+    product.openingStock = newQty;
+
+    // Sync warehouse inventory record if it exists
+    try {
+      const inv = await Inventory.findOne({ tenantId, productId: product._id });
+      if (inv) {
+        inv.quantity = newQty;
+        inv.availableQuantity = Math.max(0, newQty - (inv.reservedQuantity || 0));
+        await inv.save();
+      }
+    } catch {
+      // Non-blocking inventory sync
+    }
+  }
+
   // Service restrictions
   if (product.productType === 'service') {
     product.openingStock = 0;
+    product.stock = 0;
     product.trackInventory = false;
   }
 

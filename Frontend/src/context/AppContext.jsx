@@ -125,7 +125,9 @@ export const AppProvider = ({ children }) => {
               category: cat?.name || p.categoryId?.name || p.category || 'General',
               unit: un?.shortName || p.unitId?.shortName || p.unit || 'PCS',
               sku: p.SKU || p.sku,
+              SKU: p.SKU || p.sku,
               hsn: p.HSN || p.hsn,
+              HSN: p.HSN || p.hsn,
               minStock: p.lowStockAlert !== undefined ? p.lowStockAlert : p.minStock,
               stock: p.openingStock !== undefined ? p.openingStock : (p.stock || 0),
             };
@@ -1196,13 +1198,13 @@ export const AppProvider = ({ children }) => {
 
           const unitObj = (state.units || []).find(
             (u) =>
-              String(u.id || u._id) === String(record.unitId) ||
+              String(u.id || u._id) === String(record.unitId?._id || record.unitId?.id || record.unitId) ||
               u.shortName === record.unit ||
               u.name === record.unit
           );
           const catObj = (state.categories || []).find(
             (c) =>
-              String(c.id || c._id) === String(record.categoryId) ||
+              String(c.id || c._id) === String(record.categoryId?._id || record.categoryId?.id || record.categoryId) ||
               c.name === record.category
           );
 
@@ -1210,22 +1212,39 @@ export const AppProvider = ({ children }) => {
             throw new Error('Please create at least one Measurement Unit before adding products');
           }
 
+          const cleanSKU = (record.sku || record.SKU || '').trim().toUpperCase();
+          const cleanHSN = (record.hsn || record.HSN || '').trim();
+          const cleanSAC = (record.sac || record.SAC || '').trim();
+
+          const resolvedCategoryId = catObj
+            ? (catObj._id || catObj.id)
+            : (record.categoryId?._id || record.categoryId?.id || record.categoryId || null);
+          const resolvedUnitId = unitObj
+            ? (unitObj._id || unitObj.id)
+            : (record.unitId?._id || record.unitId?.id || record.unitId);
+
+          const targetStock = Number(
+            record.stock !== undefined ? record.stock : (record.openingStock !== undefined ? record.openingStock : 0)
+          ) || 0;
+
           const payload = {
             name: record.name,
             productType: record.productType || 'goods',
-            categoryId: catObj ? (catObj._id || catObj.id) : record.categoryId || null,
-            unitId: unitObj ? (unitObj._id || unitObj.id) : record.unitId,
-            SKU: (record.SKU || record.sku || '').toUpperCase(),
+            categoryId: resolvedCategoryId,
+            unitId: resolvedUnitId,
+            SKU: cleanSKU,
+            sku: cleanSKU,
             barcode: record.barcode || null,
             description: record.description || '',
-            HSN: record.HSN || record.hsn || null,
-            SAC: record.SAC || record.sac || null,
+            HSN: cleanHSN || null,
+            SAC: cleanSAC || null,
             gstRate: Number(record.gstRate) || 0,
             cessRate: Number(record.cessRate) || 0,
             purchasePrice: Number(record.purchasePrice) || 0,
             sellingPrice: Number(record.sellingPrice) || 0,
             mrp: Number(record.mrp) || 0,
-            openingStock: Number(record.openingStock) || 0,
+            openingStock: targetStock,
+            stock: targetStock,
             lowStockAlert: Number(record.minStock || record.lowStockAlert) || 0,
             trackInventory: record.trackInventory !== false,
             isActive: record.isActive !== false && !record.archived,
@@ -1235,13 +1254,21 @@ export const AppProvider = ({ children }) => {
             ? await productService.updateProduct(id, payload)
             : await productService.createProduct(payload);
 
+          const finalStock = saved.stock !== undefined
+            ? saved.stock
+            : (saved.openingStock !== undefined ? saved.openingStock : targetStock);
+
           const enriched = {
             ...saved,
-            category: catObj?.name || record.category || 'General',
-            unit: unitObj?.shortName || record.unit || 'PCS',
-            sku: saved.SKU || record.sku,
-            hsn: saved.HSN || record.hsn,
-            stock: saved.openingStock !== undefined ? saved.openingStock : (record.stock || 0),
+            id: saved._id || saved.id || id,
+            category: catObj?.name || (typeof saved.categoryId === 'object' ? saved.categoryId?.name : '') || record.category || 'General',
+            unit: unitObj?.shortName || (typeof saved.unitId === 'object' ? saved.unitId?.shortName : '') || record.unit || 'PCS',
+            sku: saved.SKU || cleanSKU,
+            SKU: saved.SKU || cleanSKU,
+            hsn: saved.HSN || cleanHSN,
+            HSN: saved.HSN || cleanHSN,
+            stock: finalStock,
+            openingStock: finalStock,
             minStock: saved.lowStockAlert !== undefined ? saved.lowStockAlert : (record.minStock || 0),
           };
 

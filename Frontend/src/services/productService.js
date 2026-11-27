@@ -20,6 +20,7 @@ export const getProductById = async (id) => {
 };
 
 export const createProduct = async (data) => {
+  const qty = Number(data.stock !== undefined ? data.stock : (data.openingStock !== undefined ? data.openingStock : 0)) || 0;
   const payload = {
     name: (data.name || '').trim(),
     productType: data.productType || 'goods',
@@ -35,7 +36,8 @@ export const createProduct = async (data) => {
     purchasePrice: Number(data.purchasePrice) || 0,
     sellingPrice: Number(data.sellingPrice) || 0,
     mrp: Number(data.mrp) || 0,
-    openingStock: Number(data.openingStock) || 0,
+    openingStock: qty,
+    stock: qty,
     lowStockAlert: Number(data.lowStockAlert || data.minStock) || 0,
     trackInventory: data.trackInventory !== false,
     isActive: data.isActive !== false && !data.archived,
@@ -47,9 +49,21 @@ export const createProduct = async (data) => {
 
 export const updateProduct = async (id, data) => {
   const payload = { ...data };
-  if (payload.sku && !payload.SKU) payload.SKU = payload.sku;
-  if (payload.SKU) payload.SKU = payload.SKU.trim().toUpperCase();
-  if (payload.hsn && !payload.HSN) payload.HSN = payload.hsn;
+  const cleanSKU = (payload.sku || payload.SKU || '').trim().toUpperCase();
+  if (cleanSKU) {
+    payload.SKU = cleanSKU;
+    payload.sku = cleanSKU;
+  }
+  const cleanHSN = (payload.hsn || payload.HSN || '').trim();
+  if (cleanHSN) {
+    payload.HSN = cleanHSN;
+    payload.hsn = cleanHSN;
+  }
+  if (payload.stock !== undefined || payload.openingStock !== undefined) {
+    const qty = Number(payload.stock !== undefined ? payload.stock : payload.openingStock) || 0;
+    payload.stock = qty;
+    payload.openingStock = qty;
+  }
   if (payload.minStock && !payload.lowStockAlert) payload.lowStockAlert = payload.minStock;
   if (payload.barcode === '') payload.barcode = null;
   if (payload.HSN === '') payload.HSN = null;

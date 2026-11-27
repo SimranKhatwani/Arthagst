@@ -72,14 +72,25 @@ export const ProductsPage = () => {
   };
 
   const openEdit = (p) => {
+    const skuVal = p.sku || p.SKU || '';
+    const hsnVal = p.hsn || p.HSN || '';
+    const currentStock = p.stock !== undefined ? p.stock : (p.openingStock !== undefined ? p.openingStock : 0);
     setEditing(p);
-    setForm({ ...p });
+    setForm({
+      ...p,
+      sku: skuVal,
+      SKU: skuVal,
+      hsn: hsnVal,
+      HSN: hsnVal,
+      stock: currentStock,
+      openingStock: currentStock,
+    });
     setModalOpen(true);
   };
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!form.name.trim() || !form.sku.trim()) {
+    if (!form.name.trim() || !(form.sku || form.SKU || '').trim()) {
       notify('Product name and SKU are required', 'error');
       return;
     }
@@ -88,17 +99,24 @@ export const ProductsPage = () => {
       return;
     }
     try {
+      const cleanSKU = (form.sku || form.SKU || '').trim().toUpperCase();
+      const cleanHSN = (form.hsn || form.HSN || '').trim();
+      const stockVal = Number(form.stock !== undefined ? form.stock : form.openingStock) || 0;
       const payload = {
         ...form,
         id: editing ? (editing.id || editing._id) : undefined,
         _id: editing ? (editing._id || editing.id) : undefined,
+        sku: cleanSKU,
+        SKU: cleanSKU,
+        hsn: cleanHSN,
+        HSN: cleanHSN,
         purchasePrice: Number(form.purchasePrice) || 0,
         sellingPrice: Number(form.sellingPrice) || 0,
         mrp: Number(form.mrp) || 0,
         gstRate: Number(form.gstRate) || 0,
         cessRate: Number(form.cessRate) || 0,
-        openingStock: Number(form.openingStock) || 0,
-        stock: editing ? Number(form.stock) : Number(form.openingStock || form.stock) || 0,
+        openingStock: stockVal,
+        stock: stockVal,
         minStock: Number(form.minStock) || 0,
       };
       await upsertRecord('products', payload, 'Product', 'name');
@@ -236,13 +254,31 @@ export const ProductsPage = () => {
             </InputField>
           </div>
           <InputField label="SKU" required>
-            <input type="text" required value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} className={`${inputClass} font-mono`} />
+            <input
+              type="text"
+              required
+              value={form.sku || form.SKU || ''}
+              onChange={(e) => {
+                const val = e.target.value.toUpperCase();
+                setForm({ ...form, sku: val, SKU: val });
+              }}
+              className={`${inputClass} font-mono`}
+            />
           </InputField>
           <InputField label="Barcode">
             <input type="text" value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })} className={`${inputClass} font-mono`} />
           </InputField>
           <InputField label="HSN / SAC Code" required>
-            <input type="text" required value={form.hsn} onChange={(e) => setForm({ ...form, hsn: e.target.value })} className={`${inputClass} font-mono`} />
+            <input
+              type="text"
+              required
+              value={form.hsn || form.HSN || ''}
+              onChange={(e) => {
+                const val = e.target.value;
+                setForm({ ...form, hsn: val, HSN: val });
+              }}
+              className={`${inputClass} font-mono`}
+            />
           </InputField>
           <InputField label="Category">
             <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className={inputClass}>
@@ -279,8 +315,11 @@ export const ProductsPage = () => {
           <InputField label={editing ? 'Current Stock' : 'Opening Stock'}>
             <input
               type="number"
-              value={editing ? form.stock : form.openingStock}
-              onChange={(e) => setForm({ ...form, [editing ? 'stock' : 'openingStock']: e.target.value })}
+              value={form.stock !== undefined ? form.stock : form.openingStock}
+              onChange={(e) => {
+                const val = e.target.value;
+                setForm({ ...form, stock: val, openingStock: val });
+              }}
               className={`${inputClass} font-mono`}
             />
           </InputField>

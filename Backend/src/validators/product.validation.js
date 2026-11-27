@@ -67,6 +67,10 @@ export const createProductSchema = z
       .min(0, 'Opening stock cannot be negative')
       .optional()
       .default(0),
+    stock: z.coerce
+      .number({ invalid_type_error: 'Stock must be a number' })
+      .min(0, 'Stock cannot be negative')
+      .optional(),
     lowStockAlert: z.coerce
       .number({ invalid_type_error: 'Low stock alert threshold must be a number' })
       .min(0, 'Low stock alert cannot be negative')
@@ -110,9 +114,11 @@ export const updateProductSchema = z
     categoryId: z.string().trim().nullable().optional(),
     unitId: z.string().trim().min(1).optional(),
     SKU: z.string().trim().min(1).max(50).optional(),
+    sku: z.string().trim().min(1).max(50).optional(),
     barcode: z.string().trim().max(50).optional().nullable().or(z.literal('')),
     description: z.string().trim().max(1000).optional(),
     HSN: z.string().trim().regex(HSN_REGEX, 'HSN code must be 2 to 8 numeric digits').optional().nullable().or(z.literal('')),
+    hsn: z.string().trim().regex(HSN_REGEX, 'HSN code must be 2 to 8 numeric digits').optional().nullable().or(z.literal('')),
     SAC: z.string().trim().regex(SAC_REGEX, 'SAC code must be 4 to 6 numeric digits').optional().nullable().or(z.literal('')),
     gstRate: z.coerce.number().min(0).max(100).optional(),
     cessRate: z.coerce.number().min(0).max(100).optional(),
@@ -120,6 +126,7 @@ export const updateProductSchema = z
     sellingPrice: z.coerce.number().min(0).optional(),
     mrp: z.coerce.number().min(0).optional(),
     openingStock: z.coerce.number().min(0).optional(),
+    stock: z.coerce.number().min(0).optional(),
     lowStockAlert: z.coerce.number().min(0).optional(),
     trackInventory: z.boolean().optional(),
     images: z.array(z.string().trim()).optional(),

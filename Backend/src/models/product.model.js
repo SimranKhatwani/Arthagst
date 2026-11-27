@@ -104,6 +104,11 @@ const productSchema = new mongoose.Schema(
       default: 0,
       min: [0, 'Opening stock cannot be negative'],
     },
+    stock: {
+      type: Number,
+      default: 0,
+      min: [0, 'Stock cannot be negative'],
+    },
     lowStockAlert: {
       type: Number,
       default: 0,
@@ -168,11 +173,19 @@ productSchema.pre('save', function () {
   this.gstRate = Number(Number(this.gstRate || 0).toFixed(2));
   this.cessRate = Number(Number(this.cessRate || 0).toFixed(2));
   this.openingStock = Number(Number(this.openingStock || 0).toFixed(2));
+  if (this.stock === undefined && this.openingStock !== undefined) {
+    this.stock = this.openingStock;
+  } else if (this.openingStock === undefined && this.stock !== undefined) {
+    this.openingStock = this.stock;
+  } else if (this.stock !== undefined) {
+    this.stock = Number(Number(this.stock || 0).toFixed(2));
+  }
   this.lowStockAlert = Number(Number(this.lowStockAlert || 0).toFixed(2));
 
   // Services cannot have stock or inventory tracking
   if (this.productType === 'service') {
     this.openingStock = 0;
+    this.stock = 0;
     this.trackInventory = false;
   }
 });
