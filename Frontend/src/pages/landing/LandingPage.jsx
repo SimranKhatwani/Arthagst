@@ -53,7 +53,7 @@ export const LandingPage = () => {
       icon: Boxes,
       title: 'Multi-Godown Real-Time Inventory Control',
       description:
-        'Automatic stock deductions on billing, real-time inward adjustments on purchase GRNs, low stock alerts, and batch/serial tracking across all store branches.',
+        'Automatic stock deductions on billing, real-time inward adjustments on purchase GRNs, low stock alerts, and batch/serial tracking across all branches and godowns.',
       badges: ['Batch & SKU Sync', 'Multi-Warehouse', 'Low-Stock Alerts'],
       stats: [
         { label: 'Stock Sync Latency', value: 'Live (<100ms)' },
@@ -95,7 +95,7 @@ export const LandingPage = () => {
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-blue-500/20 selection:text-blue-900">
       {/* Top Notification Bar */}
       <div className="bg-slate-900 text-slate-300 px-4 py-2.5 text-xs text-center font-medium tracking-wide">
-        <span>Unified Multi-Tenant Commerce &amp; GST Business Suite for Indian Enterprises</span>
+        <span>Cloud-Native Multi-Tenant GST Billing, Invoicing &amp; Compliance SaaS Suite for Indian Enterprises</span>
         <span className="mx-2 opacity-50">|</span>
         <button
           onClick={handleLaunch}
@@ -118,7 +118,7 @@ export const LandingPage = () => {
                 A R T H A
               </span>
               <span className="text-[9px] tracking-[0.28em] font-semibold text-blue-600 uppercase">
-                COMMERCE OS
+                GST BILLING SUITE
               </span>
             </div>
           </div>
@@ -222,19 +222,17 @@ export const LandingPage = () => {
           {/* Badge */}
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-blue-200 bg-blue-50/90 text-blue-700 text-xs font-semibold uppercase tracking-wider mb-8 shadow-xs">
             <Shield className="w-3.5 h-3.5 text-blue-600" />
-            <span>ONE PLATFORM. MULTIPLE STORES. UNIFIED CONTROL.</span>
+            <span>CLOUD-NATIVE GST BILLING, INVOICING &amp; COMPLIANCE SAAS</span>
           </div>
 
           {/* Hero Headline */}
           <h1 className="font-serif text-4xl sm:text-5xl md:text-6xl lg:text-[68px] font-normal tracking-tight text-slate-900 leading-[1.12] mb-7">
-            Everything You Need to Build, Manage &amp; Scale Your Online Store.
+            Smart GST Billing, Invoicing &amp; Tax Compliance for Growing Businesses.
           </h1>
 
           {/* Subtitle */}
           <p className="max-w-3xl mx-auto text-base sm:text-lg text-slate-600 leading-relaxed mb-10 font-normal">
-            ARTHA is a unified multi-tenant commerce management platform designed to simplify store
-            operations. Manage products, inventory, orders, customers, payments and business performance
-            through one powerful workspace.
+            ARTHA is a high-speed, multi-tenant GST billing and business management SaaS platform designed for Indian retailers, wholesalers, and enterprises. Generate B2B tax invoices, conduct rapid POS checkouts, manage godown stock, and auto-compile GSTR-1 &amp; 3B returns effortlessly.
           </p>
 
           {/* Action Button */}
@@ -243,7 +241,7 @@ export const LandingPage = () => {
               onClick={handleLaunch}
               className="inline-flex items-center justify-center gap-3 px-8 py-3.5 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-sm font-semibold tracking-wide transition-all shadow-lg shadow-blue-600/25 hover:shadow-xl active:scale-95 cursor-pointer"
             >
-              <span>Launch Your Workspace</span>
+              <span>Launch Billing Workspace</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
@@ -256,15 +254,15 @@ export const LandingPage = () => {
             </div>
             <div className="flex items-center sm:justify-center gap-2.5 text-xs font-semibold text-slate-700">
               <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
-              <span>Centralised Store Management</span>
+              <span>Automated CGST/SGST/IGST</span>
             </div>
             <div className="flex items-center sm:justify-center gap-2.5 text-xs font-semibold text-slate-700">
               <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
-              <span>Role-Based Access Control</span>
+              <span>GSTR-1 &amp; GSTR-3B Audit Ready</span>
             </div>
             <div className="flex items-center sm:justify-center gap-2.5 text-xs font-semibold text-slate-700">
               <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
-              <span>Real-Time Order &amp; Stock Sync</span>
+              <span>Real-Time Godown Stock Sync</span>
             </div>
           </div>
         </div>
@@ -282,10 +280,10 @@ export const LandingPage = () => {
               <span>INTERACTIVE PLATFORM TOUR</span>
             </div>
             <h2 className="font-serif text-3xl sm:text-4xl text-slate-900 font-normal tracking-tight">
-              A high-precision engine engineered for modern retail &amp; commerce.
+              A high-precision billing engine built for Indian trade and statutory compliance.
             </h2>
             <p className="mt-3 text-sm sm:text-base text-slate-600">
-              Explore how Artha streamlines every phase of retail and distribution—from quick POS transactions to full statutory compliance.
+              Explore how Artha streamlines every phase of business operations—from split-second POS billing to automated tax return reconciliation.
             </p>
           </div>
 
@@ -422,10 +420,10 @@ export const LandingPage = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-2xl mx-auto mb-16">
             <h2 className="font-serif text-3xl sm:text-4xl text-slate-900 font-normal tracking-tight">
-              Engineered with depth for every layer of your enterprise.
+              Engineered for Indian retailers, wholesalers, and growing enterprises.
             </h2>
             <p className="mt-3 text-sm sm:text-base text-slate-600">
-              Replace fragmented billing tools, spreadsheets, and manual filing with a coherent operating system.
+              Replace fragmented desktop billing tools, manual spreadsheets, and complex paperwork with a modern, cloud-connected GST operating suite.
             </p>
           </div>
 
@@ -518,7 +516,7 @@ export const LandingPage = () => {
                 Architected for strict multi-tenant isolation and granular RBAC.
               </h2>
               <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
-                Whether powering a franchised retail network or holding company with multiple corporate entities, each tenant operates in complete cryptographic seclusion.
+                Whether managing an independent retail store, a multi-location distribution network, or multiple GSTIN company entities, each tenant operates in complete cryptographic isolation with dedicated ledgers.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                 <div className="p-4 rounded-xl bg-white/5 border border-white/10">
@@ -569,10 +567,10 @@ export const LandingPage = () => {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <div className="rounded-3xl border border-blue-200/80 bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-10 sm:p-14 shadow-md">
             <h2 className="font-serif text-3xl sm:text-4xl text-slate-900 font-normal mb-4">
-              Ready to streamline your billing &amp; GST compliance?
+              Ready to streamline your GST billing &amp; compliance?
             </h2>
             <p className="max-w-2xl mx-auto text-sm sm:text-base text-slate-600 mb-8">
-              Access the administrative dashboard, generate tax-compliant bills, track inventory, and file GST returns with zero friction.
+              Access the administrative dashboard, generate tax-compliant bills in seconds, track inventory across godowns, and file GST returns with zero friction.
             </p>
             <div className="flex items-center justify-center">
               <button
@@ -596,7 +594,7 @@ export const LandingPage = () => {
                 A
               </div>
               <span className="font-serif text-base tracking-[0.2em] font-bold text-slate-900 uppercase">
-                ARTHA COMMERCE OS
+                ARTHA GST SUITE
               </span>
             </div>
 
@@ -630,7 +628,7 @@ export const LandingPage = () => {
               </a>
             </div>
             <div className="text-[11px] text-slate-400">
-              &copy; {new Date().getFullYear()} Artha Commerce OS &amp; GST Suite. All rights reserved.
+              &copy; {new Date().getFullYear()} Artha GST Billing &amp; Invoicing SaaS Suite. All rights reserved.
             </div>
           </div>
         </div>
