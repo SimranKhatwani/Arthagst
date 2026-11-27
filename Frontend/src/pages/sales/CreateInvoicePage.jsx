@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Plus, Trash2, Eye, Printer, Save, CheckCircle2, UserPlus, Loader2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { INDIAN_STATES, GST_RATES, PAYMENT_METHODS, REGISTRATION_TYPES } from '../../data/constants';
-import { calculateInvoiceTotals, formatINR } from '../../services/calculationService';
+import { calculateInvoiceTotals, formatINR, formatNumberIN } from '../../services/calculationService';
 import { generateNextDocNumber } from '../../services/invoiceService';
 import {
   PageHeader,
@@ -531,11 +531,15 @@ export const CreateInvoicePage = () => {
                     >
                       {state.products
                         .filter((p) => !p.archived)
-                        .map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name} (Stock: {p.stock})
-                          </option>
-                        ))}
+                        .map((p) => {
+                          const cleanName = (p.name || '').replace(/\s*\(₹[\d,]+\s*Rate\)/gi, '').trim() || p.name;
+                          const descOrBrand = [p.brand, p.description].filter(Boolean).join(' • ');
+                          return (
+                            <option key={p.id || p._id} value={p.id || p._id}>
+                              {cleanName}{descOrBrand ? ` (${descOrBrand})` : ''} ({p.sku || p.SKU || 'No SKU'}) — Price: ₹{formatNumberIN(p.sellingPrice)} (Stock: {p.stock})
+                            </option>
+                          );
+                        })}
                     </select>
                   </td>
                   <td className="px-2 py-2">

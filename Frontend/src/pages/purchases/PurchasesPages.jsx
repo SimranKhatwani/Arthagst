@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, Eye, IndianRupee, CheckCircle2, RotateCcw, PackageCheck } from 'lucide-react';
+import { Plus, Trash2, Eye, IndianRupee, CheckCircle2, RotateCcw, PackageCheck, Loader2, PackagePlus } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { GST_RATES, PAYMENT_METHODS } from '../../data/constants';
-import { calculateInvoiceTotals, formatINR, formatDateIN } from '../../services/calculationService';
+import { calculateInvoiceTotals, formatINR, formatDateIN, formatNumberIN } from '../../services/calculationService';
 import { generateNextDocNumber } from '../../services/invoiceService';
 import { exportToCSV } from '../../services/storageService';
 import {
@@ -222,16 +222,22 @@ export const PurchasesPage = ({ defaultTab = 'bills' }) => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {(viewPurchase.items || []).map((it, idx) => (
-                  <tr key={idx}>
-                    <td className="px-2 py-2">{it.name}</td>
-                    <td className="px-2 py-2 font-mono">{it.hsn}</td>
-                    <td className="px-2 py-2 text-right font-mono">{it.qty}</td>
-                    <td className="px-2 py-2 text-right font-mono">{formatINR(it.rate)}</td>
-                    <td className="px-2 py-2 text-right font-mono">{formatINR(it.totalTax)}</td>
-                    <td className="px-2 py-2 text-right font-mono font-semibold">{formatINR(it.totalAmount)}</td>
-                  </tr>
-                ))}
+                {(viewPurchase.items || []).map((it, idx) => {
+                  const itemRate = it.rate !== undefined ? it.rate : (it.unitPrice || 0);
+                  const itemQty = it.qty !== undefined ? it.qty : (it.quantity || 1);
+                  const itemTax = it.totalTax !== undefined ? it.totalTax : ((it.cgstAmount || 0) + (it.sgstAmount || 0) + (it.igstAmount || 0) + (it.cessAmount || 0));
+                  const itemTotal = it.totalAmount !== undefined ? it.totalAmount : ((it.taxableValue || (itemRate * itemQty)) + itemTax);
+                  return (
+                    <tr key={idx}>
+                      <td className="px-2 py-2">{it.name || it.productName}</td>
+                      <td className="px-2 py-2 font-mono">{it.hsn || it.HSN || '-'}</td>
+                      <td className="px-2 py-2 text-right font-mono">{itemQty}</td>
+                      <td className="px-2 py-2 text-right font-mono">{formatINR(itemRate)}</td>
+                      <td className="px-2 py-2 text-right font-mono">{formatINR(itemTax)}</td>
+                      <td className="px-2 py-2 text-right font-mono font-semibold">{formatINR(itemTotal)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
             <div className="text-right font-mono text-sm font-bold">
@@ -277,7 +283,7 @@ export const PurchasesPage = ({ defaultTab = 'bills' }) => {
 };
 
 export const AddPurchasePage = () => {
-  const { state, selectedFY, savePurchaseBill, notify } = useApp();
+  const { state, selectedFY, savePurchaseBill, upsertRecord, notify } = useApp();
   const navigate = useNavigate();
 
   const [supplierId, setSupplierId] = useState(state.suppliers[0]?.id || state.suppliers[0]?._id || '');
@@ -288,6 +294,89 @@ export const AddPurchasePage = () => {
   const [payStatus, setPayStatus] = useState('Unpaid');
   const [paymentMethod, setPaymentMethod] = useState('NEFT');
   const [isSaving, setIsSaving] = useState(false);
+
+  // Quick Product Modal State
+  const [quickProdModal, setQuickProdModal] = useState(false);
+  const [quickProdForm, setQuickProdForm] = useState({
+    name: '',
+    sku: '',
+    hsn: '8536',
+    purchasePrice: '',
+    sellingPrice: '',
+    gstRate: 18,
+  });
+  const [isCreatingProduct, setIsCreatingProduct] = useState(false);
+
+  const openQuickAddProduct = () => {
+    setQuickProdForm({
+      name: '',
+      sku: `SKU-${Math.floor(1000 + Math.random() * 9000)}`,
+      hsn: '8536',
+      purchasePrice: '',
+      sellingPrice: '',
+      gstRate: 18,
+    });
+    setQuickProdModal(true);
+  };
+
+  const handleSaveQuickProduct = async (e) => {
+    e.preventDefault();
+    if (!quickProdForm.name.trim()) {
+      notify('Product name is required', 'error');
+      return;
+    }
+    setIsCreatingProduct(true);
+    try {
+      const cleanSKU = quickProdForm.sku.trim() || `SKU-${Math.floor(1000 + Math.random() * 9000)}`;
+      const pPrice = Number(quickProdForm.purchasePrice) || 0;
+      const sPrice = Number(quickProdForm.sellingPrice) || pPrice || 0;
+      const cleanHSN = quickProdForm.hsn.trim() || '8536';
+      const gRate = Number(quickProdForm.gstRate) || 18;
+
+      const created = await upsertRecord(
+        'products',
+        {
+          name: quickProdForm.name.trim(),
+          sku: cleanSKU,
+          SKU: cleanSKU,
+          hsn: cleanHSN,
+          HSN: cleanHSN,
+          purchasePrice: pPrice,
+          sellingPrice: sPrice,
+          mrp: sPrice,
+          gstRate: gRate,
+          stock: 0,
+          openingStock: 0,
+        },
+        'Product'
+      );
+
+      if (created) {
+        const newId = created.id || created._id;
+        setItems((prev) => [
+          ...prev,
+          {
+            productId: newId,
+            name: created.name,
+            sku: created.sku || cleanSKU,
+            hsn: created.hsn || cleanHSN,
+            unit: created.unit || 'PCS',
+            qty: 1,
+            rate: pPrice,
+            discountPct: 0,
+            gstRate: gRate,
+            description: '',
+          },
+        ]);
+        setQuickProdModal(false);
+        notify(`Product '${created.name}' created and added to purchase entry`);
+      }
+    } catch (err) {
+      notify(err.message || 'Failed to create product', 'error');
+    } finally {
+      setIsCreatingProduct(false);
+    }
+  };
 
   const [items, setItems] = useState(() => {
     const p = state.products[0];
@@ -402,52 +491,116 @@ export const AddPurchasePage = () => {
         </div>
 
         <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="font-display text-sm font-semibold text-slate-900">Purchased Products</h3>
-            <button
-              type="button"
-              onClick={() => {
-                const p = state.products[0];
-                setItems([...items, { productId: p.id, name: p.name, sku: p.sku, hsn: p.hsn, unit: p.unit, qty: 10, rate: p.purchasePrice, discountPct: 0, gstRate: p.gstRate }]);
-              }}
-              className={btnSecondary}
-            >
-              <Plus className="h-3.5 w-3.5" /> Add Item
-            </button>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="font-display text-sm font-semibold text-slate-900">Purchased Products</h3>
+              <p className="text-[11px] text-slate-500">Select an existing product or add a new variant/model with its own SKU</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={openQuickAddProduct}
+                className="inline-flex items-center gap-1.5 rounded-md border border-indigo-200 bg-indigo-50/70 px-2.5 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 transition-colors"
+                title="Create a new product with its own name and SKU"
+              >
+                <PackagePlus className="h-3.5 w-3.5 text-indigo-600" /> + New Product
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const p = state.products[0];
+                  setItems([...items, { productId: p?.id || p?._id, name: p?.name, sku: p?.sku, hsn: p?.hsn, unit: p?.unit, qty: 10, rate: p?.purchasePrice || 0, discountPct: 0, gstRate: p?.gstRate || 18, description: '' }]);
+                }}
+                className={btnSecondary}
+              >
+                <Plus className="h-3.5 w-3.5" /> Add Row
+              </button>
+            </div>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[780px] text-xs">
+            <table className="w-full min-w-[820px] text-xs">
               <thead className="border-y border-slate-200 bg-slate-50 text-slate-600">
                 <tr>
-                  <th className="px-2 py-2 text-left">Product</th>
-                  <th className="px-2 py-2 text-left">HSN</th>
-                  <th className="px-2 py-2 text-right">Qty</th>
-                  <th className="px-2 py-2 text-right">Purchase Rate</th>
-                  <th className="px-2 py-2 text-right">Disc%</th>
-                  <th className="px-2 py-2 text-right">GST%</th>
-                  <th className="px-2 py-2 text-right">Total</th>
-                  <th className="px-2 py-2"></th>
+                  <th className="px-2 py-2 text-left w-64">Product &amp; Description</th>
+                  <th className="px-2 py-2 text-left w-24">HSN</th>
+                  <th className="px-2 py-2 text-right w-20">Qty</th>
+                  <th className="px-2 py-2 text-right w-24">Purchase Rate</th>
+                  <th className="px-2 py-2 text-right w-20">Disc%</th>
+                  <th className="px-2 py-2 text-right w-20">GST%</th>
+                  <th className="px-2 py-2 text-right w-28">Total</th>
+                  <th className="px-2 py-2 w-10"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {computed.items.map((it, idx) => (
-                  <tr key={idx}>
+                  <tr key={idx} className="align-top">
                     <td className="px-2 py-2">
                       <select
                         value={it.productId}
                         onChange={(e) => {
-                          const p = state.products.find((pr) => pr.id === e.target.value);
+                          const p = state.products.find((pr) => (pr.id || pr._id) === e.target.value);
                           if (!p) return;
-                          setItems(items.map((r, i) => (i === idx ? { ...r, productId: p.id, name: p.name, sku: p.sku, hsn: p.hsn, unit: p.unit, rate: p.purchasePrice, gstRate: p.gstRate } : r)));
+                          setItems(items.map((r, i) => (i === idx ? { ...r, productId: p.id || p._id, name: p.name, sku: p.sku || p.SKU, hsn: p.hsn || p.HSN, unit: p.unit, rate: p.purchasePrice, gstRate: p.gstRate } : r)));
                         }}
-                        className="w-full rounded border border-slate-200 px-2 py-1.5"
+                        className="w-full rounded border border-slate-200 bg-white px-2 py-1.5 text-xs font-medium text-slate-900 focus:border-indigo-500 focus:outline-none"
                       >
-                        {state.products.map((p) => (
-                          <option key={p.id} value={p.id}>{p.name}</option>
-                        ))}
+                        {state.products.map((p) => {
+                          const descOrBrand = [p.brand, p.description].filter(Boolean).join(' • ');
+                          return (
+                            <option key={p.id || p._id} value={p.id || p._id}>
+                              {p.name}{descOrBrand ? ` (${descOrBrand})` : ''} ({p.sku || p.SKU || 'No SKU'}) — Stock: {p.stock || 0} {p.unit || 'PCS'}
+                            </option>
+                          );
+                        })}
                       </select>
+                      <input
+                        type="text"
+                        placeholder="Brand / Description / Model / Batch No. (optional)"
+                        value={it.description || ''}
+                        onChange={(e) => setItems(items.map((r, i) => (i === idx ? { ...r, description: e.target.value } : r)))}
+                        className="mt-1.5 w-full rounded border border-slate-200 bg-slate-50/70 px-2 py-1 text-[11px] text-slate-700 placeholder:text-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none"
+                      />
+                      {(() => {
+                        const prod = state.products.find((pr) => (pr.id || pr._id) === it.productId);
+                        const rateDiffers = prod && prod.purchasePrice !== undefined && Number(it.rate) > 0 && Number(it.rate) !== Number(prod.purchasePrice);
+                        return (
+                          <div className="mt-1 space-y-1">
+                            {rateDiffers && (
+                              <div className="flex flex-wrap items-center gap-1.5 rounded bg-amber-50 px-2 py-0.5 text-[10px] text-amber-800 border border-amber-200">
+                                <span>Rate differs from base cost (₹{formatNumberIN(prod.purchasePrice)}).</span>
+                                <label className="inline-flex items-center gap-1 font-semibold text-indigo-700 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={Boolean(it.trackAsVariant)}
+                                    onChange={(e) => setItems(items.map((r, i) => (i === idx ? { ...r, trackAsVariant: e.target.checked } : r)))}
+                                    className="rounded border-slate-300 text-indigo-600 focus:ring-0"
+                                  />
+                                  <span>Track as new variant</span>
+                                </label>
+                              </div>
+                            )}
+                            {it.trackAsVariant && (
+                              <input
+                                type="text"
+                                placeholder={`Variant / Brand Name (e.g. ${it.name || 'Product'} ${it.description || '55 Inch 4K'})`}
+                                value={it.variantName || ''}
+                                onChange={(e) => setItems(items.map((r, i) => (i === idx ? { ...r, variantName: e.target.value } : r)))}
+                                className="w-full rounded border border-indigo-200 bg-indigo-50/50 px-2 py-1 text-[11px] text-indigo-900 placeholder:text-indigo-400 focus:border-indigo-500 focus:bg-white focus:outline-none"
+                              />
+                            )}
+                          </div>
+                        );
+                      })()}
                     </td>
-                    <td className="px-2 py-2 font-mono">{it.hsn}</td>
+                    <td className="px-2 py-2">
+                      <input
+                        type="text"
+                        value={it.hsn || ''}
+                        onChange={(e) => setItems(items.map((r, i) => (i === idx ? { ...r, hsn: e.target.value } : r)))}
+                        placeholder="HSN"
+                        className="w-24 rounded border border-slate-200 px-2 py-1.5 font-mono text-xs focus:border-indigo-500 focus:outline-none"
+                      />
+                    </td>
                     <td className="px-2 py-2 text-right">
                       <input type="number" min="1" value={it.qty} onChange={(e) => setItems(items.map((r, i) => (i === idx ? { ...r, qty: e.target.value } : r)))} className="w-20 rounded border border-slate-200 px-2 py-1 text-right font-mono" />
                     </td>
@@ -499,12 +652,124 @@ export const AddPurchasePage = () => {
             <div className="flex justify-between"><span>{computed.isIntraState ? 'CGST + SGST (ITC)' : 'IGST (ITC)'}</span><span className="font-mono">{formatINR(computed.totalTax)}</span></div>
             <div className="flex justify-between border-t border-slate-200 pt-2 text-base font-bold"><span>Total Purchase Bill</span><span className="font-mono">{formatINR(computed.grandTotal)}</span></div>
             <div className="pt-3 flex justify-end gap-2">
-              <button type="button" onClick={() => navigate('/purchases')} className={btnSecondary}>Cancel</button>
-              <button type="submit" className={btnPrimary}><CheckCircle2 className="h-3.5 w-3.5" /> Save Purchase &amp; Update Stock</button>
+              <button type="button" disabled={isSaving} onClick={() => navigate('/purchases')} className={btnSecondary}>Cancel</button>
+              <button
+                type="submit"
+                disabled={isSaving}
+                className={`${btnPrimary} ${isSaving ? 'opacity-70 cursor-not-allowed' : ''}`}
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving &amp; Updating Stock...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Save Purchase &amp; Update Stock
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>
       </form>
+
+      {/* Quick Add Product Modal */}
+      <Modal
+        open={quickProdModal}
+        onClose={() => setQuickProdModal(false)}
+        title="Quick Add Product / Model"
+        size="md"
+      >
+        <form onSubmit={handleSaveQuickProduct} className="space-y-4">
+          <p className="text-xs text-slate-500">
+            Create a distinct product record with its own name and SKU so stock and pricing are tracked separately.
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 text-xs">
+            <div className="sm:col-span-2">
+              <InputField label="Product Name" required>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. TV 55 Inch 4K Smart LED"
+                  value={quickProdForm.name}
+                  onChange={(e) => setQuickProdForm({ ...quickProdForm, name: e.target.value })}
+                  className={inputClass}
+                />
+              </InputField>
+            </div>
+            <InputField label="SKU">
+              <input
+                type="text"
+                value={quickProdForm.sku}
+                onChange={(e) => setQuickProdForm({ ...quickProdForm, sku: e.target.value })}
+                className={`${inputClass} font-mono`}
+                placeholder="Auto-generated if blank"
+              />
+            </InputField>
+            <InputField label="HSN Code">
+              <input
+                type="text"
+                value={quickProdForm.hsn}
+                onChange={(e) => setQuickProdForm({ ...quickProdForm, hsn: e.target.value })}
+                className={`${inputClass} font-mono`}
+              />
+            </InputField>
+            <InputField label="Purchase Rate (₹)">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+                value={quickProdForm.purchasePrice}
+                onChange={(e) => setQuickProdForm({ ...quickProdForm, purchasePrice: e.target.value })}
+                className={`${inputClass} font-mono`}
+              />
+            </InputField>
+            <InputField label="Selling Price (₹)">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+                value={quickProdForm.sellingPrice}
+                onChange={(e) => setQuickProdForm({ ...quickProdForm, sellingPrice: e.target.value })}
+                className={`${inputClass} font-mono`}
+              />
+            </InputField>
+            <div className="sm:col-span-2">
+              <InputField label="GST Rate">
+                <select
+                  value={quickProdForm.gstRate}
+                  onChange={(e) => setQuickProdForm({ ...quickProdForm, gstRate: Number(e.target.value) })}
+                  className={inputClass}
+                >
+                  {GST_RATES.map((g) => (
+                    <option key={g} value={g}>{g}%</option>
+                  ))}
+                </select>
+              </InputField>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
+            <button type="button" onClick={() => setQuickProdModal(false)} className={btnSecondary}>
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isCreatingProduct}
+              className={`${btnPrimary} ${isCreatingProduct ? 'opacity-70 cursor-not-allowed' : ''}`}
+            >
+              {isCreatingProduct ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Creating...
+                </>
+              ) : (
+                'Create & Add to Purchase'
+              )}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };

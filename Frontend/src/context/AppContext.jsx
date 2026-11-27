@@ -374,14 +374,20 @@ export const AppProvider = ({ children }) => {
             amountPaid: pb.paidAmount !== undefined ? pb.paidAmount : (pb.amountPaid || 0),
             paymentStatus: pb.paymentStatus === 'paid' ? 'Paid' : (pb.paymentStatus === 'partially_paid' ? 'Partial' : 'Unpaid'),
             status: pb.status === 'posted' ? 'Received' : (pb.status || 'Received'),
-            items: (pb.items || []).map((it) => ({
-              ...it,
-              productId: String(it.productId?._id || it.productId || ''),
-              name: it.productName || it.name || '',
-              qty: it.quantity !== undefined ? it.quantity : (it.qty || 1),
-              rate: it.unitPrice !== undefined ? it.unitPrice : (it.rate || 0),
-              hsn: it.HSN || it.hsn || '',
-            })),
+            items: (pb.items || []).map((it) => {
+              const itemTax = (it.cgstAmount || 0) + (it.sgstAmount || 0) + (it.igstAmount || 0) + (it.cessAmount || 0);
+              const itemTotal = it.totalAmount !== undefined ? it.totalAmount : ((it.taxableValue || ((it.unitPrice || it.rate || 0) * (it.quantity || it.qty || 1))) + itemTax);
+              return {
+                ...it,
+                productId: String(it.productId?._id || it.productId || ''),
+                name: it.productName || it.name || '',
+                qty: it.quantity !== undefined ? it.quantity : (it.qty || 1),
+                rate: it.unitPrice !== undefined ? it.unitPrice : (it.rate || 0),
+                hsn: it.HSN || it.hsn || '',
+                totalTax: itemTax,
+                totalAmount: itemTotal,
+              };
+            }),
           }));
         }
 
@@ -1919,13 +1925,62 @@ export const AppProvider = ({ children }) => {
         }
 
         const supplierId = String(purchasePayload.supplierId);
-        const backendItems = (purchasePayload.items || []).map((it) => ({
-          productId: String(it.productId || it.id),
-          quantity: Number(it.qty || it.quantity || 1),
-          unitPrice: Number(it.rate || it.unitPrice || 0),
-          discount: Number(it.discountPct || it.discount || 0),
-          description: it.description || '',
-        }));
+        const backendItems = [];
+        for (const it of (purchasePayload.items || [])) {
+          let productId = String(it.productId || it.id);
+          const pRate = Number(it.rate || it.unitPrice || 0);
+
+          // If user requested to track this line item as a separate product variant
+          if (it.createAsVariant || it.trackAsVariant) {
+            try {
+              const origProd = (state.products || []).find((p) => String(p.id || p._id) === productId);
+              const cleanSKU = (it.variantSku || `SKU-${Date.now().toString().slice(-4)}`).toUpperCase();
+              const cleanBaseName = (origProd?.name || it.name || 'Product').replace(/\s*\(₹[\d,]+\s*Rate\)/gi, '').trim();
+              const descOrBrand = (it.description || it.brand || '').trim();
+              const vName = (it.variantName || (descOrBrand ? `${cleanBaseName} (${descOrBrand})` : cleanBaseName)).trim();
+              const sPrice = Number(it.sellingPrice) || (origProd?.sellingPrice ? Math.round(origProd.sellingPrice * (pRate / (origProd.purchasePrice || pRate || 1))) : Math.round(pRate * 1.3));
+
+              const newVariant = await upsertRecord(
+                'products',
+                {
+                  name: vName,
+                  sku: cleanSKU,
+                  SKU: cleanSKU,
+                  hsn: it.hsn || it.HSN || origProd?.hsn || '8536',
+                  HSN: it.hsn || it.HSN || origProd?.HSN || '8536',
+                  category: origProd?.category || 'Electronics',
+                  unit: it.unit || origProd?.unit || 'PCS',
+                  brand: it.brand || origProd?.brand || '',
+                  description: it.description || origProd?.description || '',
+                  purchasePrice: pRate,
+                  sellingPrice: sPrice,
+                  mrp: sPrice,
+                  gstRate: it.gstRate !== undefined ? Number(it.gstRate) : (origProd?.gstRate || 18),
+                  stock: 0,
+                  openingStock: 0,
+                  warehouseId: String(warehouseId),
+                },
+                'Product'
+              );
+
+              if (newVariant) {
+                productId = String(newVariant.id || newVariant._id);
+              }
+            } catch (varErr) {
+              console.warn('Failed to auto-create variant product, using selected product:', varErr.message);
+            }
+          }
+
+          backendItems.push({
+            productId,
+            quantity: Number(it.qty || it.quantity || 1),
+            unitPrice: pRate,
+            discount: Number(it.discountPct || it.discount || 0),
+            description: it.description || '',
+            HSN: it.hsn || it.HSN || '',
+            gstRate: it.gstRate !== undefined ? Number(it.gstRate) : undefined,
+          });
+        }
 
         const createPayload = {
           supplierId,
@@ -2189,6 +2244,104 @@ export const AppProvider = ({ children }) => {
     );
     notify(`Stock ${type.toLowerCase()} updated`);
   }, [notify, updateStateWithAudit]);
+
+  // Split a Purchase Lot / Rate into a distinct product
+  const splitProductLot = useCallback(
+    async ({ originalProductId, newProductName, newSku, purchasePrice, sellingPrice, qtyToTransfer, purchaseBillId }) => {
+      try {
+        const prod = state.products.find((p) => String(p.id || p._id) === String(originalProductId));
+        if (!prod) {
+          notify('Original product not found', 'error');
+          return null;
+        }
+
+        const cleanSKU = (newSku || '').trim().toUpperCase() || `SKU-${Math.floor(1000 + Math.random() * 9000)}`;
+        const transferQty = Math.max(1, Number(qtyToTransfer) || 1);
+        const pRate = Number(purchasePrice) || 0;
+        const sRate = Number(sellingPrice) || Math.round(pRate * 1.3) || (prod.sellingPrice || 0);
+
+        // 1. Create the new separate product in DB with transferQty stock
+        const newProductPayload = {
+          name: newProductName.trim(),
+          sku: cleanSKU,
+          SKU: cleanSKU,
+          hsn: prod.hsn || prod.HSN || '8536',
+          HSN: prod.hsn || prod.HSN || '8536',
+          category: prod.category || 'Electronics',
+          unit: prod.unit || 'PCS',
+          purchasePrice: pRate,
+          sellingPrice: sRate,
+          mrp: sRate,
+          gstRate: prod.gstRate || 18,
+          openingStock: transferQty,
+          stock: transferQty,
+          warehouseId: prod.warehouseId || state.warehouses[0]?.id || state.warehouses[0]?._id,
+          isActive: true,
+        };
+
+        const createdProduct = await upsertRecord('products', newProductPayload, 'Product');
+        if (!createdProduct) return null;
+
+        const newProdId = String(createdProduct._id || createdProduct.id);
+
+        // 2. Reduce stock of original product by transferQty
+        const currentStock = prod.stock !== undefined ? prod.stock : (prod.openingStock || 0);
+        const remainingStock = Math.max(0, currentStock - transferQty);
+        await upsertRecord('products', {
+          ...prod,
+          id: prod.id || prod._id,
+          _id: prod._id || prod.id,
+          stock: remainingStock,
+          openingStock: remainingStock,
+        }, 'Product');
+
+        // 3. Update purchase bill item if purchaseBillId provided
+        if (purchaseBillId) {
+          try {
+            const bill = state.purchases.find((pb) => String(pb.id || pb._id) === String(purchaseBillId));
+            if (bill) {
+              const updatedItems = (bill.items || []).map((it) => {
+                const itPid = String(it.productId?._id || it.productId || it.id);
+                if (itPid === String(originalProductId) && Number(it.rate || it.unitPrice) === pRate) {
+                  return {
+                    ...it,
+                    productId: newProdId,
+                    name: newProductName.trim(),
+                    productName: newProductName.trim(),
+                  };
+                }
+                return it;
+              });
+
+              await purchaseBillService.updatePurchaseBill(purchaseBillId, {
+                supplierId: String(bill.supplierId?._id || bill.supplierId),
+                supplierInvoiceNumber: bill.supplierInvoiceNo || bill.supplierInvoiceNumber,
+                warehouseId: String(bill.warehouseId?._id || bill.warehouseId || state.warehouses[0]?._id),
+                billDate: bill.date || new Date().toISOString().slice(0, 10),
+                items: updatedItems.map((it) => ({
+                  productId: String(it.productId),
+                  quantity: Number(it.qty || it.quantity || 1),
+                  unitPrice: Number(it.rate || it.unitPrice || 0),
+                  discount: Number(it.discountPct || it.discount || 0),
+                  description: it.description || '',
+                  HSN: it.hsn || it.HSN || '',
+                })),
+              });
+            }
+          } catch (billUpdateErr) {
+            console.warn('Bill reference update warning:', billUpdateErr.message);
+          }
+        }
+
+        notify(`Separated successfully! Created '${newProductName.trim()}' with ${transferQty} ${prod.unit || 'PCS'} stock.`);
+        return createdProduct;
+      } catch (err) {
+        notify(err.message || 'Failed to separate product', 'error');
+        throw err;
+      }
+    },
+    [state.products, state.warehouses, state.purchases, upsertRecord, notify]
+  );
 
   // Bank Contra Transfer
   const transferCashBank = useCallback(async ({ fromId, toId, amount, date, notes }) => {
@@ -2509,6 +2662,7 @@ export const AppProvider = ({ children }) => {
     createSalesReturnCreditNote,
     createPurchaseReturn,
     adjustInventoryStock,
+    splitProductLot,
     transferCashBank,
     savePosBill,
     generateEInvoice,

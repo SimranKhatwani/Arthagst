@@ -18,6 +18,9 @@ export const purchaseItemInputSchema = z.object({
     .optional()
     .default(0),
   description: z.string().trim().max(1000).optional().default(''),
+  HSN: z.string().trim().optional().default(''),
+  hsn: z.string().trim().optional().default(''),
+  gstRate: z.coerce.number().min(0).max(100).optional(),
 });
 
 export const createPurchaseOrderSchema = z.object({

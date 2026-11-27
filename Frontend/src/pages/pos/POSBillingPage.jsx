@@ -494,18 +494,23 @@ export const POSBillingPage = () => {
               <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
                 {visibleProducts.map((p) => (
                   <button
-                    key={p.id}
+                    key={p.id || p._id}
                     type="button"
                     onClick={() => addToCart(p)}
                     className="flex flex-col justify-between rounded-lg border border-slate-200 bg-white p-3 text-left transition-colors hover:border-indigo-400 hover:bg-indigo-50/30"
                   >
                     <div>
                       <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono">
-                        <span className="truncate">{p.sku}</span>
+                        <span className="truncate">{p.sku || p.SKU || 'SKU'}</span>
                         <span>GST {p.gstRate}%</span>
                       </div>
                       <div className="mt-1 line-clamp-2 text-xs font-semibold text-slate-900 min-h-[2rem]">
-                        {p.name}
+                        <div>{(p.name || '').replace(/\s*\(₹[\d,]+\s*Rate\)/gi, '').trim() || p.name}</div>
+                        {(p.description || p.brand) && (
+                          <div className="text-[11px] font-normal text-slate-500 truncate">
+                            {[p.brand, p.description].filter(Boolean).join(' • ')}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="mt-2.5 flex items-center justify-between border-t border-slate-100 pt-2">
@@ -513,7 +518,7 @@ export const POSBillingPage = () => {
                         {formatINR(p.sellingPrice, false)}
                       </span>
                       <span className="font-mono text-[11px] text-slate-500">
-                        {p.stock} {p.unit}
+                        {p.stock} {p.unit || 'PCS'}
                       </span>
                     </div>
                   </button>
