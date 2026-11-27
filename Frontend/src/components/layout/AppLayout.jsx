@@ -310,19 +310,29 @@ const SidebarContent = ({
     >
       {/* Attribution Card matching theme */}
       {(!collapsed || isMobile) ? (
-        <div className="mx-1 mb-4 rounded-xl border border-slate-800 bg-slate-800/60 p-3 shadow-xs hover:border-slate-700/80 transition-colors">
-          <div className="text-[11px] font-medium text-slate-400 tracking-tight">Designed &amp; Developed by</div>
-          <div className="mt-0.5 text-xs font-bold text-indigo-400 flex items-center gap-1.5">
-            <span className="text-sm">💻</span> Requin Solutions Pvt. Ltd
+        <a
+          href="https://requinsolutions.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="group block mx-1 mb-4 rounded-xl border border-slate-800 bg-slate-800/60 p-3 shadow-xs hover:border-indigo-500/50 hover:bg-slate-800/90 transition-all cursor-pointer"
+        >
+          <div className="text-[11px] font-medium text-slate-400 tracking-tight group-hover:text-slate-300 transition-colors">
+            Designed &amp; Developed by
           </div>
-        </div>
+          <div className="mt-0.5 text-xs font-bold text-indigo-400 group-hover:text-indigo-300 flex items-center gap-1.5 transition-colors underline underline-offset-2 decoration-indigo-500/40 group-hover:decoration-indigo-400">
+            <span className="text-sm no-underline">💻</span> Requin Solutions Pvt. Ltd
+          </div>
+        </a>
       ) : (
-        <div
-          className="mx-auto mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-slate-800/80 border border-slate-700/80 text-sm shadow-xs text-indigo-400 cursor-default"
+        <a
+          href="https://requinsolutions.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mx-auto mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-slate-800/80 border border-slate-700/80 text-sm shadow-xs text-indigo-400 hover:text-indigo-300 hover:border-indigo-500/50 hover:bg-slate-800 transition-all cursor-pointer"
           title="Designed & Developed by Requin Solutions Pvt. Ltd"
         >
           💻
-        </div>
+        </a>
       )}
 
       {NAV_GROUPS.map((group) => (
@@ -790,10 +800,10 @@ export const AppLayout = ({ children }) => {
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             {/* Financial Year */}
             <select
-              value={selectedFY}
+              value={FINANCIAL_YEARS.includes(selectedFY) ? selectedFY : FINANCIAL_YEARS[0]}
               onChange={(e) => setSelectedFY(e.target.value)}
               aria-label="Financial Year"
-              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 focus:border-indigo-600 focus:outline-none shadow-2xs"
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 focus:border-indigo-600 focus:outline-none shadow-2xs cursor-pointer"
             >
               {FINANCIAL_YEARS.map((fy) => (
                 <option key={fy} value={fy}>

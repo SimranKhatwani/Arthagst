@@ -63,7 +63,34 @@ export const CONSTITUTION_TYPES = [
   'Hindu Undivided Family (HUF)',
 ];
 
-export const FINANCIAL_YEARS = ['2026-27', '2025-26', '2024-25'];
+/**
+ * Dynamic Financial Year Calculation for Indian Financial Calendar (April 1 - March 31):
+ * - Records in this platform start from FY 2026-27.
+ * - Previous years (2025-26, 2024-25) are excluded since no prior records exist.
+ * - Automatically includes new financial years (e.g. 2027-28) when the year rolls over.
+ */
+export const getAvailableFinancialYears = (date = new Date()) => {
+  const d = new Date(date);
+  const currentYear = d.getFullYear();
+  const currentMonth = d.getMonth() + 1; // 1-12
+
+  // In Indian FY: April (month 4) onwards is currentYear-(currentYear+1)
+  // Before April (Jan-March): (currentYear-1)-currentYear
+  const currentFYStart = currentMonth >= 4 ? currentYear : currentYear - 1;
+  const baseStartYear = 2026; // System records begin at FY 2026-27
+
+  // If current year changes into 2027 or beyond, include up to current FY / calendar year
+  const maxStartYear = Math.max(baseStartYear, currentFYStart, currentYear >= 2027 ? 2027 : 2026);
+
+  const years = [];
+  for (let y = maxStartYear; y >= baseStartYear; y--) {
+    const nextYY = String((y + 1) % 100).padStart(2, '0');
+    years.push(`${y}-${nextYY}`);
+  }
+  return years;
+};
+
+export const FINANCIAL_YEARS = getAvailableFinancialYears();
 
 export const EXPENSE_CATEGORIES = [
   { id: 'expcat-1', name: 'Rent & Warehouse Lease', hsn: '997212', defaultGst: 18, description: 'Shop, office and godown rentals' },
