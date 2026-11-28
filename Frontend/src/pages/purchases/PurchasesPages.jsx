@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, Eye, IndianRupee, CheckCircle2, RotateCcw, PackageCheck, Loader2, PackagePlus } from 'lucide-react';
+import { Plus, Trash2, Eye, IndianRupee, CheckCircle2, RotateCcw, PackageCheck, Loader2, PackagePlus, ShieldAlert } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { GST_RATES, PAYMENT_METHODS } from '../../data/constants';
 import { calculateInvoiceTotals, formatINR, formatDateIN, formatNumberIN } from '../../services/calculationService';
@@ -19,9 +19,10 @@ import {
 } from '../../components/common/UI';
 
 export const PurchasesPage = ({ defaultTab = 'bills' }) => {
-  const { state, recordPayment } = useApp();
+  const { state, recordPayment, canAccess } = useApp();
   const navigate = useNavigate();
   const [viewMode, setViewMode] = useState(defaultTab);
+  const canEdit = canAccess ? canAccess('purchases', 'edit') : true;
 
   useEffect(() => {
     setViewMode(defaultTab);
@@ -93,10 +94,17 @@ export const PurchasesPage = ({ defaultTab = 'bills' }) => {
             >
               Export CSV
             </button>
-            <button type="button" onClick={() => navigate('/purchases/new')} className={btnPrimary}>
-              <Plus className="h-3.5 w-3.5" />
-              Add Purchase
-            </button>
+            {canEdit ? (
+              <button type="button" onClick={() => navigate('/purchases/new')} className={btnPrimary}>
+                <Plus className="h-3.5 w-3.5" />
+                Add Purchase
+              </button>
+            ) : (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-medium">
+                <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
+                Read-Only View
+              </div>
+            )}
           </>
         }
       />
@@ -112,11 +120,11 @@ export const PurchasesPage = ({ defaultTab = 'bills' }) => {
         />
         {viewMode === 'bills' ? (
           <SegmentedTabs activeTab={statusFilter} onChange={setStatusFilter} tabs={['All', 'Paid', 'Partial', 'Unpaid']} />
-        ) : (
+        ) : canEdit ? (
           <button type="button" onClick={() => navigate('/payments/out')} className={btnSecondary}>
             <IndianRupee className="h-3.5 w-3.5" /> Record Payment Out
           </button>
-        )}
+        ) : null}
       </div>
 
       {viewMode === 'bills' ? (
@@ -283,8 +291,9 @@ export const PurchasesPage = ({ defaultTab = 'bills' }) => {
 };
 
 export const AddPurchasePage = () => {
-  const { state, selectedFY, savePurchaseBill, upsertRecord, notify } = useApp();
+  const { state, selectedFY, savePurchaseBill, upsertRecord, notify, canAccess } = useApp();
   const navigate = useNavigate();
+  const canEdit = canAccess ? canAccess('purchases', 'edit') : true;
 
   const [supplierId, setSupplierId] = useState(state.suppliers[0]?.id || state.suppliers[0]?._id || '');
   const [supplierInvoiceNo, setSupplierInvoiceNo] = useState(`SUP/${Math.floor(100 + Math.random() * 900)}`);
@@ -434,6 +443,10 @@ export const AddPurchasePage = () => {
 
   const handleSave = async (e) => {
     e.preventDefault();
+    if (!canEdit) {
+      notify('Permission Denied: Your account only has read-only permission for Purchases.', 'error');
+      return;
+    }
     if (!supplier || !supplierInvoiceNo.trim()) {
       notify('Supplier and Supplier Invoice Number are required', 'error');
       return;
@@ -470,23 +483,34 @@ export const AddPurchasePage = () => {
         subtitle="Record supplier invoice, input GST credit, and update product stock"
         breadcrumbs={['Purchases', 'Add Purchase']}
       />
+      {!canEdit && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-xs text-amber-900 shadow-sm flex items-start gap-3">
+          <ShieldAlert className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <div className="font-semibold text-sm text-amber-950">Read-Only Mode: Purchase Bill Creation Disabled</div>
+            <p className="mt-0.5 text-amber-800 leading-relaxed">
+              Your account permissions for Purchases are set to <strong>Read-Only</strong>. You can inspect invoice entries, but you cannot record new purchases or alter product stock.
+            </p>
+          </div>
+        </div>
+      )}
       <form onSubmit={handleSave} className="space-y-4">
         <div className="grid grid-cols-1 gap-4 rounded-lg border border-slate-200 bg-white p-5 sm:grid-cols-4">
           <InputField label="Supplier" required>
-            <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className={inputClass}>
+            <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className={inputClass} disabled={!canEdit}>
               {state.suppliers.map((s) => (
                 <option key={s.id} value={s.id}>{s.name} ({s.state})</option>
               ))}
             </select>
           </InputField>
           <InputField label="Supplier Invoice No." required>
-            <input type="text" value={supplierInvoiceNo} onChange={(e) => setSupplierInvoiceNo(e.target.value)} className={`${inputClass} font-mono`} />
+            <input type="text" value={supplierInvoiceNo} onChange={(e) => setSupplierInvoiceNo(e.target.value)} className={`${inputClass} font-mono`} disabled={!canEdit} />
           </InputField>
           <InputField label="Invoice Date" required>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} />
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} disabled={!canEdit} />
           </InputField>
           <InputField label="Due Date">
-            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={inputClass} />
+            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={inputClass} disabled={!canEdit} />
           </InputField>
         </div>
 
@@ -500,18 +524,20 @@ export const AddPurchasePage = () => {
               <button
                 type="button"
                 onClick={openQuickAddProduct}
-                className="inline-flex items-center gap-1.5 rounded-md border border-indigo-200 bg-indigo-50/70 px-2.5 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 transition-colors"
-                title="Create a new product with its own name and SKU"
+                disabled={!canEdit}
+                className={`inline-flex items-center gap-1.5 rounded-md border border-indigo-200 bg-indigo-50/70 px-2.5 py-1.5 text-xs font-medium text-indigo-700 transition-colors ${!canEdit ? 'opacity-50 cursor-not-allowed' : 'hover:bg-indigo-100'}`}
+                title={canEdit ? 'Create a new product with its own name and SKU' : 'Disabled in read-only mode'}
               >
                 <PackagePlus className="h-3.5 w-3.5 text-indigo-600" /> + New Product
               </button>
               <button
                 type="button"
+                disabled={!canEdit}
                 onClick={() => {
                   const p = state.products[0];
                   setItems([...items, { productId: p?.id || p?._id, name: p?.name, sku: p?.sku, hsn: p?.hsn, unit: p?.unit, qty: 10, rate: p?.purchasePrice || 0, discountPct: 0, gstRate: p?.gstRate || 18, description: '' }]);
                 }}
-                className={btnSecondary}
+                className={`${btnSecondary} ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 <Plus className="h-3.5 w-3.5" /> Add Row
               </button>
@@ -655,10 +681,15 @@ export const AddPurchasePage = () => {
               <button type="button" disabled={isSaving} onClick={() => navigate('/purchases')} className={btnSecondary}>Cancel</button>
               <button
                 type="submit"
-                disabled={isSaving}
-                className={`${btnPrimary} ${isSaving ? 'opacity-70 cursor-not-allowed' : ''}`}
+                disabled={isSaving || !canEdit}
+                title={!canEdit ? 'Read-only access: Editing restricted' : ''}
+                className={`${btnPrimary} ${(!canEdit || isSaving) ? 'opacity-60 cursor-not-allowed' : ''}`}
               >
-                {isSaving ? (
+                {!canEdit ? (
+                  <>
+                    <ShieldAlert className="h-3.5 w-3.5" /> Read-Only (Creation Disabled)
+                  </>
+                ) : isSaving ? (
                   <>
                     <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving &amp; Updating Stock...
                   </>
@@ -775,7 +806,8 @@ export const AddPurchasePage = () => {
 };
 
 export const PurchaseReturnsPage = () => {
-  const { state, createPurchaseReturn, notify } = useApp();
+  const { state, createPurchaseReturn, notify, canAccess } = useApp();
+  const canEdit = canAccess ? canAccess('purchases', 'edit') : true;
   const [purchaseId, setPurchaseId] = useState(state.purchases[0]?.id || state.purchases[0]?._id || '');
   const [qtyMap, setQtyMap] = useState({});
   const [reason, setReason] = useState('Damaged stock returned to supplier');
@@ -791,6 +823,10 @@ export const PurchaseReturnsPage = () => {
 
   const handleReturn = async (e) => {
     e.preventDefault();
+    if (!canEdit) {
+      notify('Permission Denied: Your account only has read-only permission for Purchases.', 'error');
+      return;
+    }
     if (!selectedPur) return;
     const retItems = (selectedPur.items || [])
       .map((it) => {
@@ -833,6 +869,17 @@ export const PurchaseReturnsPage = () => {
         subtitle="Return defective goods to suppliers, reduce stock, and reverse ITC"
         breadcrumbs={['Purchases', 'Purchase Returns']}
       />
+      {!canEdit && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-xs text-amber-900 shadow-sm flex items-start gap-3">
+          <ShieldAlert className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <div className="font-semibold text-sm text-amber-950">Read-Only Mode: Purchase Returns Disabled</div>
+            <p className="mt-0.5 text-amber-800 leading-relaxed">
+              Your account permissions for Purchases are set to <strong>Read-Only</strong>. Debit note generation is restricted.
+            </p>
+          </div>
+        </div>
+      )}
       <form onSubmit={handleReturn} className="rounded-lg border border-slate-200 bg-white p-5 space-y-4">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <InputField label="Select Original Purchase Bill">
@@ -881,8 +928,13 @@ export const PurchaseReturnsPage = () => {
           </table>
         )}
         <div className="flex justify-end">
-          <button type="submit" disabled={isSubmitting} className={`${btnPrimary} disabled:opacity-50`}>
-            <RotateCcw className="h-3.5 w-3.5" /> {isSubmitting ? 'Recording...' : 'Record Purchase Return'}
+          <button
+            type="submit"
+            disabled={isSubmitting || !canEdit}
+            title={!canEdit ? 'Read-only access: Editing restricted' : ''}
+            className={`${btnPrimary} ${(!canEdit || isSubmitting) ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            <RotateCcw className="h-3.5 w-3.5" /> {!canEdit ? 'Read-Only (Return Disabled)' : isSubmitting ? 'Recording...' : 'Record Purchase Return'}
           </button>
         </div>
       </form>
@@ -905,7 +957,8 @@ export const PurchaseReturnsPage = () => {
 };
 
 export const GRNPage = () => {
-  const { state, upsertRecord } = useApp();
+  const { state, upsertRecord, notify, canAccess } = useApp();
+  const canEdit = canAccess ? canAccess('purchases', 'edit') : true;
   const [modalOpen, setModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [form, setForm] = useState({
@@ -934,6 +987,10 @@ export const GRNPage = () => {
 
   const handleCreateGRN = async (e) => {
     e.preventDefault();
+    if (!canEdit) {
+      notify('Permission Denied: Your account only has read-only permission for Purchases.', 'error');
+      return;
+    }
     const sup = state.suppliers.find((s) => (s.id || s._id) === form.supplierId);
     const prod = state.products.find((p) => (p.id || p._id) === form.productId);
     const wh = state.warehouses.find((w) => (w.id || w._id) === form.warehouseId) || state.warehouses[0];
@@ -982,9 +1039,16 @@ export const GRNPage = () => {
         subtitle="Inspect inbound shipments, log damaged/missing counts, and update godown stock"
         breadcrumbs={['Purchases', 'Goods Received Notes']}
         actions={
-          <button type="button" onClick={() => setModalOpen(true)} className={btnPrimary}>
-            <PackageCheck className="h-3.5 w-3.5" /> Record GRN
-          </button>
+          canEdit ? (
+            <button type="button" onClick={() => setModalOpen(true)} className={btnPrimary}>
+              <PackageCheck className="h-3.5 w-3.5" /> Record GRN
+            </button>
+          ) : (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-medium">
+              <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
+              Read-Only View
+            </div>
+          )
         }
       />
 

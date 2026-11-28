@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from
 import { ShieldAlert } from 'lucide-react';
 import { AppProvider, useApp } from './context/AppContext';
 import { getToken } from './services/api';
-import { getFirstAllowedPath, getModuleInfoFromPath } from './utils/permissionUtils';
+import { getFirstAllowedPath, getModuleInfoFromPath, getRequiredAccessLevelForPath } from './utils/permissionUtils';
 import { ToastContainer, ConfirmDialog } from './components/common/UI';
 import { AppLayout } from './components/layout/AppLayout';
 import { SuperAdminLayout } from './components/layout/SuperAdminLayout';
@@ -139,22 +139,48 @@ const AuthLoadingScreen = ({ message = 'Verifying ArthaGST session...' }) => (
 
 const AccessRestrictedView = ({ user, targetPath }) => {
   const navigate = useNavigate();
-  const { logout } = useApp();
+  const { logout, canAccess } = useApp();
   const allowedPath = getFirstAllowedPath(user);
   const modInfo = getModuleInfoFromPath(targetPath);
+  const reqLevel = getRequiredAccessLevelForPath(targetPath);
+  const hasModuleRead = canAccess ? canAccess(modInfo.moduleId, 'read') : false;
+  const isReadOnlyRestriction = reqLevel === 'edit' && hasModuleRead;
+
+  const returnToModulePath =
+    modInfo.moduleId === 'purchases'
+      ? '/purchases'
+      : modInfo.moduleId === 'sales'
+      ? '/sales/invoices'
+      : modInfo.moduleId === 'expenses'
+      ? '/expenses'
+      : modInfo.moduleId === 'einvoice'
+      ? '/einvoice/list'
+      : allowedPath;
 
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center p-6 text-center">
-      <div className="rounded-2xl border border-rose-200 bg-white p-8 shadow-sm max-w-md w-full space-y-4">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-50 text-rose-600 border border-rose-100">
+      <div className={`rounded-2xl border p-8 shadow-sm max-w-md w-full space-y-4 ${isReadOnlyRestriction ? 'border-amber-200 bg-white' : 'border-rose-200 bg-white'}`}>
+        <div className={`mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border ${isReadOnlyRestriction ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-rose-50 text-rose-600 border-rose-100'}`}>
           <ShieldAlert className="h-7 w-7" />
         </div>
         <div>
-          <h2 className="text-lg font-bold text-slate-900">Access Restricted</h2>
+          <h2 className="text-lg font-bold text-slate-900">
+            {isReadOnlyRestriction ? 'Read-Only Access Restricted' : 'Access Restricted'}
+          </h2>
           <p className="mt-1 text-xs text-slate-500 leading-relaxed">
-            You do not have authorization to view{' '}
-            <span className="font-semibold text-slate-800">{modInfo.moduleId || targetPath}</span>.
-            Your account permissions are restricted to your assigned role.
+            {isReadOnlyRestriction ? (
+              <>
+                You have <span className="font-semibold text-amber-700">Read-Only</span> access to{' '}
+                <span className="font-semibold text-slate-800">{modInfo.moduleId || targetPath}</span>.
+                Creating or modifying entries is restricted to accounts with Edit privileges.
+              </>
+            ) : (
+              <>
+                You do not have authorization to view{' '}
+                <span className="font-semibold text-slate-800">{modInfo.moduleId || targetPath}</span>.
+                Your account permissions are restricted to your assigned role.
+              </>
+            )}
           </p>
         </div>
 
@@ -169,13 +195,23 @@ const AccessRestrictedView = ({ user, targetPath }) => {
         </div>
 
         <div className="flex flex-col gap-2 pt-2">
-          <button
-            type="button"
-            onClick={() => navigate(allowedPath, { replace: true })}
-            className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-xs font-semibold text-white hover:bg-indigo-700 shadow-sm transition-colors cursor-pointer"
-          >
-            Go to Your Workspace
-          </button>
+          {isReadOnlyRestriction && returnToModulePath !== allowedPath ? (
+            <button
+              type="button"
+              onClick={() => navigate(returnToModulePath, { replace: true })}
+              className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-xs font-semibold text-white hover:bg-indigo-700 shadow-sm transition-colors cursor-pointer"
+            >
+              Return to {modInfo.moduleId ? modInfo.moduleId.toUpperCase() : 'List'} View
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => navigate(allowedPath, { replace: true })}
+              className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-xs font-semibold text-white hover:bg-indigo-700 shadow-sm transition-colors cursor-pointer"
+            >
+              Go to Your Workspace
+            </button>
+          )}
           <button
             type="button"
             onClick={() => {
@@ -204,8 +240,9 @@ const ProtectedTenant = ({ children }) => {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Check if current user has permission to this path
-  const isAllowed = canAccess ? canAccess(location.pathname, 'read') : true;
+  // Check if current user has permission to this path with proper required level (read vs edit)
+  const requiredLevel = getRequiredAccessLevelForPath(location.pathname);
+  const isAllowed = canAccess ? canAccess(location.pathname, requiredLevel) : true;
 
   if (!isAllowed) {
     // If user lands on /dashboard by default but doesn't have dashboard access, auto-redirect to first allowed path!

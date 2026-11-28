@@ -252,19 +252,13 @@ const SidebarContent = ({
                   }
                   return canAccess(child.id, 'read') ? child : null;
                 }
-                return canAccess(child.path || child.id || `${item.id}:${child.label}`, 'read')
-                  ? child
-                  : null;
+                const target = child.path || child.id || `${item.id}:${child.label}`;
+                return canAccess(target, 'read') ? child : null;
               })
               .filter(Boolean);
 
             if (filteredChildren.length > 0) {
               return { ...item, children: filteredChildren };
-            }
-
-            // If no children matched directly, check if the parent module itself has permission
-            if (canAccess(item.id, 'read')) {
-              return item;
             }
 
             return null;

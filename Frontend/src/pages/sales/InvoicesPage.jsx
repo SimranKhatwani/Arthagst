@@ -10,6 +10,7 @@ import {
   RotateCcw,
   IndianRupee,
   Loader2,
+  ShieldAlert,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { formatINR, formatDateIN } from '../../services/calculationService';
@@ -29,8 +30,9 @@ import {
 import { TaxInvoicePreview } from '../../components/invoice/TaxInvoicePreview';
 
 export const InvoicesPage = () => {
-  const { state, selectedFY, cancelSalesInvoice, recordPayment, confirmAction } = useApp();
+  const { state, selectedFY, cancelSalesInvoice, recordPayment, confirmAction, canAccess } = useApp();
   const navigate = useNavigate();
+  const canEdit = canAccess ? canAccess('sales', 'edit') : true;
 
   const [statusFilter, setStatusFilter] = useState('All');
   const [customerFilter, setCustomerFilter] = useState('All');
@@ -220,7 +222,7 @@ export const InvoicesPage = () => {
           >
             <Eye className="h-3.5 w-3.5" />
           </button>
-          {r.status === 'Draft' && (
+          {canEdit && r.status === 'Draft' && (
             <button
               type="button"
               title="Edit Draft"
@@ -230,7 +232,7 @@ export const InvoicesPage = () => {
               <Edit3 className="h-3.5 w-3.5" />
             </button>
           )}
-          {r.status === 'Finalized' && r.paymentStatus !== 'Paid' && (
+          {canEdit && r.status === 'Finalized' && r.paymentStatus !== 'Paid' && (
             <button
               type="button"
               title="Record Payment"
@@ -240,15 +242,17 @@ export const InvoicesPage = () => {
               <IndianRupee className="h-3.5 w-3.5" />
             </button>
           )}
-          <button
-            type="button"
-            title="Duplicate Invoice"
-            onClick={() => navigate(`/sales/invoices/new?duplicate=${r.id}`)}
-            className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-          >
-            <Copy className="h-3.5 w-3.5" />
-          </button>
-          {r.status === 'Finalized' && (
+          {canEdit && (
+            <button
+              type="button"
+              title="Duplicate Invoice"
+              onClick={() => navigate(`/sales/invoices/new?duplicate=${r.id}`)}
+              className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+            >
+              <Copy className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {canEdit && r.status === 'Finalized' && (
             <button
               type="button"
               title="Create Credit Note / Return"
@@ -258,7 +262,7 @@ export const InvoicesPage = () => {
               <RotateCcw className="h-3.5 w-3.5" />
             </button>
           )}
-          {r.status === 'Finalized' && (
+          {canEdit && r.status === 'Finalized' && (
             <button
               type="button"
               title="Cancel Invoice"
@@ -289,14 +293,21 @@ export const InvoicesPage = () => {
               <Download className="h-3.5 w-3.5" />
               Export CSV
             </button>
-            <button
-              type="button"
-              onClick={() => navigate('/sales/invoices/new')}
-              className={btnPrimary}
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Create Invoice
-            </button>
+            {canEdit ? (
+              <button
+                type="button"
+                onClick={() => navigate('/sales/invoices/new')}
+                className={btnPrimary}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Create Invoice
+              </button>
+            ) : (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-medium">
+                <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
+                Read-Only View
+              </div>
+            )}
           </>
         }
       />

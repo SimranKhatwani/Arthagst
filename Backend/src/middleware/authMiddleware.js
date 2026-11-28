@@ -167,4 +167,42 @@ export const authorizeRoles = (...allowedRoles) => {
   };
 };
 
+/**
+ * Permission-based authorization middleware
+ * Checks if authenticated user has required access level ('read' or 'edit') for a module
+ */
+export const authorizePermission = (moduleName, level = 'read') => {
+  return (req, res, next) => {
+    const user = req.user;
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+    const role = (user.role || '').toLowerCase();
+    if (role === 'owner' || role === 'admin' || user.isSuperAdmin || role === 'super_admin') {
+      return next();
+    }
+    const perms = Array.isArray(user.permissions) ? user.permissions : [];
+    if (perms.includes('all') || perms.includes('*')) {
+      return next();
+    }
+    const hasRead =
+      perms.includes(moduleName) ||
+      perms.includes(`${moduleName}:read`) ||
+      perms.includes(`${moduleName}:edit`) ||
+      perms.some((p) => p.startsWith(`${moduleName}:`));
+    const hasEdit =
+      perms.includes(`${moduleName}:edit`) ||
+      perms.includes(`${moduleName}:write`) ||
+      perms.some((p) => p.startsWith(`${moduleName}:`) && (p.endsWith(':edit') || p.endsWith(':write')));
+
+    if (level === 'read' && hasRead) return next();
+    if (level === 'edit' && hasEdit) return next();
+
+    return res.status(403).json({
+      success: false,
+      message: `Permission denied. Your account does not have ${level} access to '${moduleName}'.`,
+    });
+  };
+};
+
 export default authenticate;

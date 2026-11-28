@@ -386,6 +386,25 @@ export const hasGranularKeysForModule = (perms, moduleId) => {
 };
 
 /**
+ * Determine the minimum privilege level required for a given URL path or route.
+ * Creation, generation, and editing routes inherently require 'edit' access.
+ */
+export const getRequiredAccessLevelForPath = (path) => {
+  if (!path) return 'read';
+  const p = path.toLowerCase().split('?')[0].split('#')[0];
+  if (
+    p.endsWith('/new') ||
+    p.includes('/edit') ||
+    p === '/einvoice/generate' ||
+    p === '/einvoice/eway-generate' ||
+    p === '/onboarding'
+  ) {
+    return 'edit';
+  }
+  return 'read';
+};
+
+/**
  * Check if a user has access to a given module, submodule, or URL path.
  *
  * @param {Object} user - Current user object
@@ -407,29 +426,53 @@ export const checkUserPermission = (user, target, level = 'read') => {
     return true;
   }
 
-  // Resolve target identifier
+  // Resolve target identifier and effective required level
   let moduleId = target;
   let subModuleId = target;
+  let requiredLevel = level;
+
   if (typeof target === 'string' && target.startsWith('/')) {
     const resolved = getModuleInfoFromPath(target);
     moduleId = resolved.moduleId;
     subModuleId = resolved.subModuleId;
+    // If the path itself is intrinsically an action/create route, effective level is always 'edit'
+    if (getRequiredAccessLevelForPath(target) === 'edit') {
+      requiredLevel = 'edit';
+    }
   } else if (typeof target === 'string' && target.includes(':')) {
     moduleId = target.split(':')[0];
     subModuleId = target;
+    // Submodules like 'purchases:create', 'sales:create', 'einvoice:generate' represent creation actions
+    if (
+      subModuleId.endsWith(':create') ||
+      subModuleId.endsWith(':generate') ||
+      subModuleId.endsWith(':eway-generate')
+    ) {
+      requiredLevel = 'edit';
+    }
   }
 
   // If unmapped public path, grant access
   if (!moduleId) return true;
 
-  // 1. Check direct submodule match: e.g. "sales:invoices:read", "sales:invoices:edit", or "sales:invoices"
+  // 1. Check direct submodule match: e.g. "purchases:create:edit", "purchases:create:read", or "purchases:create"
   if (subModuleId && subModuleId !== moduleId) {
-    if (perms.includes(subModuleId)) return true;
-    if (level === 'read' && (perms.includes(`${subModuleId}:read`) || perms.includes(`${subModuleId}:edit`) || perms.includes(`${subModuleId}:write`))) {
-      return true;
-    }
-    if (level === 'edit' && (perms.includes(`${subModuleId}:edit`) || perms.includes(`${subModuleId}:write`))) {
-      return true;
+    if (requiredLevel === 'read') {
+      if (
+        perms.includes(`${subModuleId}:read`) ||
+        perms.includes(`${subModuleId}:edit`) ||
+        perms.includes(`${subModuleId}:write`) ||
+        perms.includes(subModuleId)
+      ) {
+        return true;
+      }
+    } else if (requiredLevel === 'edit') {
+      if (
+        perms.includes(`${subModuleId}:edit`) ||
+        perms.includes(`${subModuleId}:write`)
+      ) {
+        return true;
+      }
     }
     // If granular permissions exist for this parent module, and this submodule didn't match, deny access
     if (hasGranularKeysForModule(perms, moduleId)) {
@@ -437,13 +480,20 @@ export const checkUserPermission = (user, target, level = 'read') => {
     }
   }
 
-  // 2. Check parent module match: e.g. "sales:read", "sales:edit", or "sales"
-  if (perms.includes(moduleId)) return true;
-  if (level === 'read') {
-    return perms.includes(`${moduleId}:read`) || perms.includes(`${moduleId}:edit`) || perms.includes(`${moduleId}:write`);
+  // 2. Check parent module match: e.g. "purchases:read", "purchases:edit"
+  if (requiredLevel === 'read') {
+    return (
+      perms.includes(moduleId) ||
+      perms.includes(`${moduleId}:read`) ||
+      perms.includes(`${moduleId}:edit`) ||
+      perms.includes(`${moduleId}:write`)
+    );
   }
-  if (level === 'edit') {
-    return perms.includes(`${moduleId}:edit`) || perms.includes(`${moduleId}:write`);
+  if (requiredLevel === 'edit') {
+    return (
+      perms.includes(`${moduleId}:edit`) ||
+      perms.includes(`${moduleId}:write`)
+    );
   }
 
   return false;

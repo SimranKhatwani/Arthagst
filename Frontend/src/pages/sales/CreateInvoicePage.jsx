@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Plus, Trash2, Eye, Printer, Save, CheckCircle2, UserPlus, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Eye, Printer, Save, CheckCircle2, UserPlus, Loader2, ShieldAlert } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { INDIAN_STATES, GST_RATES, PAYMENT_METHODS, REGISTRATION_TYPES } from '../../data/constants';
 import { calculateInvoiceTotals, formatINR, formatNumberIN } from '../../services/calculationService';
@@ -18,8 +18,9 @@ import { validateGSTIN } from '../../utils/gstinValidator';
 import { TaxInvoicePreview } from '../../components/invoice/TaxInvoicePreview';
 
 export const CreateInvoicePage = () => {
-  const { state, selectedFY, saveSalesInvoice, upsertRecord, notify } = useApp();
+  const { state, selectedFY, saveSalesInvoice, upsertRecord, notify, canAccess } = useApp();
   const navigate = useNavigate();
+  const canEdit = canAccess ? canAccess('sales', 'edit') : true;
   const { id: editId } = useParams();
   const [searchParams] = useSearchParams();
   const duplicateId = searchParams.get('duplicate');
@@ -238,6 +239,10 @@ export const CreateInvoicePage = () => {
   });
 
   const handleSave = async (status, shouldPrint = false) => {
+    if (!canEdit) {
+      notify('Permission Denied: Your account only has read-only permission for Sales.', 'error');
+      return;
+    }
     if (!selectedCustomer) {
       notify('Select a customer first', 'error');
       return;
@@ -339,22 +344,41 @@ export const CreateInvoicePage = () => {
               <Eye className="h-3.5 w-3.5" />
               Preview Invoice
             </button>
-            <button type="button" disabled={isSaving} onClick={() => handleSave('Draft')} className={`${btnSecondary} disabled:opacity-50`}>
+            <button
+              type="button"
+              disabled={isSaving || !canEdit}
+              title={!canEdit ? 'Read-only access: Editing restricted' : ''}
+              onClick={() => handleSave('Draft')}
+              className={`${btnSecondary} ${(!canEdit || isSaving) ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
               <Save className="h-3.5 w-3.5" />
-              {isSaving ? 'Saving...' : 'Save Draft'}
+              {!canEdit ? 'Read-Only' : isSaving ? 'Saving...' : 'Save Draft'}
             </button>
             <button
               type="button"
-              disabled={isSaving}
+              disabled={isSaving || !canEdit}
+              title={!canEdit ? 'Read-only access: Editing restricted' : ''}
               onClick={() => handleSave('Finalized', false)}
-              className={`${btnPrimary} disabled:opacity-50`}
+              className={`${btnPrimary} ${(!canEdit || isSaving) ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               <CheckCircle2 className="h-3.5 w-3.5" />
-              {isSaving ? 'Generating...' : 'Generate Invoice'}
+              {!canEdit ? 'Creation Disabled' : isSaving ? 'Generating...' : 'Generate Invoice'}
             </button>
           </>
         }
       />
+
+      {!canEdit && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-xs text-amber-900 shadow-sm flex items-start gap-3">
+          <ShieldAlert className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <div className="font-semibold text-sm text-amber-950">Read-Only Mode: Sales Invoice Creation Disabled</div>
+            <p className="mt-0.5 text-amber-800 leading-relaxed">
+              Your account permissions for Sales are set to <strong>Read-Only</strong>. You can preview invoice layouts, but you cannot generate or save invoices.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Section 1 & 2: Customer + Invoice Details */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">

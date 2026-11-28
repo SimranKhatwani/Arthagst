@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import * as salesController from '../controllers/sales.controller.js';
-import { authenticate } from '../middleware/authMiddleware.js';
+import { authenticate, authorizePermission } from '../middleware/authMiddleware.js';
 import { requireLimit } from '../middleware/subscriptionLimit.middleware.js';
 
 const router = Router();
@@ -13,107 +13,59 @@ router.use(authenticate);
  * Sales Invoices Routes
  * ==========================================
  */
-
-/**
- * @route   POST /api/sales/invoices
- * @desc    Create a new draft sales invoice
- * @access  Private
- */
-router.post('/invoices', requireLimit('invoices'), salesController.createInvoice);
-
-/**
- * @route   GET /api/sales/invoices
- * @desc    List sales invoices with filters & pagination
- * @access  Private
- */
-router.get('/invoices', salesController.getInvoices);
-
-/**
- * @route   GET /api/sales/invoices/:id/pdf
- * @desc    Generate Tax Invoice PDF
- * @access  Private
- */
-router.get('/invoices/:id/pdf', salesController.getInvoicePDF);
-
-/**
- * @route   GET /api/sales/invoices/:id
- * @desc    Get sales invoice by ID
- * @access  Private
- */
-router.get('/invoices/:id', salesController.getInvoiceById);
-
-/**
- * @route   PUT /api/sales/invoices/:id
- * @desc    Update draft sales invoice
- * @access  Private
- */
-router.put('/invoices/:id', salesController.updateInvoice);
-
-/**
- * @route   POST /api/sales/invoices/:id/post
- * @desc    Finalize and post invoice (atomically reduces warehouse stock)
- * @access  Private
- */
-router.post('/invoices/:id/post', salesController.postInvoice);
-
-/**
- * @route   POST /api/sales/invoices/:id/cancel
- * @desc    Cancel invoice (atomically reverses stock)
- * @access  Private
- */
-router.post('/invoices/:id/cancel', salesController.cancelInvoice);
-
-/**
- * @route   POST /api/sales/invoices/:id/returns
- * @desc    Create sales return / credit note against a posted invoice
- * @access  Private
- */
-router.post('/invoices/:id/returns', salesController.createSalesReturn);
+router.post('/invoices', authorizePermission('sales', 'edit'), requireLimit('invoices'), salesController.createInvoice);
+router.get('/invoices', authorizePermission('sales', 'read'), salesController.getInvoices);
+router.get('/invoices/:id/pdf', authorizePermission('sales', 'read'), salesController.getInvoicePDF);
+router.get('/invoices/:id', authorizePermission('sales', 'read'), salesController.getInvoiceById);
+router.put('/invoices/:id', authorizePermission('sales', 'edit'), salesController.updateInvoice);
+router.post('/invoices/:id/post', authorizePermission('sales', 'edit'), salesController.postInvoice);
+router.post('/invoices/:id/cancel', authorizePermission('sales', 'edit'), salesController.cancelInvoice);
+router.post('/invoices/:id/returns', authorizePermission('sales', 'edit'), salesController.createSalesReturn);
 
 /**
  * ==========================================
  * Quotations / Estimates Routes
  * ==========================================
  */
-router.post('/quotations', salesController.createQuotation);
-router.get('/quotations', salesController.getQuotations);
-router.get('/quotations/:id', salesController.getQuotationById);
-router.put('/quotations/:id', salesController.updateQuotation);
-router.delete('/quotations/:id', salesController.deleteQuotation);
-router.post('/quotations/:id/convert-to-order', salesController.convertQuotationToOrder);
-router.post('/quotations/:id/convert-to-invoice', salesController.convertQuotationToInvoice);
+router.post('/quotations', authorizePermission('sales', 'edit'), salesController.createQuotation);
+router.get('/quotations', authorizePermission('sales', 'read'), salesController.getQuotations);
+router.get('/quotations/:id', authorizePermission('sales', 'read'), salesController.getQuotationById);
+router.put('/quotations/:id', authorizePermission('sales', 'edit'), salesController.updateQuotation);
+router.delete('/quotations/:id', authorizePermission('sales', 'edit'), salesController.deleteQuotation);
+router.post('/quotations/:id/convert-to-order', authorizePermission('sales', 'edit'), salesController.convertQuotationToOrder);
+router.post('/quotations/:id/convert-to-invoice', authorizePermission('sales', 'edit'), salesController.convertQuotationToInvoice);
 
 /**
  * ==========================================
  * Sales Orders Routes
  * ==========================================
  */
-router.post('/orders', salesController.createSalesOrder);
-router.get('/orders', salesController.getSalesOrders);
-router.get('/orders/:id', salesController.getSalesOrderById);
-router.put('/orders/:id', salesController.updateSalesOrder);
-router.post('/orders/:id/cancel', salesController.cancelSalesOrder);
-router.post('/orders/:id/convert-to-invoice', salesController.convertOrderToInvoice);
+router.post('/orders', authorizePermission('sales', 'edit'), salesController.createSalesOrder);
+router.get('/orders', authorizePermission('sales', 'read'), salesController.getSalesOrders);
+router.get('/orders/:id', authorizePermission('sales', 'read'), salesController.getSalesOrderById);
+router.put('/orders/:id', authorizePermission('sales', 'edit'), salesController.updateSalesOrder);
+router.post('/orders/:id/cancel', authorizePermission('sales', 'edit'), salesController.cancelSalesOrder);
+router.post('/orders/:id/convert-to-invoice', authorizePermission('sales', 'edit'), salesController.convertOrderToInvoice);
 
 /**
  * ==========================================
  * Delivery Challans Routes
  * ==========================================
  */
-router.post('/challans', salesController.createDeliveryChallan);
-router.get('/challans', salesController.getDeliveryChallans);
-router.get('/challans/:id', salesController.getDeliveryChallanById);
-router.put('/challans/:id', salesController.updateDeliveryChallan);
-router.post('/challans/:id/convert-to-invoice', salesController.convertChallanToInvoice);
+router.post('/challans', authorizePermission('sales', 'edit'), salesController.createDeliveryChallan);
+router.get('/challans', authorizePermission('sales', 'read'), salesController.getDeliveryChallans);
+router.get('/challans/:id', authorizePermission('sales', 'read'), salesController.getDeliveryChallanById);
+router.put('/challans/:id', authorizePermission('sales', 'edit'), salesController.updateDeliveryChallan);
+router.post('/challans/:id/convert-to-invoice', authorizePermission('sales', 'edit'), salesController.convertChallanToInvoice);
 
 /**
  * ==========================================
  * Credit Notes Routes
  * ==========================================
  */
-router.post('/credit-notes', salesController.createCreditNote);
-router.get('/credit-notes', salesController.getCreditNotes);
-router.get('/credit-notes/:id', salesController.getCreditNoteById);
-router.post('/credit-notes/:id/post', salesController.postCreditNote);
+router.post('/credit-notes', authorizePermission('sales', 'edit'), salesController.createCreditNote);
+router.get('/credit-notes', authorizePermission('sales', 'read'), salesController.getCreditNotes);
+router.get('/credit-notes/:id', authorizePermission('sales', 'read'), salesController.getCreditNoteById);
+router.post('/credit-notes/:id/post', authorizePermission('sales', 'edit'), salesController.postCreditNote);
 
 export default router;
