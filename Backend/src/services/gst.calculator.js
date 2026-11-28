@@ -21,8 +21,9 @@ export const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z
 /**
  * Validate GSTIN format with strict state code, structure, and Mod-36 checksum
  */
-export const isValidGSTIN = (gstin) => {
-  return validateGSTINBool(gstin);
+export const isValidGSTIN = (gstin, options = { required: true }) => {
+  if (!gstin || !String(gstin).trim()) return false;
+  return validateGSTINBool(gstin, options);
 };
 
 /**

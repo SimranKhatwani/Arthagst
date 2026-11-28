@@ -390,7 +390,7 @@ export const getGSTR1Data = async (tenantId, options = {}) => {
           },
         ],
       });
-    } else if (hasValidGSTIN) {
+    } else if (hasValidGSTIN && inv.partyGSTIN) {
       // B2B
       const gstin = inv.partyGSTIN.toUpperCase();
       if (!b2bMap[gstin]) {
