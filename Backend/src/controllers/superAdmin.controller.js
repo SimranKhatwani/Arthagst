@@ -114,6 +114,7 @@ export const login = async (req, res, next) => {
         email: user.email,
         role: 'super_admin',
         isSuperAdmin: true,
+        permissions: ['all'],
       },
     });
   } catch (error) {

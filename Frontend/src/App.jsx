@@ -1,6 +1,9 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { ShieldAlert } from 'lucide-react';
 import { AppProvider, useApp } from './context/AppContext';
+import { getToken } from './services/api';
+import { getFirstAllowedPath, getModuleInfoFromPath } from './utils/permissionUtils';
 import { ToastContainer, ConfirmDialog } from './components/common/UI';
 import { AppLayout } from './components/layout/AppLayout';
 import { SuperAdminLayout } from './components/layout/SuperAdminLayout';
@@ -134,8 +137,63 @@ const AuthLoadingScreen = ({ message = 'Verifying ArthaGST session...' }) => (
   </div>
 );
 
+const AccessRestrictedView = ({ user, targetPath }) => {
+  const navigate = useNavigate();
+  const { logout } = useApp();
+  const allowedPath = getFirstAllowedPath(user);
+  const modInfo = getModuleInfoFromPath(targetPath);
+
+  return (
+    <div className="flex min-h-[60vh] flex-col items-center justify-center p-6 text-center">
+      <div className="rounded-2xl border border-rose-200 bg-white p-8 shadow-sm max-w-md w-full space-y-4">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-50 text-rose-600 border border-rose-100">
+          <ShieldAlert className="h-7 w-7" />
+        </div>
+        <div>
+          <h2 className="text-lg font-bold text-slate-900">Access Restricted</h2>
+          <p className="mt-1 text-xs text-slate-500 leading-relaxed">
+            You do not have authorization to view{' '}
+            <span className="font-semibold text-slate-800">{modInfo.moduleId || targetPath}</span>.
+            Your account permissions are restricted to your assigned role.
+          </p>
+        </div>
+
+        <div className="rounded-xl bg-slate-50 p-3 border border-slate-100 text-xs text-left">
+          <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+            Current Session
+          </div>
+          <div className="font-medium text-slate-800">{user?.name}</div>
+          <div className="text-slate-500 text-[11px]">
+            Role: <span className="font-semibold text-indigo-700">{user?.role}</span> • {user?.email}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2 pt-2">
+          <button
+            type="button"
+            onClick={() => navigate(allowedPath, { replace: true })}
+            className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-xs font-semibold text-white hover:bg-indigo-700 shadow-sm transition-colors cursor-pointer"
+          >
+            Go to Your Workspace
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              logout();
+              navigate('/login');
+            }}
+            className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+          >
+            Sign Out
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const ProtectedTenant = ({ children }) => {
-  const { state, authLoading } = useApp();
+  const { state, authLoading, canAccess } = useApp();
   const location = useLocation();
 
   if (authLoading) {
@@ -145,6 +203,24 @@ const ProtectedTenant = ({ children }) => {
   if (!state.isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
+
+  // Check if current user has permission to this path
+  const isAllowed = canAccess ? canAccess(location.pathname, 'read') : true;
+
+  if (!isAllowed) {
+    // If user lands on /dashboard by default but doesn't have dashboard access, auto-redirect to first allowed path!
+    if (location.pathname === '/dashboard') {
+      const allowedPath = getFirstAllowedPath(state.currentUser);
+      return <Navigate to={allowedPath} replace />;
+    }
+
+    return (
+      <AppLayout>
+        <AccessRestrictedView user={state.currentUser} targetPath={location.pathname} />
+      </AppLayout>
+    );
+  }
+
   return <AppLayout>{children}</AppLayout>;
 };
 
@@ -175,7 +251,8 @@ const PublicAuthRoute = ({ children }) => {
     if (state.currentUser?.role === 'super_admin' || state.currentUser?.isSuperAdmin) {
       return <Navigate to="/sd" replace />;
     }
-    return <Navigate to="/dashboard" replace />;
+    const targetPath = getFirstAllowedPath(state.currentUser);
+    return <Navigate to={targetPath} replace />;
   }
 
   return children;

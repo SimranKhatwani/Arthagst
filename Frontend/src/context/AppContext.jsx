@@ -40,6 +40,7 @@ import * as eWayBillService from '../services/eWayBillService';
 import * as reportsService from '../services/reportsService';
 import * as superAdminService from '../services/superAdminService';
 import * as userService from '../services/userService';
+import { checkUserPermission, getDefaultPermissionsForRole } from '../utils/permissionUtils';
 
 const AppContext = createContext(null);
 
@@ -171,6 +172,21 @@ export const AppProvider = ({ children }) => {
             permissions: u.permissions || [],
             createdAt: u.createdAt,
           }));
+          // Synchronize currentUser permissions if current user is in team users list
+          if (next.currentUser) {
+            const currentId = String(next.currentUser._id || next.currentUser.id || '');
+            const currentEmail = (next.currentUser.email || '').toLowerCase().trim();
+            const matchedUser = next.users.find(
+              (u) => (currentId && u.id === currentId) || (u.email && u.email.toLowerCase().trim() === currentEmail)
+            );
+            if (matchedUser && matchedUser.permissions?.length > 0) {
+              next.currentUser = {
+                ...next.currentUser,
+                permissions: matchedUser.permissions,
+                role: matchedUser.role || next.currentUser.role,
+              };
+            }
+          }
         } else if (!next.users || next.users.length === 0) {
           next.users = [];
         }
@@ -760,6 +776,13 @@ export const AppProvider = ({ children }) => {
       .then((data) => {
         if (!isMounted) return;
         if (data?.user) {
+          const userWithPerms = {
+            ...data.user,
+            permissions:
+              Array.isArray(data.user.permissions) && data.user.permissions.length > 0
+                ? data.user.permissions
+                : getDefaultPermissionsForRole(data.user.role),
+          };
           const tenant = data.tenant || {
             tenantCode: 'PLATFORM',
             businessName: 'Platform Administration',
@@ -769,7 +792,7 @@ export const AppProvider = ({ children }) => {
           setState((prev) => ({
             ...prev,
             isAuthenticated: true,
-            currentUser: data.user,
+            currentUser: userWithPerms,
             currentTenant: tenant,
             business: {
               ...prev.business,
@@ -907,28 +930,66 @@ export const AppProvider = ({ children }) => {
         if (data.tenant?.tenantCode) {
           localStorage.setItem('arthagst_last_tenant_code', data.tenant.tenantCode);
         }
+
+        let fullUser = data.user;
+        let fullTenant = data.tenant;
+
+        // Fetch complete authenticated profile from /auth/me to ensure permissions,
+        // role assignments, and tenant configuration are 100% synchronized with MongoDB
+        if (!fullUser?.permissions || !Array.isArray(fullUser.permissions) || fullUser.permissions.length === 0) {
+          try {
+            const profile = await authService.getMe();
+            if (profile?.user) {
+              fullUser = {
+                ...fullUser,
+                ...profile.user,
+                permissions:
+                  Array.isArray(profile.user.permissions) && profile.user.permissions.length > 0
+                    ? profile.user.permissions
+                    : (fullUser?.permissions && fullUser.permissions.length > 0
+                        ? fullUser.permissions
+                        : getDefaultPermissionsForRole(profile.user.role || fullUser?.role)),
+              };
+            }
+            if (profile?.tenant) {
+              fullTenant = { ...fullTenant, ...profile.tenant };
+            }
+          } catch (profileErr) {
+            console.warn('Profile fetch during login fallback:', profileErr);
+          }
+        }
+
+        // Defensive: Ensure permissions are never undefined/empty if a role is present
+        if (fullUser && (!fullUser.permissions || !Array.isArray(fullUser.permissions) || fullUser.permissions.length === 0)) {
+          fullUser = {
+            ...fullUser,
+            permissions: getDefaultPermissionsForRole(fullUser.role),
+          };
+        }
+
         setState((prev) => ({
           ...prev,
           isAuthenticated: true,
-          currentUser: data.user,
-          currentTenant: data.tenant,
+          currentUser: fullUser,
+          currentTenant: fullTenant,
           business: {
             ...prev.business,
-            ...data.tenant,
-            businessName: data.tenant?.businessName || prev.business?.businessName,
-            tenantCode: data.tenant?.tenantCode || 'PLATFORM',
-            email: data.tenant?.email || data.user?.email || prev.business?.email,
-            subscriptionStatus: data.tenant?.subscriptionStatus || 'active',
+            ...fullTenant,
+            businessName: fullTenant?.businessName || prev.business?.businessName,
+            tenantCode: fullTenant?.tenantCode || 'PLATFORM',
+            email: fullTenant?.email || fullUser?.email || prev.business?.email,
+            subscriptionStatus: fullTenant?.subscriptionStatus || 'active',
           },
         }));
-        notify(`Welcome back, ${data.user?.name || 'Administrator'}!`);
-        if (data.user?.isSuperAdmin || data.user?.role === 'super_admin') {
+
+        notify(`Welcome back, ${fullUser?.name || 'Administrator'}!`);
+        if (fullUser?.isSuperAdmin || fullUser?.role === 'super_admin') {
           loadSuperAdminData();
         } else {
           loadPhase1Data();
           loadPhase2Data();
         }
-        return data;
+        return { ...data, user: fullUser, tenant: fullTenant };
       } catch (err) {
         throw err;
       }
@@ -2624,8 +2685,16 @@ export const AppProvider = ({ children }) => {
     notify(msg);
   }, [notify]);
 
+  const canAccess = useCallback(
+    (target, level = 'read') => {
+      return checkUserPermission(state.currentUser, target, level);
+    },
+    [state.currentUser]
+  );
+
   const value = {
     state,
+    canAccess,
     setState,
     selectedFY,
     setSelectedFY,

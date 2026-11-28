@@ -17,6 +17,7 @@ import {
   Lock,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { getFirstAllowedPath } from '../../utils/permissionUtils';
 
 export const LandingPage = () => {
   const navigate = useNavigate();
@@ -26,7 +27,7 @@ export const LandingPage = () => {
 
   const handleLaunch = () => {
     if (state.isAuthenticated) {
-      navigate('/dashboard');
+      navigate(getFirstAllowedPath(state.currentUser));
     } else {
       navigate('/login');
     }

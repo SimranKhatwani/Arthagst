@@ -128,6 +128,7 @@ export const registerBusiness = async (data) => {
           name: user.name,
           email: user.email,
           role: user.role,
+          permissions: user.permissions || ['all'],
         },
       };
     } catch (error) {
@@ -280,6 +281,7 @@ export const loginUser = async ({ tenantCode, email, password }) => {
           role: 'super_admin',
           isSuperAdmin: true,
           isActive: adminUser.isActive,
+          permissions: ['all'],
         },
       };
     }
@@ -362,6 +364,7 @@ export const loginUser = async ({ tenantCode, email, password }) => {
       name: user.name,
       email: user.email,
       role: user.role,
+      permissions: user.permissions || [],
       lastLogin: new Date(),
     },
   };

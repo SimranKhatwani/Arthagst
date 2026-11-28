@@ -218,6 +218,7 @@ const SidebarContent = ({
   currentUser,
   onLogout,
 }) => {
+  const { canAccess } = useApp();
   const userName =
     currentUser?.name ||
     currentUser?.displayName ||
@@ -231,6 +232,60 @@ const SidebarContent = ({
     return str.slice(0, 2).toUpperCase();
   };
   const initials = getInitials(userName);
+
+  const visibleNavGroups = useMemo(() => {
+    if (!canAccess) return NAV_GROUPS;
+
+    return NAV_GROUPS.map((group) => {
+      const filteredItems = group.items
+        .map((item) => {
+          // If item has children (nested sub-menu)
+          if (item.children && item.children.length > 0) {
+            const filteredChildren = item.children
+              .map((child) => {
+                if (child.children && child.children.length > 0) {
+                  const nestedChildren = child.children.filter((leaf) =>
+                    canAccess(leaf.path || leaf.id, 'read')
+                  );
+                  if (nestedChildren.length > 0) {
+                    return { ...child, children: nestedChildren };
+                  }
+                  return canAccess(child.id, 'read') ? child : null;
+                }
+                return canAccess(child.path || child.id || `${item.id}:${child.label}`, 'read')
+                  ? child
+                  : null;
+              })
+              .filter(Boolean);
+
+            if (filteredChildren.length > 0) {
+              return { ...item, children: filteredChildren };
+            }
+
+            // If no children matched directly, check if the parent module itself has permission
+            if (canAccess(item.id, 'read')) {
+              return item;
+            }
+
+            return null;
+          }
+
+          // Flat item (e.g., Dashboard, POS, Notifications, Audit, Users, Settings, Subscription)
+          const target = item.path || item.id;
+          if (canAccess(target, 'read') || canAccess(item.id, 'read')) {
+            return item;
+          }
+
+          return null;
+        })
+        .filter(Boolean);
+
+      return {
+        ...group,
+        items: filteredItems,
+      };
+    }).filter((group) => group.items.length > 0);
+  }, [canAccess, currentUser]);
 
   return (
     <div className="flex h-full flex-col bg-slate-900 text-slate-300">
@@ -335,7 +390,7 @@ const SidebarContent = ({
         </a>
       )}
 
-      {NAV_GROUPS.map((group) => (
+      {visibleNavGroups.map((group) => (
         <div key={group.section}>
           {(!collapsed || isMobile) && (
             <div className="mb-2 px-3 text-[11px] font-bold uppercase tracking-wider text-slate-400/90">
@@ -534,6 +589,7 @@ export const AppLayout = ({ children }) => {
     setSelectedFY,
     confirmAction,
     logout,
+    canAccess,
   } = useApp();
   const location = useLocation();
   const navigate = useNavigate();
@@ -633,41 +689,47 @@ export const AppLayout = ({ children }) => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return [];
     const results = [];
-    (state.invoices || []).slice(0, 30).forEach((inv) => {
-      if (
-        inv.invoiceNumber.toLowerCase().includes(q) ||
-        inv.customerName.toLowerCase().includes(q)
-      ) {
-        results.push({
-          type: 'Invoice',
-          title: `${inv.invoiceNumber} — ${inv.customerName}`,
-          meta: `${formatINR(inv.grandTotal)} · ${inv.paymentStatus}`,
-          path: '/sales/invoices',
-        });
-      }
-    });
-    (state.customers || []).forEach((c) => {
-      if (c.name.toLowerCase().includes(q) || (c.gstin || '').toLowerCase().includes(q)) {
-        results.push({
-          type: 'Customer',
-          title: c.name,
-          meta: `${c.city || c.state} · ${c.registrationType}`,
-          path: `/parties/customers/${c.id}`,
-        });
-      }
-    });
-    (state.products || []).forEach((p) => {
-      if (p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q) || p.hsn.includes(q)) {
-        results.push({
-          type: 'Product',
-          title: p.name,
-          meta: `${p.sku} · HSN ${p.hsn} · Stock ${p.stock} ${p.unit}`,
-          path: '/inventory/products',
-        });
-      }
-    });
+    if (!canAccess || canAccess('sales', 'read')) {
+      (state.invoices || []).slice(0, 30).forEach((inv) => {
+        if (
+          inv.invoiceNumber.toLowerCase().includes(q) ||
+          inv.customerName.toLowerCase().includes(q)
+        ) {
+          results.push({
+            type: 'Invoice',
+            title: `${inv.invoiceNumber} — ${inv.customerName}`,
+            meta: `${formatINR(inv.grandTotal)} · ${inv.paymentStatus}`,
+            path: '/sales/invoices',
+          });
+        }
+      });
+    }
+    if (!canAccess || canAccess('parties', 'read')) {
+      (state.customers || []).forEach((c) => {
+        if (c.name.toLowerCase().includes(q) || (c.gstin || '').toLowerCase().includes(q)) {
+          results.push({
+            type: 'Customer',
+            title: c.name,
+            meta: `${c.city || c.state} · ${c.registrationType}`,
+            path: `/parties/customers/${c.id}`,
+          });
+        }
+      });
+    }
+    if (!canAccess || canAccess('inventory', 'read')) {
+      (state.products || []).forEach((p) => {
+        if (p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q) || p.hsn.includes(q)) {
+          results.push({
+            type: 'Product',
+            title: p.name,
+            meta: `${p.sku} · HSN ${p.hsn} · Stock ${p.stock} ${p.unit}`,
+            path: '/inventory/products',
+          });
+        }
+      });
+    }
     return results.slice(0, 8);
-  }, [searchQuery, state.invoices, state.customers, state.products]);
+  }, [searchQuery, state.invoices, state.customers, state.products, canAccess]);
 
   const handleLogout = async () => {
     const ok = await confirmAction({

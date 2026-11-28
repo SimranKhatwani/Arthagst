@@ -19,6 +19,7 @@ import {
   MapPin,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { getFirstAllowedPath } from '../../utils/permissionUtils';
 import {
   INDIAN_STATES,
   BUSINESS_TYPES,
@@ -61,7 +62,7 @@ export const LoginPage = () => {
 
     setLoading(true);
     try {
-      await login({
+      const data = await login({
         tenantCode: tenantCode.trim().toUpperCase(),
         email: email.trim().toLowerCase(),
         password,
@@ -71,7 +72,8 @@ export const LoginPage = () => {
         localStorage.setItem('arthagst_last_tenant_code', tenantCode.trim().toUpperCase());
       }
 
-      navigate('/dashboard');
+      const dest = getFirstAllowedPath(data?.user);
+      navigate(dest);
     } catch (err) {
       if (err.errors && Array.isArray(err.errors)) {
         const mapped = {};
@@ -968,7 +970,7 @@ export const OnboardingWizardPage = () => {
       gstin: form.gstin ? form.gstin.trim().toUpperCase() : '',
     };
     completeOnboarding(finalForm);
-    navigate('/dashboard');
+    navigate(getFirstAllowedPath(state.currentUser));
   };
 
   return (
@@ -988,10 +990,10 @@ export const OnboardingWizardPage = () => {
           </div>
           <button
             type="button"
-            onClick={() => navigate('/dashboard')}
+            onClick={() => navigate(getFirstAllowedPath(state.currentUser))}
             className={btnSecondary}
           >
-            Skip to Dashboard
+            Skip to Workspace
           </button>
         </div>
 

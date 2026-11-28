@@ -1,4 +1,4 @@
-import api from './api.js';
+import api, { setToken } from './api.js';
 
 /**
  * Authentication API Service
@@ -14,7 +14,32 @@ export const login = async ({ tenantCode, email, password }) => {
     payload.tenantCode = tenantCode.trim().toUpperCase();
   }
   const res = await api.post('/auth/login', payload);
-  return res.data;
+  const data = res.data;
+  if (data?.token) {
+    setToken(data.token);
+  }
+  // If backend login payload did not supply complete permissions array,
+  // query /api/auth/me using the stored token to get the full Mongoose user profile with permissions
+  if (data?.user && (!Array.isArray(data.user.permissions) || data.user.permissions.length === 0)) {
+    try {
+      const meRes = await getMe();
+      if (meRes?.user) {
+        data.user = {
+          ...data.user,
+          ...meRes.user,
+        };
+      }
+      if (meRes?.tenant) {
+        data.tenant = {
+          ...data.tenant,
+          ...meRes.tenant,
+        };
+      }
+    } catch {
+      // Continue with whatever data was returned
+    }
+  }
+  return data;
 };
 
 export const superAdminLogin = async ({ email, password }) => {

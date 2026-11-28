@@ -31,11 +31,14 @@ import {
   List,
   Search,
   X,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { ROLES_CONFIG, INDIAN_STATES, FINANCIAL_YEARS } from '../../data/constants';
 import { exportAppDataJSON } from '../../services/storageService';
 import * as userService from '../../services/userService';
+import { SYSTEM_MODULE_GROUPS, ALL_SYSTEM_MODULES, getDefaultPermissionsForRole, hasGranularKeysForModule } from '../../utils/permissionUtils';
 import {
   PageHeader,
   DataTable,
@@ -208,84 +211,65 @@ export const UsersRolesPage = () => {
   const [savingUserPerms, setSavingUserPerms] = useState(false);
   const [permSearch, setPermSearch] = useState('');
   const [permViewMode, setPermViewMode] = useState('cards'); // 'cards' | 'table'
+  const [expandedModalModules, setExpandedModalModules] = useState({});
 
-  const ALL_MODULES = [
-    { id: 'sales', label: 'Sales & Invoicing', desc: 'Invoices, Quotations, Orders, Challans, Credit Notes', icon: FileText },
-    { id: 'purchases', label: 'Purchases & Bills', desc: 'Purchase Bills, Orders, GRNs, Debit Notes', icon: ShoppingBag },
-    { id: 'inventory', label: 'Inventory & Godowns', desc: 'Stock movements, Items, Warehouses, Batches', icon: Package },
-    { id: 'parties', label: 'Parties & CRM', desc: 'Customer & Supplier directory and ledgers', icon: Users },
-    { id: 'payments', label: 'Banking & Payments', desc: 'Bank accounts, payment in/out, settlements', icon: IndianRupee },
-    { id: 'expenses', label: 'Expenses & Overheads', desc: 'Vouchers, recurring expenses, ITC claims', icon: Receipt },
-    { id: 'pos', label: 'POS Billing', desc: 'Retail counter checkout and thermal receipts', icon: MonitorSmartphone },
-    { id: 'gst', label: 'GST Returns', desc: 'GSTR-1, GSTR-3B, GSTR-2B reconciliation', icon: Percent },
-    { id: 'accounting', label: 'Accounting & Ledgers', desc: 'Chart of accounts, journals, P&L, balance sheet', icon: BookOpen },
-    { id: 'reports', label: 'Reports & Analytics', desc: 'Business dashboards and financial registers', icon: BarChart3 },
-    { id: 'users', label: 'User Management', desc: 'Manage team staff and permissions', icon: ShieldCheck },
-    { id: 'settings', label: 'Business Settings', desc: 'Company profile, tax rates, invoice templates', icon: Settings },
-  ];
+  const ALL_MODULES = ALL_SYSTEM_MODULES;
+
+  const toggleExpandModalModule = (modId) => {
+    setExpandedModalModules((prev) => ({ ...prev, [modId]: !prev[modId] }));
+  };
 
   const hasModulePermission = (perms, modId, level = 'read') => {
     if (!Array.isArray(perms)) return false;
     if (perms.includes('all') || perms.includes('*')) return true;
     if (perms.includes(modId)) return true;
     if (level === 'read') {
-      return perms.includes(`${modId}:read`) || perms.includes(`${modId}:edit`) || perms.includes(`${modId}:write`);
+      if (perms.includes(`${modId}:read`) || perms.includes(`${modId}:edit`) || perms.includes(`${modId}:write`)) return true;
+      return perms.some((p) => p.startsWith(`${modId}:`));
     }
     if (level === 'edit') {
-      return perms.includes(`${modId}:edit`) || perms.includes(`${modId}:write`);
+      if (perms.includes(`${modId}:edit`) || perms.includes(`${modId}:write`)) return true;
+      return perms.some((p) => p.startsWith(`${modId}:`) && (p.endsWith(':edit') || p.endsWith(':write')));
     }
     return false;
   };
 
-  const getDefaultPermissionsForRole = (role) => {
-    const r = (role || '').toLowerCase();
-    if (r === 'owner' || r === 'admin') {
-      return ALL_MODULES.flatMap((m) => [`${m.id}:read`, `${m.id}:edit`]);
+  const hasSubModulePermission = (perms, subId, level = 'read') => {
+    if (!Array.isArray(perms)) return false;
+    if (perms.includes('all') || perms.includes('*')) return true;
+    const parentId = subId.split(':')[0];
+    if (perms.includes(parentId)) return true;
+
+    const hasGranular = hasGranularKeysForModule(perms, parentId);
+
+    if (hasGranular) {
+      if (level === 'read') {
+        return (
+          perms.includes(`${subId}:read`) ||
+          perms.includes(`${subId}:edit`) ||
+          perms.includes(`${subId}:write`) ||
+          perms.includes(subId)
+        );
+      }
+      if (level === 'edit') {
+        return (
+          perms.includes(`${subId}:edit`) ||
+          perms.includes(`${subId}:write`) ||
+          perms.includes(subId)
+        );
+      }
+      return false;
     }
-    if (r.includes('bill') || r.includes('pos')) {
-      return [
-        'sales:read', 'sales:edit',
-        'parties:read', 'parties:edit',
-        'payments:read', 'payments:edit',
-        'pos:read', 'pos:edit',
-        'inventory:read',
-      ];
+
+    if (level === 'read') {
+      if (perms.includes(`${parentId}:read`) || perms.includes(`${parentId}:edit`) || perms.includes(`${parentId}:write`)) return true;
+      return perms.includes(subId) || perms.includes(`${subId}:read`) || perms.includes(`${subId}:edit`) || perms.includes(`${subId}:write`);
     }
-    if (r.includes('account') || r.includes('ca')) {
-      return [
-        'sales:read', 'sales:edit',
-        'purchases:read', 'purchases:edit',
-        'parties:read', 'parties:edit',
-        'payments:read', 'payments:edit',
-        'expenses:read', 'expenses:edit',
-        'gst:read', 'gst:edit',
-        'accounting:read', 'accounting:edit',
-        'reports:read', 'reports:edit',
-        'inventory:read',
-      ];
+    if (level === 'edit') {
+      if (perms.includes(`${parentId}:edit`) || perms.includes(`${parentId}:write`)) return true;
+      return perms.includes(subId) || perms.includes(`${subId}:edit`) || perms.includes(`${subId}:write`);
     }
-    if (r.includes('ware') || r.includes('stock') || r.includes('inven')) {
-      return [
-        'inventory:read', 'inventory:edit',
-        'purchases:read', 'purchases:edit',
-        'sales:read',
-        'parties:read',
-      ];
-    }
-    if (r.includes('view') || r.includes('audit')) {
-      return [
-        'sales:read',
-        'purchases:read',
-        'inventory:read',
-        'parties:read',
-        'payments:read',
-        'expenses:read',
-        'gst:read',
-        'accounting:read',
-        'reports:read',
-      ];
-    }
-    return ALL_MODULES.flatMap((m) => [`${m.id}:read`, `${m.id}:edit`]);
+    return false;
   };
 
   const normalizeUserPermissions = (perms, role) => {
@@ -482,48 +466,161 @@ export const UsersRolesPage = () => {
   const handleToggleUserModuleLevel = (modId, level) => {
     setUserPermsForm((prev) => {
       const cur = Array.isArray(prev.permissions) ? prev.permissions : [];
+      const mod = ALL_SYSTEM_MODULES.find((m) => m.id === modId);
+      const subIds = (mod?.submodules || []).map((s) => s.id);
+
       const readKey = `${modId}:read`;
       const editKey = `${modId}:edit`;
-      const hasRead = cur.includes(readKey) || cur.includes(modId);
-      const hasEdit = cur.includes(editKey) || cur.includes(modId);
+      const hasRead = cur.includes(readKey) || cur.includes(modId) || cur.some((p) => p.startsWith(`${modId}:`));
+      const hasEdit = cur.includes(editKey) || cur.includes(modId) || cur.some((p) => p.startsWith(`${modId}:`) && (p.endsWith(':edit') || p.endsWith(':write')));
 
-      // Filter out existing keys for this module
-      let next = cur.filter((p) => p !== readKey && p !== editKey && p !== modId);
+      // Remove parent keys and submodule keys
+      let next = cur.filter((p) => {
+        if (p === modId || p === readKey || p === editKey) return false;
+        if (p.startsWith(`${modId}:`)) return false;
+        return true;
+      });
 
       if (level === 'read') {
         if (hasRead) {
-          // Unchecking read turns off both read and edit
+          // Turning off read -> everything for this module is removed
         } else {
-          // Checking read
+          // Turning on read -> add parent read and all submodules read
           next.push(readKey);
-          if (hasEdit) next.push(editKey);
+          subIds.forEach((sId) => next.push(`${sId}:read`));
+          if (hasEdit) {
+            next.push(editKey);
+            subIds.forEach((sId) => next.push(`${sId}:edit`));
+          }
         }
       } else if (level === 'edit') {
         if (hasEdit) {
-          // Unchecking edit keeps read active
+          // Turning off edit -> keep read active for parent and submodules
           next.push(readKey);
+          subIds.forEach((sId) => next.push(`${sId}:read`));
         } else {
-          // Checking edit automatically activates read too
+          // Turning on edit -> activate read + edit for parent and all submodules
           next.push(readKey);
           next.push(editKey);
+          subIds.forEach((sId) => {
+            next.push(`${sId}:read`);
+            next.push(`${sId}:edit`);
+          });
         }
       }
 
-      return { ...prev, permissions: next };
+      return { ...prev, permissions: Array.from(new Set(next)) };
     });
   };
 
+  const handleToggleUserSubModuleLevel = (modId, subId, level) => {
+    setUserPermsForm((prev) => {
+      const cur = Array.isArray(prev.permissions) ? prev.permissions : [];
+      const mod = ALL_SYSTEM_MODULES.find((m) => m.id === modId);
+      const allSubIds = (mod?.submodules || []).map((s) => s.id);
+
+      const currentSubRead = hasSubModulePermission(cur, subId, 'read');
+      const currentSubEdit = hasSubModulePermission(cur, subId, 'edit');
+      const hadCoarseRead = cur.includes(`${modId}:read`) || cur.includes(modId);
+      const hadCoarseEdit = cur.includes(`${modId}:edit`) || cur.includes(`${modId}:write`);
+
+      let next = [...cur];
+
+      // If cur only had coarse keys and no granular keys for this module, expand coarse keys into all submodules first
+      if (!hasGranularKeysForModule(cur, modId)) {
+        next = next.filter((p) => p !== `${modId}:read` && p !== `${modId}:edit` && p !== `${modId}:write` && p !== modId);
+        allSubIds.forEach((id) => {
+          if (hadCoarseRead) next.push(`${id}:read`);
+          if (hadCoarseEdit) next.push(`${id}:edit`);
+        });
+      }
+
+      if (level === 'edit') {
+        if (currentSubEdit) {
+          // Deselect Edit for this submodule -> remove subId:edit, keep subId:read
+          next = next.filter((p) => p !== `${subId}:edit` && p !== `${subId}:write`);
+          next.push(`${subId}:read`);
+        } else {
+          // Select Edit for this submodule -> add subId:read and subId:edit
+          next.push(`${subId}:read`);
+          next.push(`${subId}:edit`);
+        }
+      } else if (level === 'read') {
+        if (currentSubRead) {
+          // Deselect Read on subId -> remove BOTH Read and Edit on subId (No Access to this submodule!)
+          next = next.filter((p) => p !== `${subId}:read` && p !== `${subId}:edit` && p !== `${subId}:write` && p !== subId);
+        } else {
+          // Select Read on subId -> add subId:read
+          next.push(`${subId}:read`);
+        }
+      }
+
+      // Always remove coarse keys because we are now managing this module at the granular level
+      next = next.filter((p) => p !== `${modId}:read` && p !== `${modId}:edit` && p !== `${modId}:write` && p !== modId);
+
+      // If ALL submodules happen to have read & edit, we can also restore coarse keys
+      const allHaveRead = allSubIds.length > 0 && allSubIds.every((id) => next.includes(`${id}:read`) || next.includes(`${id}:edit`));
+      const allHaveEdit = allSubIds.length > 0 && allSubIds.every((id) => next.includes(`${id}:edit`));
+      if (allHaveRead && allHaveEdit) {
+        next.push(`${modId}:read`);
+        next.push(`${modId}:edit`);
+      }
+
+      return { ...prev, permissions: Array.from(new Set(next)) };
+    });
+  };
+
+  const handleCycleSubModulePrivilege = (modId, subId) => {
+    const hasRead = hasSubModulePermission(userPermsForm.permissions, subId, 'read');
+    const hasEdit = hasSubModulePermission(userPermsForm.permissions, subId, 'edit');
+    if (hasEdit) {
+      handleToggleUserSubModuleLevel(modId, subId, 'edit');
+    } else if (hasRead) {
+      handleToggleUserSubModuleLevel(modId, subId, 'read');
+    } else {
+      handleToggleUserSubModuleLevel(modId, subId, 'edit');
+    }
+  };
+
+  const handleCycleModulePrivilege = (modId) => {
+    const hasRead = hasModulePermission(userPermsForm.permissions, modId, 'read');
+    const hasEdit = hasModulePermission(userPermsForm.permissions, modId, 'edit');
+    if (hasEdit) {
+      handleToggleUserModuleLevel(modId, 'edit');
+    } else if (hasRead) {
+      handleToggleUserModuleLevel(modId, 'read');
+    } else {
+      handleToggleUserModuleLevel(modId, 'edit');
+    }
+  };
+
   const handleSelectAllReadAndEdit = () => {
+    const allKeys = new Set();
+    ALL_SYSTEM_MODULES.forEach((m) => {
+      allKeys.add(`${m.id}:read`);
+      allKeys.add(`${m.id}:edit`);
+      (m.submodules || []).forEach((s) => {
+        allKeys.add(`${s.id}:read`);
+        allKeys.add(`${s.id}:edit`);
+      });
+    });
     setUserPermsForm((prev) => ({
       ...prev,
-      permissions: ALL_MODULES.flatMap((m) => [`${m.id}:read`, `${m.id}:edit`]),
+      permissions: Array.from(allKeys),
     }));
   };
 
   const handleSelectAllReadOnly = () => {
+    const allKeys = new Set();
+    ALL_SYSTEM_MODULES.forEach((m) => {
+      allKeys.add(`${m.id}:read`);
+      (m.submodules || []).forEach((s) => {
+        allKeys.add(`${s.id}:read`);
+      });
+    });
     setUserPermsForm((prev) => ({
       ...prev,
-      permissions: ALL_MODULES.map((m) => `${m.id}:read`),
+      permissions: Array.from(allKeys),
     }));
   };
 
@@ -554,12 +651,19 @@ export const UsersRolesPage = () => {
         });
       }
 
-      setState((prev) => ({
-        ...prev,
-        users: (prev.users || []).map((u) =>
+      setState((prev) => {
+        const nextUsers = (prev.users || []).map((u) =>
           u.id === targetId ? { ...u, permissions: userPermsForm.permissions } : u
-        ),
-      }));
+        );
+        const isSelf = prev.currentUser && (prev.currentUser.id === targetId || prev.currentUser._id === targetId);
+        return {
+          ...prev,
+          users: nextUsers,
+          currentUser: isSelf
+            ? { ...prev.currentUser, permissions: userPermsForm.permissions }
+            : prev.currentUser,
+        };
+      });
 
       notify(`Permissions for '${editingUserPerms.name}' (${editingUserPerms.role}) updated successfully!`);
       setEditingUserPerms(null);
@@ -1313,7 +1417,7 @@ export const UsersRolesPage = () => {
                                 const cur = form.permissions || [];
                                 const readKey = `${mod.id}:read`;
                                 const editKey = `${mod.id}:edit`;
-                                let next = cur.filter((p) => p !== readKey && p !== editKey && p !== mod.id);
+                                let next = cur.filter((p) => p !== readKey && p !== editKey && p !== mod.id && !p.startsWith(`${mod.id}:`));
                                 if (!hasRead) {
                                   next.push(readKey);
                                   if (hasEdit) next.push(editKey);
@@ -1332,7 +1436,7 @@ export const UsersRolesPage = () => {
                                 const cur = form.permissions || [];
                                 const readKey = `${mod.id}:read`;
                                 const editKey = `${mod.id}:edit`;
-                                let next = cur.filter((p) => p !== readKey && p !== editKey && p !== mod.id);
+                                let next = cur.filter((p) => p !== readKey && p !== editKey && p !== mod.id && !p.startsWith(`${mod.id}:`));
                                 if (!hasEdit) {
                                   next.push(readKey);
                                   next.push(editKey);
@@ -1399,7 +1503,7 @@ export const UsersRolesPage = () => {
                   onClick={handleSelectAllReadAndEdit}
                   className="rounded border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors shadow-2xs"
                 >
-                  All Read & Edit (12)
+                  All Read & Edit (17)
                 </button>
                 <button
                   type="button"
@@ -1425,92 +1529,240 @@ export const UsersRolesPage = () => {
               </div>
             </div>
 
-            {/* 12 Modules to Select From */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="block text-xs font-semibold text-slate-800">
-                  Configure Read / Edit Privileges per Module:
-                </label>
-                <span className="text-[11px] font-semibold text-indigo-700">
-                  {ALL_MODULES.filter((m) => hasModulePermission(userPermsForm.permissions, m.id, 'read')).length} of {ALL_MODULES.length} modules granted (
-                  {ALL_MODULES.filter((m) => hasModulePermission(userPermsForm.permissions, m.id, 'edit')).length} Read & Edit)
-                </span>
+            {/* Modules and Sub-modules configured per section */}
+            <div className="space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-800">
+                    Configure Read / Edit Privileges across All Modules & Sub-modules:
+                  </label>
+                  <span className="text-[11px] text-slate-500">
+                    Expand any module below to inspect or fine-tune individual sub-module permissions
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-[11px] font-semibold text-indigo-700 border border-indigo-200">
+                    {ALL_MODULES.filter((m) => hasModulePermission(userPermsForm.permissions, m.id, 'read')).length} of {ALL_MODULES.length} modules granted (
+                    {ALL_MODULES.filter((m) => hasModulePermission(userPermsForm.permissions, m.id, 'edit')).length} Read & Edit)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const all = {};
+                      ALL_SYSTEM_MODULES.forEach((m) => { all[m.id] = true; });
+                      setExpandedModalModules(all);
+                    }}
+                    className="text-[11px] text-indigo-600 hover:underline font-medium"
+                  >
+                    Expand All
+                  </button>
+                  <span className="text-slate-300">|</span>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedModalModules({})}
+                    className="text-[11px] text-slate-500 hover:underline font-medium"
+                  >
+                    Collapse All
+                  </button>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-96 overflow-y-auto p-1">
-                {ALL_MODULES.map((mod) => {
-                  const hasRead = hasModulePermission(userPermsForm.permissions, mod.id, 'read');
-                  const hasEdit = hasModulePermission(userPermsForm.permissions, mod.id, 'edit');
-                  const Icon = mod.icon || Shield;
-
+              <div className="space-y-4 max-h-[480px] overflow-y-auto p-1 pr-2">
+                {SYSTEM_MODULE_GROUPS.map((grp) => {
+                  const grpActiveCount = grp.modules.filter((m) => hasModulePermission(userPermsForm.permissions, m.id, 'read')).length;
                   return (
-                    <div
-                      key={mod.id}
-                      className={`rounded-xl border p-3 text-xs transition-all ${
-                        hasEdit
-                          ? 'border-indigo-300 bg-indigo-50/50 shadow-2xs ring-1 ring-indigo-300/30'
-                          : hasRead
-                          ? 'border-amber-300 bg-amber-50/40 shadow-2xs ring-1 ring-amber-300/30'
-                          : 'border-slate-200 bg-white hover:border-slate-300'
-                      }`}
-                    >
-                      {/* Module Title & Status Pill */}
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div
-                            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
-                              hasEdit
-                                ? 'bg-indigo-100 text-indigo-700'
-                                : hasRead
-                                ? 'bg-amber-100 text-amber-700'
-                                : 'bg-slate-100 text-slate-400'
-                            }`}
-                          >
-                            <Icon className="h-4 w-4" />
-                          </div>
-                          <div className="min-w-0">
-                            <div className="font-semibold text-slate-900 text-xs truncate">{mod.label}</div>
-                            <p className="text-[10px] text-slate-500 leading-tight truncate">{mod.desc}</p>
-                          </div>
-                        </div>
-
-                        <span
-                          className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider border ${
-                            hasEdit
-                              ? 'bg-indigo-100 text-indigo-700 border-indigo-200'
-                              : hasRead
-                              ? 'bg-amber-100 text-amber-800 border-amber-200'
-                              : 'bg-slate-100 text-slate-400 border-slate-200'
-                          }`}
-                        >
-                          {hasEdit ? 'Read & Edit' : hasRead ? 'Read Only' : 'No Access'}
+                    <div key={grp.section} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 space-y-2.5">
+                      <div className="flex items-center justify-between border-b border-slate-200/80 pb-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                          {grp.section}
+                        </span>
+                        <span className="text-[11px] font-medium text-slate-500">
+                          {grpActiveCount} of {grp.modules.length} active
                         </span>
                       </div>
 
-                      {/* Read & Edit Checkbox Selectors */}
-                      <div className="mt-2.5 flex items-center justify-between pt-2 border-t border-slate-100">
-                        <span className="text-[11px] font-medium text-slate-600">Permissions:</span>
-                        <div className="flex items-center gap-4">
-                          <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-slate-700 hover:text-indigo-600 select-none">
-                            <input
-                              type="checkbox"
-                              checked={hasRead}
-                              onChange={() => handleToggleUserModuleLevel(mod.id, 'read')}
-                              className="h-4 w-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                            />
-                            <span>Read</span>
-                          </label>
+                      <div className="grid grid-cols-1 gap-2.5">
+                        {grp.modules.map((mod) => {
+                          const hasRead = hasModulePermission(userPermsForm.permissions, mod.id, 'read');
+                          const hasEdit = hasModulePermission(userPermsForm.permissions, mod.id, 'edit');
+                          const Icon = mod.icon || Shield;
+                          const submodules = mod.submodules || [];
+                          const isExpanded = Boolean(expandedModalModules[mod.id]);
+                          const activeSubCount = submodules.filter((s) => hasSubModulePermission(userPermsForm.permissions, s.id, 'read')).length;
 
-                          <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-slate-700 hover:text-indigo-600 select-none">
-                            <input
-                              type="checkbox"
-                              checked={hasEdit}
-                              onChange={() => handleToggleUserModuleLevel(mod.id, 'edit')}
-                              className="h-4 w-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                            />
-                            <span>Edit</span>
-                          </label>
-                        </div>
+                          return (
+                            <div
+                              key={mod.id}
+                              className={`rounded-xl border text-xs transition-all ${
+                                hasEdit
+                                  ? 'border-indigo-300 bg-white shadow-2xs'
+                                  : hasRead
+                                  ? 'border-amber-300 bg-white shadow-2xs'
+                                  : 'border-slate-200 bg-white/70 hover:border-slate-300'
+                              }`}
+                            >
+                              {/* Parent Module Row */}
+                              <div className="p-3">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <div
+                                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                                        hasEdit
+                                          ? 'bg-indigo-100 text-indigo-700'
+                                          : hasRead
+                                          ? 'bg-amber-100 text-amber-700'
+                                          : 'bg-slate-100 text-slate-400'
+                                      }`}
+                                    >
+                                      <Icon className="h-4 w-4" />
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="font-semibold text-slate-900 text-xs truncate">
+                                        {mod.label}
+                                      </div>
+                                      <p className="text-[11px] text-slate-500 leading-tight truncate">
+                                        {mod.desc}
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    {submodules.length > 0 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleExpandModalModule(mod.id)}
+                                        className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                                      >
+                                        <span>{submodules.length} sub-modules ({activeSubCount})</span>
+                                        {isExpanded ? (
+                                          <ChevronUp className="h-3 w-3 text-slate-500" />
+                                        ) : (
+                                          <ChevronDown className="h-3 w-3 text-slate-500" />
+                                        )}
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCycleModulePrivilege(mod.id)}
+                                      title="Click to toggle module access: Read & Edit → Read Only → No Access"
+                                      className={`rounded px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider border cursor-pointer hover:shadow-xs active:scale-95 transition-all ${
+                                        hasEdit
+                                          ? 'bg-indigo-100 text-indigo-700 border-indigo-200 hover:bg-indigo-200'
+                                          : hasRead
+                                          ? 'bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-200'
+                                          : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'
+                                      }`}
+                                    >
+                                      {hasEdit ? 'Read & Edit' : hasRead ? 'Read Only' : 'No Access'}
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Module Level Checkboxes */}
+                                <div className="mt-2.5 flex items-center justify-between pt-2 border-t border-slate-100">
+                                  <span className="text-[11px] font-medium text-slate-600">
+                                    Module Access Level:
+                                  </span>
+                                  <div className="flex items-center gap-4">
+                                    <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-slate-700 hover:text-indigo-600 select-none">
+                                      <input
+                                        type="checkbox"
+                                        checked={hasRead}
+                                        onChange={() => handleToggleUserModuleLevel(mod.id, 'read')}
+                                        className="h-4 w-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                      />
+                                      <span>Read</span>
+                                    </label>
+
+                                    <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-slate-700 hover:text-indigo-600 select-none">
+                                      <input
+                                        type="checkbox"
+                                        checked={hasEdit}
+                                        onChange={() => handleToggleUserModuleLevel(mod.id, 'edit')}
+                                        className="h-4 w-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                      />
+                                      <span>Edit</span>
+                                    </label>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Indented Submodules List (when expanded) */}
+                              {isExpanded && submodules.length > 0 && (
+                                <div className="border-t border-slate-200/80 bg-slate-50/70 p-2.5 space-y-1.5 rounded-b-xl">
+                                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 px-1">
+                                    Granular Sub-module Permissions for {mod.label}:
+                                  </div>
+                                  <div className="space-y-1">
+                                    {submodules.map((sub) => {
+                                      const subRead = hasSubModulePermission(userPermsForm.permissions, sub.id, 'read');
+                                      const subEdit = hasSubModulePermission(userPermsForm.permissions, sub.id, 'edit');
+
+                                      return (
+                                        <div
+                                          key={sub.id}
+                                          className={`flex items-center justify-between rounded-lg border px-3 py-1.5 text-xs transition-colors ${
+                                            subEdit
+                                              ? 'border-indigo-200 bg-white'
+                                              : subRead
+                                              ? 'border-amber-200 bg-white'
+                                              : 'border-slate-200/80 bg-white/50'
+                                          }`}
+                                        >
+                                          <div className="min-w-0 flex items-center gap-2">
+                                            <span className="font-medium text-slate-800 text-[11px]">
+                                              {sub.label}
+                                            </span>
+                                            <span className="font-mono text-[10px] text-slate-400">
+                                              ({sub.path})
+                                            </span>
+                                          </div>
+
+                                          <div className="flex items-center gap-3 shrink-0">
+                                            <label className="flex items-center gap-1 cursor-pointer text-[11px] font-medium text-slate-600 hover:text-indigo-600 select-none">
+                                              <input
+                                                type="checkbox"
+                                                checked={subRead}
+                                                onChange={() => handleToggleUserSubModuleLevel(mod.id, sub.id, 'read')}
+                                                className="h-3.5 w-3.5 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                              />
+                                              <span>Read</span>
+                                            </label>
+
+                                            <label className="flex items-center gap-1 cursor-pointer text-[11px] font-medium text-slate-600 hover:text-indigo-600 select-none">
+                                              <input
+                                                type="checkbox"
+                                                checked={subEdit}
+                                                onChange={() => handleToggleUserSubModuleLevel(mod.id, sub.id, 'edit')}
+                                                className="h-3.5 w-3.5 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                              />
+                                              <span>Edit</span>
+                                            </label>
+
+                                            <button
+                                              type="button"
+                                              onClick={() => handleCycleSubModulePrivilege(mod.id, sub.id)}
+                                              title="Click to toggle privilege: Read & Edit → Read Only → No Access"
+                                              className={`rounded px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider border cursor-pointer hover:shadow-xs active:scale-95 transition-all ${
+                                                subEdit
+                                                  ? 'bg-indigo-100 text-indigo-700 border-indigo-200 hover:bg-indigo-200'
+                                                  : subRead
+                                                  ? 'bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-200'
+                                                  : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'
+                                              }`}
+                                            >
+                                              {subEdit ? 'Read & Edit' : subRead ? 'Read Only' : 'No Access'}
+                                            </button>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   );
