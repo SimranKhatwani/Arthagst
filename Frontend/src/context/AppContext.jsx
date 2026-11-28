@@ -1991,20 +1991,65 @@ export const AppProvider = ({ children }) => {
 
         const supplierId = String(purchasePayload.supplierId);
         
-        // Process line items and auto-create variants in parallel
+        // Process line items and auto-create products/variants in parallel
         const backendItems = await Promise.all(
           (purchasePayload.items || []).map(async (it) => {
-            let productId = String(it.productId || it.id);
+            let productId = String(it.productId || it.id || '');
             const pRate = Number(it.rate || it.unitPrice || 0);
-            const origProd = (state.products || []).find((p) => String(p.id || p._id) === productId);
+            const isManual = Boolean(it.isManual || productId === '__manual__' || productId === '__new__' || !productId || productId === 'undefined');
+            let origProd = !isManual ? (state.products || []).find((p) => String(p.id || p._id) === productId) : null;
+            const cleanBaseName = (it.name || origProd?.name || 'Product').replace(/\s*\(₹[\d,]+\s*Rate\)/gi, '').trim();
             const descOrBrand = (it.description || it.brand || '').trim();
+
+            // If item was entered manually without choosing an existing product from dropdown
+            if (isManual || !origProd) {
+              const existingBase = (state.products || []).find(
+                (p) => (p.name || '').trim().toLowerCase() === cleanBaseName.toLowerCase()
+              );
+              if (existingBase) {
+                origProd = existingBase;
+                productId = String(existingBase.id || existingBase._id);
+              } else {
+                try {
+                  const cleanSKU = (it.sku || it.variantSku || `SKU-${Date.now().toString().slice(-4)}${Math.floor(Math.random() * 90 + 10)}`).toUpperCase();
+                  const sPrice = Number(it.sellingPrice) || Math.round(pRate * 1.3) || (pRate > 0 ? Math.round(pRate * 1.3) : 1000);
+                  const newBaseProd = await upsertRecord(
+                    'products',
+                    {
+                      name: cleanBaseName,
+                      sku: cleanSKU,
+                      SKU: cleanSKU,
+                      hsn: it.hsn || it.HSN || '8536',
+                      HSN: it.hsn || it.HSN || '8536',
+                      category: it.category || 'General',
+                      unit: it.unit || 'PCS',
+                      brand: it.brand || descOrBrand || '',
+                      description: descOrBrand || '',
+                      purchasePrice: pRate,
+                      sellingPrice: sPrice,
+                      mrp: sPrice,
+                      gstRate: it.gstRate !== undefined ? Number(it.gstRate) : 18,
+                      stock: 0,
+                      openingStock: 0,
+                      warehouseId: String(warehouseId),
+                    },
+                    'Product'
+                  );
+                  if (newBaseProd) {
+                    productId = String(newBaseProd.id || newBaseProd._id);
+                    origProd = newBaseProd;
+                  }
+                } catch (createErr) {
+                  console.warn('Failed to auto-create manual base product:', createErr.message);
+                }
+              }
+            }
+
             const rateDiffers = origProd && origProd.purchasePrice !== undefined && pRate > 0 && Number(pRate) !== Number(origProd.purchasePrice);
             const shouldBeVariant = Boolean(it.createAsVariant || it.trackAsVariant || descOrBrand);
 
             if (shouldBeVariant) {
               try {
-                const cleanBaseName = (origProd?.name || it.name || 'Product').replace(/\s*\(₹[\d,]+\s*Rate\)/gi, '').trim();
-
                 // Check if an existing variant already matches
                 const existingVariant = (state.products || []).find((p) => {
                   if (String(p._id || p.id) === productId && !descOrBrand) return false;
@@ -2062,6 +2107,7 @@ export const AppProvider = ({ children }) => {
 
             return {
               productId,
+              productName: cleanBaseName,
               quantity: Number(it.qty || it.quantity || 1),
               unitPrice: pRate,
               discount: Number(it.discountPct || it.discount || 0),

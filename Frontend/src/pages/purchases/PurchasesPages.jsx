@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, Eye, IndianRupee, CheckCircle2, RotateCcw, PackageCheck, Loader2, PackagePlus, ShieldAlert } from 'lucide-react';
+import { Plus, Trash2, Eye, IndianRupee, CheckCircle2, RotateCcw, PackageCheck, Loader2, PackagePlus, ShieldAlert, PenSquare, ListFilter, Sparkles } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { GST_RATES, PAYMENT_METHODS } from '../../data/constants';
 import { calculateInvoiceTotals, formatINR, formatDateIN, formatNumberIN } from '../../services/calculationService';
@@ -458,6 +458,12 @@ export const AddPurchasePage = () => {
       notify('Supplier and Supplier Invoice Number are required', 'error');
       return;
     }
+    for (const it of items) {
+      if (it.isManual && (!it.name || !it.name.trim())) {
+        notify('Please enter a product name for the manually added product row', 'error');
+        return;
+      }
+    }
     setIsSaving(true);
     try {
       await savePurchaseBill({
@@ -579,24 +585,89 @@ export const AddPurchasePage = () => {
                 {computed.items.map((it, idx) => (
                   <tr key={idx} className="align-top">
                     <td className="px-2 py-2">
-                      <select
-                        value={it.productId}
-                        onChange={(e) => {
-                          const p = state.products.find((pr) => (pr.id || pr._id) === e.target.value);
-                          if (!p) return;
-                          setItems(items.map((r, i) => (i === idx ? { ...r, productId: p.id || p._id, name: p.name, sku: p.sku || p.SKU, hsn: p.hsn || p.HSN, unit: p.unit, rate: p.purchasePrice, gstRate: p.gstRate } : r)));
-                        }}
-                        className="w-full rounded border border-slate-200 bg-white px-2 py-1.5 text-xs font-medium text-slate-900 focus:border-indigo-500 focus:outline-none"
-                      >
-                        {state.products.map((p) => {
-                          const descOrBrand = [p.brand, p.description].filter(Boolean).join(' • ');
-                          return (
-                            <option key={p.id || p._id} value={p.id || p._id}>
-                              {p.name}{descOrBrand ? ` (${descOrBrand})` : ''} ({p.sku || p.SKU || 'No SKU'}) — Stock: {p.stock || 0} {p.unit || 'PCS'}
-                            </option>
-                          );
-                        })}
-                      </select>
+                      <div className="flex items-center justify-between gap-1 mb-1">
+                        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                          {it.isManual ? '✏️ Custom Product Name' : 'Product'}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={!canEdit}
+                          onClick={() => {
+                            setItems(items.map((r, i) => {
+                              if (i !== idx) return r;
+                              const nextManual = !r.isManual;
+                              const fallbackProd = state.products[0];
+                              return {
+                                ...r,
+                                isManual: nextManual,
+                                productId: nextManual ? '__manual__' : (fallbackProd?.id || fallbackProd?._id),
+                                name: nextManual ? (r.name && r.name !== fallbackProd?.name ? r.name : '') : (fallbackProd?.name || ''),
+                                sku: nextManual ? '' : (fallbackProd?.sku || fallbackProd?.SKU || ''),
+                                hsn: nextManual ? (r.hsn || '8536') : (fallbackProd?.hsn || fallbackProd?.HSN || ''),
+                                unit: nextManual ? (r.unit || 'PCS') : (fallbackProd?.unit || 'PCS'),
+                                rate: nextManual ? (r.rate || 0) : (fallbackProd?.purchasePrice || 0),
+                                gstRate: nextManual ? (r.gstRate || 18) : (fallbackProd?.gstRate || 18),
+                              };
+                            }));
+                          }}
+                          className="inline-flex items-center gap-1 text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
+                          title={it.isManual ? 'Switch back to catalog dropdown' : 'Type a new product name manually'}
+                        >
+                          {it.isManual ? (
+                            <>
+                              <ListFilter className="h-3 w-3" /> Select from Dropdown
+                            </>
+                          ) : (
+                            <>
+                              <PenSquare className="h-3 w-3" /> + Type Manually
+                            </>
+                          )}
+                        </button>
+                      </div>
+
+                      {it.isManual ? (
+                        <div>
+                          <input
+                            type="text"
+                            required
+                            placeholder="Type new product name (e.g. Microwave Oven)..."
+                            value={it.name || ''}
+                            onChange={(e) => setItems(items.map((r, i) => (i === idx ? { ...r, name: e.target.value } : r)))}
+                            className="w-full rounded border border-indigo-300 bg-indigo-50/50 px-2 py-1.5 text-xs font-semibold text-indigo-950 placeholder:text-indigo-400 focus:border-indigo-600 focus:bg-white focus:outline-none"
+                            autoFocus
+                          />
+                          <div className="flex items-center gap-1 text-[9.5px] text-indigo-700 font-medium mt-0.5">
+                            <Sparkles className="h-2.5 w-2.5" /> Auto-creates as a new product in your catalog
+                          </div>
+                        </div>
+                      ) : (
+                        <select
+                          value={it.productId}
+                          onChange={(e) => {
+                            if (e.target.value === '__manual__') {
+                              setItems(items.map((r, i) => (i === idx ? { ...r, isManual: true, productId: '__manual__', name: '' } : r)));
+                              return;
+                            }
+                            const p = state.products.find((pr) => (pr.id || pr._id) === e.target.value);
+                            if (!p) return;
+                            setItems(items.map((r, i) => (i === idx ? { ...r, isManual: false, productId: p.id || p._id, name: p.name, sku: p.sku || p.SKU, hsn: p.hsn || p.HSN, unit: p.unit, rate: p.purchasePrice, gstRate: p.gstRate } : r)));
+                          }}
+                          className="w-full rounded border border-slate-200 bg-white px-2 py-1.5 text-xs font-medium text-slate-900 focus:border-indigo-500 focus:outline-none"
+                        >
+                          <option value="__manual__">➕ Type New Product Manually...</option>
+                          <optgroup label="Catalog Products &amp; Variants">
+                            {state.products.map((p) => {
+                              const descOrBrand = [p.brand, p.description].filter(Boolean).join(' • ');
+                              return (
+                                <option key={p.id || p._id} value={p.id || p._id}>
+                                  {p.name}{descOrBrand ? ` (${descOrBrand})` : ''} ({p.sku || p.SKU || 'No SKU'}) — Stock: {p.stock || 0} {p.unit || 'PCS'}
+                                </option>
+                              );
+                            })}
+                          </optgroup>
+                        </select>
+                      )}
+
                       <input
                         type="text"
                         placeholder="Brand / Description / Model / Batch No. (e.g. LG 7kg)"
