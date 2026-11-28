@@ -167,19 +167,23 @@ export const CreateInvoicePage = () => {
   const handleProductChange = (idx, productId) => {
     const prod = state.products.find((p) => (p.id || p._id) === productId);
     if (!prod) return;
+    const cleanName = (prod.name || '').replace(/\s*\(₹[\d,]+\s*Rate\)/gi, '').trim() || prod.name;
+    const descText = [prod.brand, prod.description].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(' • ');
     setLineItems((prev) =>
       prev.map((row, i) =>
         i === idx
           ? {
               ...row,
               productId: prod.id || prod._id,
-              name: prod.name,
-              sku: prod.sku,
-              hsn: prod.hsn,
-              unit: prod.unit,
+              name: cleanName,
+              sku: prod.sku || prod.SKU || '',
+              hsn: prod.hsn || prod.HSN || '',
+              unit: prod.unit || 'PCS',
               rate: prod.sellingPrice,
               gstRate: prod.gstRate,
               cessRate: prod.cessRate || 0,
+              description: descText,
+              brand: prod.brand || '',
             }
           : row
       )
@@ -565,6 +569,13 @@ export const CreateInvoicePage = () => {
                           );
                         })}
                     </select>
+                    <input
+                      type="text"
+                      placeholder="Item Description / Model / Brand (optional)"
+                      value={item.description || ''}
+                      onChange={(e) => updateLine(idx, 'description', e.target.value)}
+                      className="mt-1 w-full rounded border border-slate-200 bg-slate-50/70 px-2 py-1 text-[11px] text-slate-700 placeholder:text-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none"
+                    />
                   </td>
                   <td className="px-2 py-2">
                     <input
@@ -616,6 +627,13 @@ export const CreateInvoicePage = () => {
                         </option>
                       ))}
                     </select>
+                    <input
+                      type="text"
+                      placeholder="Item Description / Model / Brand (optional)"
+                      value={item.description || ''}
+                      onChange={(e) => updateLine(idx, 'description', e.target.value)}
+                      className="mt-1 w-full rounded border border-slate-200 bg-slate-50/70 px-2 py-1 text-[11px] text-slate-700 placeholder:text-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none"
+                    />
                   </td>
                   <td className="px-2 py-2 text-right font-mono tabular-nums text-slate-700">
                     {formatINR(item.taxableAmount)}

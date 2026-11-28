@@ -364,6 +364,8 @@ export const POSBillingPage = () => {
             rate: c.rate || c.unitPrice || 0,
             unitPrice: c.rate || c.unitPrice || 0,
             gstRate: c.gstRate || 0,
+            description: c.description || c.brand || '',
+            brand: c.brand || '',
             totalAmount: c.totalAmount !== undefined
               ? c.totalAmount
               : Number(((c.rate || 0) * (c.qty || 1) * (1 + (c.gstRate || 0) / 100)).toFixed(2)),
@@ -379,6 +381,8 @@ export const POSBillingPage = () => {
             rate: it.unitPrice || it.rate || 0,
             unitPrice: it.unitPrice || it.rate || 0,
             gstRate: it.gstRate || 0,
+            description: it.description || it.brand || '',
+            brand: it.brand || '',
             totalAmount: it.lineTotal !== undefined ? it.lineTotal : ((it.unitPrice || 0) * (it.quantity || 1)),
             lineTotal: it.lineTotal !== undefined ? it.lineTotal : ((it.unitPrice || 0) * (it.quantity || 1)),
           })));
@@ -780,11 +784,16 @@ export const POSBillingPage = () => {
                     ? it.totalAmount
                     : (it.lineTotal !== undefined ? it.lineTotal : itRate * itQty);
                   return (
-                    <div key={i} className="flex justify-between items-center text-[11px]">
-                      <span className="truncate pr-2">
-                        {itName} × {itQty}
-                      </span>
-                      <span className="font-semibold font-mono">{formatINR(itTotal)}</span>
+                    <div key={i} className="flex justify-between items-start text-[11px] py-0.5">
+                      <div className="truncate pr-2">
+                        <span className="font-medium text-slate-800">{itName} × {itQty}</span>
+                        {(it.description || it.brand) && (
+                          <div className="text-[9px] text-slate-500 font-normal">
+                            {[it.brand, it.description].filter(Boolean).filter((v, idx, arr) => arr.indexOf(v) === idx).join(' • ')}
+                          </div>
+                        )}
+                      </div>
+                      <span className="font-semibold font-mono whitespace-nowrap">{formatINR(itTotal)}</span>
                     </div>
                   );
                 })}

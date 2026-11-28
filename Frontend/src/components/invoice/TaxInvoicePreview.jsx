@@ -173,7 +173,16 @@ export const TaxInvoicePreview = ({ invoice, business, eInvoice = null }) => {
               {(invoice.items || []).map((item, i) => (
                 <tr key={i}>
                   <td className="px-2 py-2 font-mono">{i + 1}</td>
-                  <td className="px-2 py-2 font-medium text-slate-900">{item.name}</td>
+                  <td className="px-2 py-2 font-medium text-slate-900">
+                    <div className="font-semibold">{item.name || item.productName}</div>
+                    {(() => {
+                      const descText = [item.brand, item.description].filter(Boolean).filter((v, idx, arr) => arr.indexOf(v) === idx).join(' • ');
+                      if (descText && !(item.name || '').toLowerCase().includes(descText.toLowerCase())) {
+                        return <div className="text-[11px] text-slate-500 font-normal mt-0.5">{descText}</div>;
+                      }
+                      return null;
+                    })()}
+                  </td>
                   <td className="px-2 py-2 font-mono text-slate-600">{item.hsn}</td>
                   <td className="px-2 py-2 text-right font-mono tabular-nums">
                     {item.qty} {item.unit}

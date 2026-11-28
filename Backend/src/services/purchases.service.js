@@ -840,6 +840,12 @@ export const createPurchaseBill = async (tenantId, userId, data) => {
   });
 
   await bill.save();
+
+  if (data.autoPost) {
+    const postedBill = await postPurchaseBill(tenantId, userId, bill._id);
+    return postedBill;
+  }
+
   return bill;
 };
 
@@ -950,6 +956,12 @@ export const updatePurchaseBill = async (tenantId, id, data) => {
   if (data.notes !== undefined) bill.notes = data.notes;
 
   await bill.save();
+
+  if (data.autoPost) {
+    const postedBill = await postPurchaseBill(tenantId, userId, bill._id);
+    return postedBill;
+  }
+
   return bill;
 };
 

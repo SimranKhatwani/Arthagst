@@ -294,6 +294,8 @@ export const AppProvider = ({ children }) => {
               sku: it.SKU || it.sku || '',
               hsn: it.HSN || it.hsn || '',
               unit: it.unitName || it.unit || 'PCS',
+              description: it.description || it.productId?.description || '',
+              brand: it.brand || it.productId?.brand || '',
             })),
           }));
         }
@@ -1863,6 +1865,8 @@ export const AppProvider = ({ children }) => {
             totalAmount: itTotal,
             lineTotal: itTotal,
             gstRate: it.gstRate ?? orig.gstRate ?? 0,
+            description: it.description || orig.description || '',
+            brand: it.brand || orig.brand || '',
           };
         });
 
@@ -1986,62 +1990,88 @@ export const AppProvider = ({ children }) => {
         }
 
         const supplierId = String(purchasePayload.supplierId);
-        const backendItems = [];
-        for (const it of (purchasePayload.items || [])) {
-          let productId = String(it.productId || it.id);
-          const pRate = Number(it.rate || it.unitPrice || 0);
+        
+        // Process line items and auto-create variants in parallel
+        const backendItems = await Promise.all(
+          (purchasePayload.items || []).map(async (it) => {
+            let productId = String(it.productId || it.id);
+            const pRate = Number(it.rate || it.unitPrice || 0);
+            const origProd = (state.products || []).find((p) => String(p.id || p._id) === productId);
+            const descOrBrand = (it.description || it.brand || '').trim();
+            const rateDiffers = origProd && origProd.purchasePrice !== undefined && pRate > 0 && Number(pRate) !== Number(origProd.purchasePrice);
+            const shouldBeVariant = Boolean(it.createAsVariant || it.trackAsVariant || descOrBrand);
 
-          // If user requested to track this line item as a separate product variant
-          if (it.createAsVariant || it.trackAsVariant) {
-            try {
-              const origProd = (state.products || []).find((p) => String(p.id || p._id) === productId);
-              const cleanSKU = (it.variantSku || `SKU-${Date.now().toString().slice(-4)}`).toUpperCase();
-              const cleanBaseName = (origProd?.name || it.name || 'Product').replace(/\s*\(₹[\d,]+\s*Rate\)/gi, '').trim();
-              const descOrBrand = (it.description || it.brand || '').trim();
-              const vName = (it.variantName || (descOrBrand ? `${cleanBaseName} (${descOrBrand})` : cleanBaseName)).trim();
-              const sPrice = Number(it.sellingPrice) || (origProd?.sellingPrice ? Math.round(origProd.sellingPrice * (pRate / (origProd.purchasePrice || pRate || 1))) : Math.round(pRate * 1.3));
+            if (shouldBeVariant) {
+              try {
+                const cleanBaseName = (origProd?.name || it.name || 'Product').replace(/\s*\(₹[\d,]+\s*Rate\)/gi, '').trim();
 
-              const newVariant = await upsertRecord(
-                'products',
-                {
-                  name: vName,
-                  sku: cleanSKU,
-                  SKU: cleanSKU,
-                  hsn: it.hsn || it.HSN || origProd?.hsn || '8536',
-                  HSN: it.hsn || it.HSN || origProd?.HSN || '8536',
-                  category: origProd?.category || 'Electronics',
-                  unit: it.unit || origProd?.unit || 'PCS',
-                  brand: it.brand || origProd?.brand || '',
-                  description: it.description || origProd?.description || '',
-                  purchasePrice: pRate,
-                  sellingPrice: sPrice,
-                  mrp: sPrice,
-                  gstRate: it.gstRate !== undefined ? Number(it.gstRate) : (origProd?.gstRate || 18),
-                  stock: 0,
-                  openingStock: 0,
-                  warehouseId: String(warehouseId),
-                },
-                'Product'
-              );
+                // Check if an existing variant already matches
+                const existingVariant = (state.products || []).find((p) => {
+                  if (String(p._id || p.id) === productId && !descOrBrand) return false;
+                  const pName = (p.name || '').trim().toLowerCase();
+                  const pBrand = (p.brand || '').trim().toLowerCase();
+                  const pDesc = (p.description || '').trim().toLowerCase();
+                  const baseLower = cleanBaseName.toLowerCase();
+                  const targetDesc = descOrBrand.toLowerCase();
 
-              if (newVariant) {
-                productId = String(newVariant.id || newVariant._id);
+                  if (!targetDesc) return false;
+                  return (
+                    (pName === baseLower && (pBrand === targetDesc || pDesc === targetDesc)) ||
+                    pName === `${baseLower} (${targetDesc})` ||
+                    (pBrand === targetDesc && pName.includes(baseLower))
+                  );
+                });
+
+                if (existingVariant) {
+                  productId = String(existingVariant.id || existingVariant._id);
+                } else if (descOrBrand || rateDiffers) {
+                  const cleanSKU = (it.variantSku || `SKU-${Date.now().toString().slice(-4)}${Math.floor(Math.random() * 90 + 10)}`).toUpperCase();
+                  const sPrice = Number(it.sellingPrice) || (origProd?.sellingPrice ? Math.round(origProd.sellingPrice * (pRate / (origProd.purchasePrice || pRate || 1))) : Math.round(pRate * 1.3));
+
+                  const newVariant = await upsertRecord(
+                    'products',
+                    {
+                      name: cleanBaseName,
+                      sku: cleanSKU,
+                      SKU: cleanSKU,
+                      hsn: it.hsn || it.HSN || origProd?.hsn || origProd?.HSN || '8536',
+                      HSN: it.hsn || it.HSN || origProd?.HSN || origProd?.hsn || '8536',
+                      category: origProd?.category || 'Electronics',
+                      unit: it.unit || origProd?.unit || 'PCS',
+                      brand: it.brand || descOrBrand || origProd?.brand || '',
+                      description: descOrBrand || origProd?.description || '',
+                      purchasePrice: pRate,
+                      sellingPrice: sPrice,
+                      mrp: sPrice,
+                      gstRate: it.gstRate !== undefined ? Number(it.gstRate) : (origProd?.gstRate || 18),
+                      stock: 0,
+                      openingStock: 0,
+                      warehouseId: String(warehouseId),
+                    },
+                    'Product'
+                  );
+
+                  if (newVariant) {
+                    productId = String(newVariant.id || newVariant._id);
+                  }
+                }
+              } catch (varErr) {
+                console.warn('Failed to auto-create variant product, using selected product:', varErr.message);
               }
-            } catch (varErr) {
-              console.warn('Failed to auto-create variant product, using selected product:', varErr.message);
             }
-          }
 
-          backendItems.push({
-            productId,
-            quantity: Number(it.qty || it.quantity || 1),
-            unitPrice: pRate,
-            discount: Number(it.discountPct || it.discount || 0),
-            description: it.description || '',
-            HSN: it.hsn || it.HSN || '',
-            gstRate: it.gstRate !== undefined ? Number(it.gstRate) : undefined,
-          });
-        }
+            return {
+              productId,
+              quantity: Number(it.qty || it.quantity || 1),
+              unitPrice: pRate,
+              discount: Number(it.discountPct || it.discount || 0),
+              description: descOrBrand,
+              brand: it.brand || (descOrBrand ? descOrBrand.split(/[\s•·]+/)[0] : ''),
+              HSN: it.hsn || it.HSN || origProd?.hsn || '',
+              gstRate: it.gstRate !== undefined ? Number(it.gstRate) : undefined,
+            };
+          })
+        );
 
         const createPayload = {
           supplierId,
@@ -2052,6 +2082,7 @@ export const AppProvider = ({ children }) => {
           placeOfSupply: purchasePayload.placeOfSupply || state.business.state,
           items: backendItems,
           paidAmount: Number(purchasePayload.amountPaid) || 0,
+          autoPost: true,
         };
 
         let savedBill;
@@ -2066,8 +2097,12 @@ export const AppProvider = ({ children }) => {
         const billId = billRecord._id || billRecord.id;
 
         if (billRecord.status !== 'posted') {
-          const postedRes = await purchaseBillService.postPurchaseBill(billId);
-          Object.assign(billRecord, postedRes?.bill || postedRes);
+          try {
+            const postedRes = await purchaseBillService.postPurchaseBill(billId);
+            Object.assign(billRecord, postedRes?.bill || postedRes);
+          } catch (postErr) {
+            console.warn('Fallback post notice:', postErr.message);
+          }
         }
 
         const remainingBal = billRecord.balanceAmount !== undefined ? billRecord.balanceAmount : (billRecord.outstandingBalance !== undefined ? billRecord.outstandingBalance : 0);
@@ -2110,10 +2145,50 @@ export const AppProvider = ({ children }) => {
 
         notify('Purchase bill saved and inventory stock increased');
 
-        // Background sync to refresh caches without delaying user
-        Promise.all([loadPhase1Data(), loadPhase2Data()]).catch((syncErr) =>
-          console.warn('Background sync notice:', syncErr.message)
-        );
+        // Fast background sync to refresh purchases and products without delaying user
+        Promise.allSettled([
+          purchaseBillService.getPurchaseBills({ limit: 100 }),
+          productService.getProducts({ limit: 100 }),
+        ]).then(([pBills, pProds]) => {
+          setState((prev) => {
+            const next = { ...prev };
+            if (pBills.status === 'fulfilled' && pBills.value) {
+              const rawBills = pBills.value.bills || pBills.value.data?.bills || [];
+              next.purchases = rawBills.map((b) => ({
+                ...b,
+                id: String(b._id || b.id),
+                date: b.billDate ? new Date(b.billDate).toISOString().slice(0, 10) : (b.date || ''),
+                supplierName: b.supplierName || '',
+                supplierInvoiceNo: b.supplierInvoiceNumber || b.supplierInvoiceNo || '',
+                status: b.billStatus === 'posted' ? 'Finalized' : (b.billStatus || 'Draft'),
+                paymentStatus: b.paymentStatus === 'paid' ? 'Paid' : (b.paymentStatus === 'partially_paid' ? 'Partial' : 'Unpaid'),
+                taxableValue: b.taxableAmount !== undefined ? b.taxableAmount : (b.taxableValue || 0),
+                items: (b.items || []).map((it) => ({
+                  ...it,
+                  productId: String(it.productId?._id || it.productId || ''),
+                  name: it.productName || it.name || '',
+                  qty: it.quantity !== undefined ? it.quantity : (it.qty || 1),
+                  rate: it.unitPrice !== undefined ? it.unitPrice : (it.rate || 0),
+                  description: it.description || '',
+                  brand: it.brand || '',
+                })),
+              }));
+            }
+            if (pProds.status === 'fulfilled' && pProds.value) {
+              const rawProds = pProds.value.products || pProds.value.data?.products || [];
+              next.products = rawProds.map((p) => ({
+                ...p,
+                id: String(p._id || p.id),
+                sku: p.SKU || p.sku || '',
+                hsn: p.HSN || p.hsn || '',
+                category: p.categoryId?.name || p.category || 'General',
+                unit: p.unitId?.shortName || p.unit || 'PCS',
+                stock: p.stock !== undefined ? p.stock : (p.openingStock || 0),
+              }));
+            }
+            return next;
+          });
+        }).catch((syncErr) => console.warn('Background sync notice:', syncErr.message));
 
         return billRecord;
       } catch (err) {

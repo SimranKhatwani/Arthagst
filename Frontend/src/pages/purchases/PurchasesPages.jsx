@@ -237,7 +237,14 @@ export const PurchasesPage = ({ defaultTab = 'bills' }) => {
                   const itemTotal = it.totalAmount !== undefined ? it.totalAmount : ((it.taxableValue || (itemRate * itemQty)) + itemTax);
                   return (
                     <tr key={idx}>
-                      <td className="px-2 py-2">{it.name || it.productName}</td>
+                      <td className="px-2 py-2">
+                        <div className="font-medium text-slate-900">{it.name || it.productName}</div>
+                        {(it.description || it.brand) && (
+                          <div className="text-[10px] text-slate-500 font-normal mt-0.5">
+                            {[it.brand, it.description].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(' • ')}
+                          </div>
+                        )}
+                      </td>
                       <td className="px-2 py-2 font-mono">{it.hsn || it.HSN || '-'}</td>
                       <td className="px-2 py-2 text-right font-mono">{itemQty}</td>
                       <td className="px-2 py-2 text-right font-mono">{formatINR(itemRate)}</td>
@@ -483,6 +490,17 @@ export const AddPurchasePage = () => {
         subtitle="Record supplier invoice, input GST credit, and update product stock"
         breadcrumbs={['Purchases', 'Add Purchase']}
       />
+      {isSaving && (
+        <div className="rounded-xl border border-indigo-200 bg-indigo-50/90 p-4 text-xs text-indigo-950 shadow-sm flex items-center gap-3 animate-pulse">
+          <Loader2 className="h-5 w-5 text-indigo-600 animate-spin shrink-0" />
+          <div>
+            <div className="font-semibold text-sm text-indigo-900">Saving Purchase &amp; Updating Inventory Stock...</div>
+            <p className="mt-0.5 text-indigo-700">
+              Recording purchase bill, allocating product variants, and synchronizing warehouse stock. Please wait a moment.
+            </p>
+          </div>
+        </div>
+      )}
       {!canEdit && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-xs text-amber-900 shadow-sm flex items-start gap-3">
           <ShieldAlert className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
@@ -581,17 +599,22 @@ export const AddPurchasePage = () => {
                       </select>
                       <input
                         type="text"
-                        placeholder="Brand / Description / Model / Batch No. (optional)"
+                        placeholder="Brand / Description / Model / Batch No. (e.g. LG 7kg)"
                         value={it.description || ''}
-                        onChange={(e) => setItems(items.map((r, i) => (i === idx ? { ...r, description: e.target.value } : r)))}
+                        onChange={(e) => setItems(items.map((r, i) => (i === idx ? { ...r, description: e.target.value, createAsVariant: Boolean(e.target.value.trim()) } : r)))}
                         className="mt-1.5 w-full rounded border border-slate-200 bg-slate-50/70 px-2 py-1 text-[11px] text-slate-700 placeholder:text-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none"
                       />
+                      {Boolean(it.description && it.description.trim()) && (
+                        <div className="mt-1 flex items-center gap-1 text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded font-medium">
+                          <span>✨ Tracked as separate variant in inventory ({it.description.trim()})</span>
+                        </div>
+                      )}
                       {(() => {
                         const prod = state.products.find((pr) => (pr.id || pr._id) === it.productId);
                         const rateDiffers = prod && prod.purchasePrice !== undefined && Number(it.rate) > 0 && Number(it.rate) !== Number(prod.purchasePrice);
                         return (
                           <div className="mt-1 space-y-1">
-                            {rateDiffers && (
+                            {rateDiffers && !it.description && (
                               <div className="flex flex-wrap items-center gap-1.5 rounded bg-amber-50 px-2 py-0.5 text-[10px] text-amber-800 border border-amber-200">
                                 <span>Rate differs from base cost (₹{formatNumberIN(prod.purchasePrice)}).</span>
                                 <label className="inline-flex items-center gap-1 font-semibold text-indigo-700 cursor-pointer">
@@ -605,10 +628,10 @@ export const AddPurchasePage = () => {
                                 </label>
                               </div>
                             )}
-                            {it.trackAsVariant && (
+                            {it.trackAsVariant && !it.description && (
                               <input
                                 type="text"
-                                placeholder={`Variant / Brand Name (e.g. ${it.name || 'Product'} ${it.description || '55 Inch 4K'})`}
+                                placeholder={`Variant / Brand Name (e.g. ${it.name || 'Product'} 55 Inch 4K)`}
                                 value={it.variantName || ''}
                                 onChange={(e) => setItems(items.map((r, i) => (i === idx ? { ...r, variantName: e.target.value } : r)))}
                                 className="w-full rounded border border-indigo-200 bg-indigo-50/50 px-2 py-1 text-[11px] text-indigo-900 placeholder:text-indigo-400 focus:border-indigo-500 focus:bg-white focus:outline-none"

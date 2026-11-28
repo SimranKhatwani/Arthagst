@@ -78,6 +78,7 @@ export const createPurchaseBillSchema = z.object({
   isITCClaimable: z.boolean().optional().default(true),
   items: z.array(purchaseItemInputSchema).min(1, 'At least one line item is required'),
   paidAmount: z.coerce.number().min(0).optional().default(0),
+  autoPost: z.boolean().optional().default(false),
   notes: z.string().trim().max(1000).optional().default(''),
 });
 
