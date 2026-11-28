@@ -636,9 +636,7 @@ export const AddPurchasePage = () => {
                             className="w-full rounded border border-indigo-300 bg-indigo-50/50 px-2 py-1.5 text-xs font-semibold text-indigo-950 placeholder:text-indigo-400 focus:border-indigo-600 focus:bg-white focus:outline-none"
                             autoFocus
                           />
-                          <div className="flex items-center gap-1 text-[9.5px] text-indigo-700 font-medium mt-0.5">
-                            <Sparkles className="h-2.5 w-2.5" /> Auto-creates as a new product in your catalog
-                          </div>
+
                         </div>
                       ) : (
                         <select
